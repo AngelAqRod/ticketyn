@@ -30,12 +30,15 @@ function renderNewTicket() {
 }
 
 async function fillRequired() {
-  await screen.findByRole('option', { name: 'SGgt-00000 — Cliente de prueba' })
+  await waitFor(() => expect(screen.getByLabelText(/^Cliente\s*\*?$/)).toBeEnabled())
   fireEvent.change(screen.getByLabelText(/^Título\s*\*?$/), { target: { value: 'Incidencia retroactiva' } })
   fireEvent.change(screen.getByLabelText(/^Descripción\s*\*?$/), { target: { value: 'Sin conexión' } })
-  fireEvent.change(screen.getByLabelText(/^Cliente\s*\*?$/), { target: { value: '1' } })
+  fireEvent.click(screen.getByLabelText(/^Cliente\s*\*?$/))
+  fireEvent.click(await screen.findByRole('option', { name: 'SGgt-00000 — Cliente de prueba' }))
+  await waitFor(() => expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toBeEnabled())
+  fireEvent.click(screen.getByLabelText(/^Circuito\s*\*?$/))
   await screen.findByRole('option', { name: 'SGgt-00000.00000 — Internet principal' })
-  fireEvent.change(screen.getByLabelText(/^Circuito\s*\*?$/), { target: { value: '5' } })
+  fireEvent.click(screen.getByRole('option', { name: 'SGgt-00000.00000 — Internet principal' }))
   for (const label of ['Sector', 'Departamento', 'Tipo de incidencia']) {
     fireEvent.change(screen.getByRole('combobox', { name: new RegExp('^' + label + '\\s*\\*?$') }), { target: { value: '1' } })
   }
@@ -54,7 +57,7 @@ describe('creación de tickets', () => {
     expect(screen.getByLabelText('Fin', { exact: true })).toHaveValue('')
     expect(screen.getByLabelText(/^Estado\s*\*?$/)).toHaveValue('OPEN')
     expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toBeDisabled()
-    await screen.findByRole('option', { name: 'SGgt-00000 — Cliente de prueba' })
+    await waitFor(() => expect(screen.getByLabelText(/^Cliente\s*\*?$/)).toBeEnabled())
     for (const path of ['customers', 'sectors', 'departments', 'incident-types']) {
       expect(fetchMock).toHaveBeenCalledWith(`/api/${path}?include_inactive=false&limit=200&offset=0`, expect.any(Object))
     }
@@ -81,14 +84,17 @@ describe('creación de tickets', () => {
     const fetchMock = mockApi()
     renderNewTicket()
     await fillRequired()
-    expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toHaveValue('5')
+    expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toHaveValue('SGgt-00000.00000 — Internet principal')
     expect(fetchMock).toHaveBeenCalledWith('/api/circuits?customer_id=1&include_inactive=false&limit=200&offset=0', expect.any(Object))
-    fireEvent.change(screen.getByLabelText(/^Cliente\s*\*?$/), { target: { value: '2' } })
+    fireEvent.click(screen.getByLabelText(/^Cliente\s*\*?$/))
+    fireEvent.click(screen.getByRole('option', { name: 'OTHER — Otro cliente' }))
     expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toHaveValue('')
+    await waitFor(() => expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toBeEnabled())
+    fireEvent.click(screen.getByLabelText(/^Circuito\s*\*?$/))
     await screen.findByRole('option', { name: 'OTHER-CIRCUIT — Internet principal' })
     expect(screen.queryByRole('option', { name: 'SGgt-00000.00000 — Internet principal' })).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith('/api/circuits?customer_id=2&include_inactive=false&limit=200&offset=0', expect.any(Object))
-    fireEvent.change(screen.getByLabelText(/^Cliente\s*\*?$/), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar Cliente' }))
     expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toBeDisabled()
   })
   it('envía IDs y la fecha local como el mismo instante ISO, fin null y confirma referencia', async () => {
@@ -168,8 +174,61 @@ describe('creación de tickets', () => {
     expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled()
     failed = false
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar catálogos' }))
-    await screen.findByRole('option', { name: 'SGgt-00000 — Cliente de prueba' })
+    await waitFor(() => expect(screen.getByLabelText(/^Cliente\s*\*?$/)).toBeEnabled())
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  })
+  it.each(['sGGT', 'PRUEBA'])('busca Cliente por código o nombre: %s', async (search) => {
+    mockApi(); renderNewTicket()
+    const input = screen.getByRole('combobox', { name: /^Cliente/ })
+    await waitFor(() => expect(input).toBeEnabled())
+    fireEvent.click(input); fireEvent.change(input, { target: { value: search } })
+    expect(screen.getByRole('option', { name: 'SGgt-00000 — Cliente de prueba' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'OTHER — Otro cliente' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('option', { name: 'SGgt-00000 — Cliente de prueba' }))
+    expect(input).toHaveValue('SGgt-00000 — Cliente de prueba')
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /^Circuito/ })).toBeEnabled())
+  })
+  it.each(['sgGT-00000.00000', 'PRINCIPAL'])('busca Circuito por código o descripción: %s', async (search) => {
+    mockApi(); renderNewTicket(); await fillRequired()
+    const input = screen.getByRole('combobox', { name: /^Circuito/ })
+    fireEvent.click(input); fireEvent.change(input, { target: { value: search } })
+    expect(screen.getByRole('option', { name: 'SGgt-00000.00000 — Internet principal' })).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'not-found' } })
+    expect(screen.getByText('No se encontraron circuitos.')).toBeInTheDocument()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(input).toHaveValue('SGgt-00000.00000 — Internet principal')
+  })
+  it('cliente sin circuitos activos muestra un mensaje distinto de búsqueda sin coincidencias', async () => {
+    const mock = mockApi()
+    const normal = mock.getMockImplementation()!
+    mock.mockImplementation((path, options) => path.startsWith('/api/circuits') ? Promise.resolve(jsonResponse([])) : normal(path, options))
+    renderNewTicket()
+    const customer = screen.getByRole('combobox', { name: /^Cliente/ })
+    await waitFor(() => expect(customer).toBeEnabled())
+    const circuitInput = screen.getByRole('combobox', { name: /^Circuito/ })
+    expect(circuitInput).toBeDisabled()
+    expect(circuitInput).toHaveAttribute('placeholder', 'Selecciona primero un cliente.')
+    fireEvent.click(customer); fireEvent.click(screen.getByRole('option', { name: 'SGgt-00000 — Cliente de prueba' }))
+    expect(await screen.findByText('Este cliente no tiene circuitos activos.')).toBeInTheDocument()
+    expect(circuitInput).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Completa los campos obligatorios')
+    expect(mock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+  it('volver a seleccionar el mismo cliente no borra su circuito', async () => {
+    mockApi(); renderNewTicket(); await fillRequired()
+    const customer = screen.getByRole('combobox', { name: /^Cliente/ })
+    fireEvent.click(customer)
+    fireEvent.click(screen.getByRole('option', { name: 'SGgt-00000 — Cliente de prueba' }))
+    expect(screen.getByRole('combobox', { name: /^Circuito/ })).toHaveValue('SGgt-00000.00000 — Internet principal')
+  })
+  it('conserva Sector, Departamento y Tipo de incidencia como selects nativos', async () => {
+    mockApi(); renderNewTicket(); await fillRequired()
+    for (const label of ['Sector', 'Departamento', 'Tipo de incidencia']) {
+      const select = screen.getByLabelText(new RegExp('^' + label + '\\s*\\*?$'))
+      expect(select.tagName).toBe('SELECT')
+      expect(select).toHaveValue('1')
+    }
   })
   it('Nuevo ticket y Cancelar navegan sin recargar', async () => {
     mockApi()

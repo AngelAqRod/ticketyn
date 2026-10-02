@@ -37,7 +37,7 @@ function mockApi(initial: Ticket = ticket, patch?: (options: RequestInit) => Pro
   return mock
 }
 function open(path = '/tickets/1') { render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>) }
-const field = (name: string) => screen.getByLabelText(new RegExp(`^${name}\\s*\\*?$`))
+const field = (name: string) => name === 'Cliente' || name === 'Circuito' ? screen.getByRole('combobox', { name: new RegExp(`^${name}\\s*\\*?$`) }) : screen.getByLabelText(new RegExp(`^${name}\\s*\\*?$`))
 async function ready() { await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled()) }
 afterEach(() => vi.useRealTimers())
 
@@ -74,21 +74,43 @@ describe('edición de tickets', () => {
     mockApi(); open('/tickets/1/edit'); await ready()
     expect(field('Título')).toHaveValue(ticket.title)
     expect(field('Descripción')).toHaveValue(ticket.description)
-    expect(field('Cliente')).toHaveValue('1')
-    expect(field('Circuito')).toHaveValue('1')
+    expect(field('Cliente')).toHaveValue('C-1 — Cliente histórico')
+    expect(field('Circuito')).toHaveValue('C-1.01 — Enlace principal')
     expect(field('Inicio')).toHaveValue(localDateTimeValue(new Date(ticket.start_at)))
     expect(field('Fin')).toHaveValue('')
     expect(screen.queryByRole('textbox', { name: /referencia/i })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(ticket.reference)
   })
+  it('los valores históricos inactivos son visibles pero no seleccionables como nuevas opciones', async () => {
+    mockApi(); open('/tickets/1/edit'); await ready()
+    expect(field('Cliente')).toHaveValue('C-1 — Cliente histórico')
+    expect(field('Circuito')).toHaveValue('C-1.01 — Enlace principal')
+    fireEvent.click(field('Circuito'))
+    const oldCircuit = screen.getByRole('option', { name: /C-1.01 — Enlace principal/ })
+    expect(oldCircuit).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.keyDown(field('Circuito'), { key: 'Escape' })
+    fireEvent.click(field('Cliente'))
+    const oldCustomer = screen.getByRole('option', { name: /C-1 — Cliente histórico/ })
+    expect(oldCustomer).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(screen.getByRole('option', { name: 'C-2 — Otro cliente' }))
+    expect(field('Circuito')).toHaveValue('')
+    await waitFor(() => expect(field('Circuito')).toBeEnabled())
+    fireEvent.click(field('Cliente'))
+    fireEvent.click(screen.getByRole('option', { name: /C-1 — Cliente histórico/ }))
+    fireEvent.keyDown(field('Cliente'), { key: 'Escape' })
+    expect(field('Cliente')).toHaveValue('C-2 — Otro cliente')
+  })
   it('cambiar cliente limpia circuito y utiliza el filtro customer_id', async () => {
     const mock = mockApi(); open('/tickets/1/edit'); await ready()
-    fireEvent.change(field('Cliente'), { target: { value: '2' } })
+    fireEvent.click(field('Cliente'))
+    fireEvent.click(screen.getByRole('option', { name: 'C-2 — Otro cliente' }))
     expect(field('Circuito')).toHaveValue('')
+    await waitFor(() => expect(field('Circuito')).toBeEnabled())
+    fireEvent.click(field('Circuito'))
     await screen.findByRole('option', { name: 'C-2.01 — Enlace principal' })
     expect(screen.queryByRole('option', { name: 'C-1.01 — Enlace principal' })).not.toBeInTheDocument()
     expect(mock).toHaveBeenCalledWith('/api/circuits?customer_id=2&include_inactive=false&limit=200&offset=0', expect.any(Object))
-    fireEvent.change(field('Cliente'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar Cliente' }))
     expect(field('Circuito')).toBeDisabled()
   })
   it('envía PATCH soportado, fecha local convertida y fin null, y refresca detalle', async () => {
@@ -159,7 +181,7 @@ describe('edición de tickets', () => {
     failed = false
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar catálogos' }))
     await ready()
-    expect(field('Circuito')).toHaveValue('1')
+    expect(field('Circuito')).toHaveValue('C-1.01 — Enlace principal')
   })
   it('Finalizar ahora prepara Fin y CLOSED con reloj local, sin guardar automáticamente', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 9, 2, 16, 20))

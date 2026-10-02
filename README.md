@@ -125,6 +125,11 @@ catálogos activos y filtra los circuitos por el ID del cliente seleccionado.
 Inicio y Fin se editan en hora local del navegador; los botones **Ahora** son
 atajos y los timestamps se convierten a ISO UTC conservando el instante elegido.
 Fin puede quedar vacío, independientemente del estado Abierto/Cerrado.
+Cliente y Circuito permiten búsqueda local por código o texto y selección con
+mouse o con flechas, Enter y Escape; los demás catálogos conservan selects nativos.
+Los botones **+** permiten crear un cliente o circuito activo sin salir del
+formulario. El catálogo se guarda inmediatamente y queda seleccionado; el
+resto del ticket se conserva y solo se persiste al guardar el ticket.
 Tras guardar, el listado muestra la referencia asignada por el backend.
 La referencia del listado abre `/tickets/:id`; **Editar ticket** abre
 `/tickets/:id/edit`. La edición conserva los catálogos históricos inactivos.

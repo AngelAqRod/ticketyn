@@ -6,6 +6,8 @@ import type { Circuit, Customer, Department, IncidentType, Sector } from '../typ
 import type { Ticket, TicketStatus } from '../types/ticket'
 import { localDateTimeToIso, localDateTimeValue } from '../lib/datetime'
 import { FormField } from '../components/FormField'
+import { QuickCatalogCreate } from './QuickCatalogCreate'
+import { SearchableSelect } from './SearchableSelect'
 import { PageHeading } from '../components/PageHeading'
 
 interface Catalogs {
@@ -37,6 +39,9 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [historical, setHistorical] = useState<Awaited<ReturnType<typeof getTicketCatalogs>> | null>(null)
+  const [quickCreate, setQuickCreate] = useState<'customer' | 'circuit' | null>(null)
+  const [quickNotice, setQuickNotice] = useState<string | null>(null)
+  const selectedCustomer = catalogs?.customers.find((item) => String(item.id) === customerId)
   const sending = useRef(false)
   const submitController = useRef<AbortController | null>(null)
 
@@ -44,6 +49,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   useEffect(() => {
     const controller = new AbortController()
     setCatalogLoading(true)
+    setCircuitLoading(Boolean(customerId))
     setCatalogError(null)
     Promise.all([
       listCustomers(controller.signal), listSectors(controller.signal),
@@ -66,7 +72,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   }, [catalogRetry])
 
   useEffect(() => {
-    if (!customerId || catalogLoading) return
+    if (!customerId || catalogLoading || catalogError) return
     const controller = new AbortController()
     setCircuitLoading(true)
     setCircuitError(null)
@@ -76,14 +82,29 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
       if (!controller.signal.aborted) { setCircuitError(errorMessage(error)); setCircuitLoading(false) }
     })
     return () => controller.abort()
-  }, [customerId, circuitRetry, historical, catalogLoading])
+  }, [customerId, circuitRetry, historical, catalogLoading, catalogError])
 
   function changeCustomer(value: string) {
+    if (value === customerId) return
     setCustomerId(value)
     setCircuitId('')
     setCircuits([])
     setCircuitError(null)
     setCircuitLoading(Boolean(value))
+  }
+
+  function customerCreated(customer: Customer) {
+    setCatalogs((current) => current ? { ...current, customers: [...current.customers.filter((item) => item.id !== customer.id), customer] } : current)
+    changeCustomer(String(customer.id))
+    setQuickCreate(null)
+    setQuickNotice(`Cliente ${customer.customer_code} creado y seleccionado.`)
+  }
+
+  function circuitCreated(circuit: Circuit) {
+    setCircuits((current) => [...current.filter((item) => item.id !== circuit.id), circuit])
+    setCircuitId(String(circuit.id))
+    setQuickCreate(null)
+    setQuickNotice(`Circuito ${circuit.circuit_code} creado y seleccionado.`)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -126,6 +147,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
 
   return <>
     <PageHeading title={ticket ? `Editar ${ticket.reference}` : "Nuevo ticket"} description={ticket ? "Actualiza los datos operativos del ticket." : "Registra una incidencia. La referencia se asignará automáticamente al guardar."} />
+    {quickNotice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{quickNotice}</p>}
     {catalogLoading && <p role="status" className="mb-5 text-sm text-slate-500">Cargando catálogos...</p>}
     {catalogError && <div role="alert" className="panel mb-5 p-4"><p className="font-medium">Error al cargar catálogos</p><p className="mt-1 text-sm">{catalogError}</p><button type="button" className="button-secondary mt-3" onClick={() => setCatalogRetry(catalogRetry + 1)}>Reintentar catálogos</button></div>}
     <form onSubmit={submit} noValidate className="panel p-5 sm:p-7" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting}>
@@ -139,9 +161,13 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
         <section aria-labelledby="relations-heading" className="border-t border-slate-100 pt-6">
           <h2 id="relations-heading" className="mb-4 font-semibold text-slate-900">Cliente y clasificación</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField id="customer" label="Cliente" required><select id="customer" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={customerId} onChange={(e) => changeCustomer(e.target.value)}><option value="">Selecciona un cliente</option>{catalogs?.customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}</option>)}</select></FormField>
-            <FormField id="circuit" label="Circuito" required><select id="circuit" className="form-input" required disabled={!customerId || circuitLoading || Boolean(circuitError)} value={circuitId} onChange={(e) => setCircuitId(e.target.value)}><option value="">{!customerId ? 'Selecciona primero un cliente' : circuitLoading ? 'Cargando circuitos...' : 'Selecciona un circuito'}</option>{circuits.map((item) => <option key={item.id} value={item.id}>{item.circuit_code} — {item.description}</option>)}</select>
-              {customerId && !circuitLoading && !circuitError && !circuits.length && <p className="mt-2 text-xs text-slate-600">Este cliente no tiene circuitos activos.</p>}
+            <FormField id="customer" label="Cliente" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="customer" label="Cliente" required disabled={submitting || catalogLoading || Boolean(catalogError)} value={customerId} onChange={changeCustomer}
+              options={(catalogs?.customers ?? []).map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}`, disabled: !item.active }))}
+              placeholder="Selecciona un cliente" emptyMessage="No se encontraron clientes." noMatchMessage="No se encontraron clientes." /></div><button type="button" className="button-secondary shrink-0" aria-label="Nuevo cliente" title="Nuevo cliente" disabled={submitting || catalogLoading || Boolean(catalogError)} onClick={() => setQuickCreate('customer')}>+</button></div></FormField>
+            <FormField id="circuit" label="Circuito" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="circuit" label="Circuito" required disabled={submitting || !customerId || circuitLoading || Boolean(circuitError)} value={circuitId} onChange={setCircuitId}
+              options={circuits.map((item) => ({ value: String(item.id), label: `${item.circuit_code} — ${item.description}`, disabled: !item.active }))}
+              placeholder={!customerId ? 'Selecciona primero un cliente.' : circuitLoading ? 'Cargando circuitos...' : 'Selecciona un circuito'} emptyMessage="Este cliente no tiene circuitos activos." noMatchMessage="No se encontraron circuitos." /></div><button type="button" className="button-secondary shrink-0" aria-label="Nuevo circuito" title="Nuevo circuito" disabled={submitting || !selectedCustomer || catalogLoading || Boolean(catalogError) || circuitLoading || Boolean(circuitError)} onClick={() => setQuickCreate('circuit')}>+</button></div>
+              {customerId && !circuitLoading && !circuitError && !circuits.some((item) => item.active) && !circuitId && <p className="mt-2 text-xs text-slate-600">Este cliente no tiene circuitos activos.</p>}
               {circuitError && <div role="alert" className="mt-2 text-sm text-red-700"><p>Error al cargar circuitos: {circuitError}</p><button type="button" className="button-secondary mt-2" onClick={() => setCircuitRetry(circuitRetry + 1)}>Reintentar circuitos</button></div>}
             </FormField>
             <FormField id="sector" label="Sector" required><select id="sector" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={sectorId} onChange={(e) => setSectorId(e.target.value)}><option value="">Selecciona un sector</option>{catalogs?.sectors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
@@ -166,5 +192,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
         <button type="submit" className="button-primary" disabled={submitting || catalogLoading || Boolean(catalogError) || circuitLoading || Boolean(circuitError)}>{submitting ? (ticket ? 'Guardando...' : 'Creando...') : (ticket ? 'Guardar cambios' : 'Guardar')}</button>
       </div>
     </form>
+    {quickCreate === 'customer' && <QuickCatalogCreate kind="customer" onCancel={() => setQuickCreate(null)} onCreated={customerCreated} />}
+    {quickCreate === 'circuit' && selectedCustomer && <QuickCatalogCreate kind="circuit" customer={selectedCustomer} onCancel={() => setQuickCreate(null)} onCreated={circuitCreated} />}
   </>
 }
