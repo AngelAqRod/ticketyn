@@ -1,25 +1,23 @@
 import { Link } from 'react-router'
 import type { Ticket } from '../types/ticket'
-import { formatDate, formatDuration } from '../lib/format'
+import { formatDate, formatTableDate, formatDuration } from '../lib/format'
 import { StatusBadge } from './StatusBadge'
 
 export function TicketTable({ tickets }: { tickets: Ticket[] }) {
   return <div className="panel overflow-hidden">
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[780px] text-left text-sm">
+      <table className="operation-table min-w-[860px]">
         <caption className="sr-only">Listado de tickets</caption>
-        <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
-          <tr>{['Referencia', 'Título', 'Estado', 'Inicio', 'Fin', 'Duración'].map((title) =>
-            <th key={title} scope="col" className="px-5 py-4 font-medium">{title}</th>)}</tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {tickets.map((ticket) => <tr key={ticket.id} className="hover:bg-slate-50">
-            <th scope="row" className="whitespace-nowrap px-5 py-5 font-medium text-emerald-800"><Link to={`/tickets/${ticket.id}`} className="underline underline-offset-4">{ticket.reference}</Link></th>
-            <td className="max-w-80 min-w-48 px-5 py-5 text-slate-900">{ticket.title}</td>
-            <td className="px-5 py-5"><StatusBadge status={ticket.status} /></td>
-            <td className="whitespace-nowrap px-5 py-5 text-slate-500"><time dateTime={ticket.start_at}>{formatDate(ticket.start_at)}</time></td>
-            <td className="whitespace-nowrap px-5 py-5 text-slate-500">{ticket.end_at ? <time dateTime={ticket.end_at}>{formatDate(ticket.end_at)}</time> : '—'}</td>
-            <td className="whitespace-nowrap px-5 py-5 text-slate-500">{formatDuration(ticket.duration_seconds)}</td>
+        <thead><tr>{['Referencia', 'Estado', 'Título', 'Inicio', 'Fin', 'Duración'].map((title) =>
+          <th key={title} scope="col">{title}</th>)}</tr></thead>
+        <tbody>
+          {tickets.map((ticket) => <tr key={ticket.id}>
+            <th scope="row" className="w-36 whitespace-nowrap text-emerald-800"><Link to={`/tickets/${ticket.id}`} className="record-code hover:underline underline-offset-4">{ticket.reference}</Link></th>
+            <td className="w-28"><StatusBadge status={ticket.status} /></td>
+            <td className="min-w-52 text-slate-900"><span className="line-clamp-2" title={ticket.title}>{ticket.title}</span></td>
+            <td className="w-40 whitespace-nowrap text-xs tabular-nums text-slate-600"><time dateTime={ticket.start_at} title={formatDate(ticket.start_at)}>{formatTableDate(ticket.start_at)}</time></td>
+            <td className="w-40 whitespace-nowrap text-xs tabular-nums text-slate-600">{ticket.end_at ? <time dateTime={ticket.end_at} title={formatDate(ticket.end_at)}>{formatTableDate(ticket.end_at)}</time> : '—'}</td>
+            <td className="w-28 whitespace-nowrap font-mono text-xs tabular-nums text-slate-600">{formatDuration(ticket.duration_seconds)}</td>
           </tr>)}
         </tbody>
       </table>

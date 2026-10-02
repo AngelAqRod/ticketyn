@@ -147,20 +147,20 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
 
   return <>
     <PageHeading title={ticket ? `Editar ${ticket.reference}` : "Nuevo ticket"} description={ticket ? "Actualiza los datos operativos del ticket." : "Registra una incidencia. La referencia se asignará automáticamente al guardar."} />
-    {quickNotice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{quickNotice}</p>}
-    {catalogLoading && <p role="status" className="mb-5 text-sm text-slate-500">Cargando catálogos...</p>}
-    {catalogError && <div role="alert" className="panel mb-5 p-4"><p className="font-medium">Error al cargar catálogos</p><p className="mt-1 text-sm">{catalogError}</p><button type="button" className="button-secondary mt-3" onClick={() => setCatalogRetry(catalogRetry + 1)}>Reintentar catálogos</button></div>}
-    <form onSubmit={submit} noValidate className="panel p-5 sm:p-7" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting}>
-      <fieldset disabled={submitting} className="min-w-0 space-y-7">
+    {quickNotice && <p role="status" className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900">{quickNotice}</p>}
+    {catalogLoading && <p role="status" className="mb-3 text-sm text-slate-500">Cargando catálogos...</p>}
+    {catalogError && <div role="alert" className="panel mb-3 p-4"><p className="font-medium">Error al cargar catálogos</p><p className="mt-1 text-sm">{catalogError}</p><button type="button" className="button-secondary mt-3" onClick={() => setCatalogRetry(catalogRetry + 1)}>Reintentar catálogos</button></div>}
+    <form onSubmit={submit} noValidate className="panel p-4 sm:p-5" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting}>
+      <fieldset disabled={submitting} className="min-w-0 space-y-5">
         <legend className="sr-only">Datos del ticket</legend>
-        <section aria-labelledby="incident-heading" className="space-y-4">
+        <section aria-labelledby="incident-heading" className="space-y-3">
           <h2 id="incident-heading" className="font-semibold text-slate-900">Incidencia</h2>
           <FormField id="title" label="Título" required><input id="title" className="form-input" required value={title} onChange={(e) => setTitle(e.target.value)} /></FormField>
-          <FormField id="description" label="Descripción" required><textarea id="description" className="form-input resize-y" rows={4} required value={description} onChange={(e) => setDescription(e.target.value)} /></FormField>
+          <FormField id="description" label="Descripción" required><textarea id="description" className="form-input resize-y" rows={3} required value={description} onChange={(e) => setDescription(e.target.value)} /></FormField>
         </section>
-        <section aria-labelledby="relations-heading" className="border-t border-slate-100 pt-6">
-          <h2 id="relations-heading" className="mb-4 font-semibold text-slate-900">Cliente y clasificación</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+        <section aria-labelledby="relations-heading" className="border-t border-slate-200 pt-4">
+          <h2 id="relations-heading" className="mb-3 text-sm font-semibold text-slate-900">Cliente y clasificación</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
             <FormField id="customer" label="Cliente" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="customer" label="Cliente" required disabled={submitting || catalogLoading || Boolean(catalogError)} value={customerId} onChange={changeCustomer}
               options={(catalogs?.customers ?? []).map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}`, disabled: !item.active }))}
               placeholder="Selecciona un cliente" emptyMessage="No se encontraron clientes." noMatchMessage="No se encontraron clientes." /></div><button type="button" className="button-secondary shrink-0" aria-label="Nuevo cliente" title="Nuevo cliente" disabled={submitting || catalogLoading || Boolean(catalogError)} onClick={() => setQuickCreate('customer')}>+</button></div></FormField>
@@ -176,18 +176,18 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
             <FormField id="status" label="Estado" required><select id="status" className="form-input" value={status} onChange={(e) => setStatus(e.target.value === 'CLOSED' ? 'CLOSED' : 'OPEN')}><option value="OPEN">Abierto</option><option value="CLOSED">Cerrado</option></select></FormField>
           </div>
         </section>
-        <section aria-labelledby="dates-heading" className="border-t border-slate-100 pt-6">
+        <section aria-labelledby="dates-heading" className="border-t border-slate-200 pt-4">
           {ticket && <button type="button" className="button-secondary mb-4" onClick={() => { setEndAt(localDateTimeValue()); setStatus('CLOSED') }}>Finalizar ahora</button>}
-          <h2 id="dates-heading" className="mb-1 font-semibold text-slate-900">Tiempos operativos</h2>
-          <p className="mb-4 text-xs text-slate-500">Fechas y horas de tu navegador. Puedes registrar una incidencia anterior; “Ahora” es solo un atajo.</p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <h2 id="dates-heading" className="mb-1 text-sm font-semibold text-slate-900">Tiempos operativos</h2>
+          <p className="mb-3 text-xs text-slate-500">Fechas y horas de tu navegador. Puedes registrar una incidencia anterior; “Ahora” es solo un atajo.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
             <FormField id="start-at" label="Inicio" required><div className="flex items-center gap-2"><input id="start-at" type="datetime-local" step="60" className="form-input min-w-0" required value={startAt} onChange={(e) => setStartAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Inicio" onClick={() => setStartAt(localDateTimeValue())}>Ahora</button></div></FormField>
             <FormField id="end-at" label="Fin"><div className="flex items-center gap-2"><input id="end-at" type="datetime-local" step="60" className="form-input min-w-0" value={endAt} onChange={(e) => setEndAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Fin" onClick={() => setEndAt(localDateTimeValue())}>Ahora</button></div></FormField>
           </div>
         </section>
       </fieldset>
       {submitError && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-800">{submitError}</p>}
-      <div className="mt-7 flex justify-end gap-3 border-t border-slate-100 pt-5">
+      <div className="mt-5 flex justify-end gap-3 border-t border-slate-200 pt-4">
         <button type="button" className="button-secondary" disabled={submitting} onClick={() => navigate(ticket ? `/tickets/${ticket.id}` : '/tickets')}>Cancelar</button>
         <button type="submit" className="button-primary" disabled={submitting || catalogLoading || Boolean(catalogError) || circuitLoading || Boolean(circuitError)}>{submitting ? (ticket ? 'Guardando...' : 'Creando...') : (ticket ? 'Guardar cambios' : 'Guardar')}</button>
       </div>

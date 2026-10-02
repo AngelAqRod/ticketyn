@@ -1,19 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Segoe UI", system-ui, sans-serif;
 }
 
 @layer base {
-  body { @apply m-0 bg-slate-50 text-slate-800 antialiased; }
-  button, a, input { @apply focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700; }
+  body { @apply m-0 bg-slate-100 text-slate-800 antialiased; }
+  button, a, input, select, textarea { @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700; }
   button:not(:disabled) { cursor: pointer; }
   button:disabled { cursor: not-allowed; }
 }
 
 @layer components {
-  .panel { @apply rounded-xl border border-slate-200 bg-white shadow-xs; }
-  .form-input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-500; }
-  .button-primary { @apply inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-900 disabled:opacity-50; }
-  .button-secondary { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40; }
+  .panel { @apply rounded-md border border-slate-200 bg-white; }
+  .form-input { @apply w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-500; }
+  .button-primary { @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-emerald-800 bg-emerald-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-900 disabled:opacity-50; }
+  .button-secondary { @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40; }
+  .operation-table { @apply w-full text-left text-sm; }
+  .operation-table thead { @apply border-b border-slate-300 bg-slate-50 text-[11px] tracking-wide text-slate-600 uppercase; }
+  .operation-table thead th { @apply whitespace-nowrap px-3 py-2.5 font-semibold; }
+  .operation-table tbody { @apply divide-y divide-slate-200; }
+  .operation-table tbody tr { @apply even:bg-slate-50/50 hover:bg-emerald-50/40; }
+  .operation-table tbody th, .operation-table tbody td { @apply px-3 py-2.5 align-middle; }
+  .operation-table .button-secondary { @apply min-h-8 px-2 py-1 text-xs; }
+  .record-code { @apply font-mono text-[13px] font-semibold tracking-tight; }
+  .section-label { @apply text-[11px] font-semibold tracking-wider text-slate-500 uppercase; }
+  .status-badge { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold; }
 }

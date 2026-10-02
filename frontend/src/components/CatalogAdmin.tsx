@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import * as api from '../api'
 import type { CatalogKind, Circuit, Customer, NamedCatalog } from '../types/catalog'
-import { formatDate } from '../lib/format'
+import { formatDate, formatTableDate } from '../lib/format'
 import { FormField } from './FormField'
 import { PageHeading } from './PageHeading'
 
@@ -131,9 +131,9 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
     <PageHeading title={info.title} description={info.description} action={<button type="button" className="button-primary" disabled={busy || loading || Boolean(loadError)} onClick={() => edit()}>Nuevo {info.singular}</button>} />
     {notice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
     {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-    {draft && <form className="panel mb-6 p-5" aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate>
-      <h2 className="mb-4 font-semibold">{draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}</h2>
-      <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
+    {draft && <form className="panel mb-4 p-4" aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate>
+      <h2 className="mb-3 text-sm font-semibold">{draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}</h2>
+      <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
         {kind === 'circuits' && <FormField id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
         {(kind === 'customers' || kind === 'circuits') && <FormField id="admin-code" label={kind === 'customers' ? 'Código de cliente' : 'Código de circuito'} required><input id="admin-code" className="form-input" required value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></FormField>}
         <FormField id="admin-name" label={kind === 'circuits' ? 'Descripción' : 'Nombre'} required><input id="admin-name" className="form-input" required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></FormField>
@@ -142,14 +142,14 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
       <p className="mt-3 text-xs text-slate-500">Desactivar conserva el registro y sus referencias históricas.</p>
       <div className="mt-4 flex justify-end gap-3"><button type="button" className="button-secondary" disabled={busy} onClick={() => { setDraft(null); setError(null) }}>Cancelar</button><button type="submit" className="button-primary" disabled={busy}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button></div>
     </form>}
-    {(kind === 'customers' || kind === 'circuits') && <div className="mb-4 max-w-md"><label htmlFor="admin-search" className="mb-1 block text-sm font-medium">Buscar {info.empty}</label><input id="admin-search" type="search" className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}
-    {loading ? <p role="status">Cargando {info.empty}...</p> : loadError ? <div role="alert" className="panel p-5"><p>Error al cargar {info.empty}: {loadError}</p><button type="button" className="button-secondary mt-3" onClick={() => setRetry(retry + 1)}>Reintentar</button></div> : !ordered.length ? <p className="panel p-6">{items.length ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`}</p> : <div className="panel overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><caption className="sr-only">{info.title}</caption>
-      <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500"><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col" className="px-4 py-3 font-medium">{label}</th>)}</tr></thead>
-      <tbody className="divide-y divide-slate-100">{ordered.map((item) => <tr key={item.id}>
-        {(kind === 'customers' || kind === 'circuits') && <th scope="row" className="px-4 py-3 font-medium">{code(item)}</th>}
-        {kind === 'circuits' && 'customer_id' in item && <td className="px-4 py-3">{customerLabel(item.customer_id)}</td>}
-        <td className="px-4 py-3">{name(item)}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-medium ${item.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
-        <td className="whitespace-nowrap px-4 py-3">{formatDate(item.created_at)}</td><td className="px-4 py-3"><div className="flex gap-2"><button type="button" className="button-secondary" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}>Editar</button><button type="button" className="button-secondary" disabled={busy || Boolean(draft)} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}>{item.active ? 'Desactivar' : 'Activar'}</button></div></td>
+    {(kind === 'customers' || kind === 'circuits') && <div className="mb-3 max-w-md"><label htmlFor="admin-search" className="mb-1 block text-xs font-medium">Buscar {info.empty}</label><input id="admin-search" type="search" className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}
+    {loading ? <p role="status">Cargando {info.empty}...</p> : loadError ? <div role="alert" className="panel p-5"><p>Error al cargar {info.empty}: {loadError}</p><button type="button" className="button-secondary mt-3" onClick={() => setRetry(retry + 1)}>Reintentar</button></div> : !ordered.length ? <p className="panel p-6">{items.length ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`}</p> : <div className="panel overflow-x-auto"><table className="operation-table min-w-[650px]"><caption className="sr-only">{info.title}</caption>
+      <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+      <tbody>{ordered.map((item) => <tr key={item.id}>
+        {(kind === 'customers' || kind === 'circuits') && <th scope="row" className="record-code text-slate-900">{code(item)}</th>}
+        {kind === 'circuits' && 'customer_id' in item && <td>{customerLabel(item.customer_id)}</td>}
+        <td>{name(item)}</td><td><span className={`status-badge ${item.active ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
+        <td className="whitespace-nowrap text-xs tabular-nums text-slate-600"><time dateTime={item.created_at} title={formatDate(item.created_at)}>{formatTableDate(item.created_at)}</time></td><td><div className="flex gap-2"><button type="button" className="button-secondary" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}>Editar</button><button type="button" className="button-secondary" disabled={busy || Boolean(draft)} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}>{item.active ? 'Desactivar' : 'Activar'}</button></div></td>
       </tr>)}</tbody></table></div>}
   </>
 }

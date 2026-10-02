@@ -1,5 +1,13 @@
 const dateFormatter = new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' })
 
+const tableDateFormatter = new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+export function formatTableDate(value: string | null): string {
+  if (value === null) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'Fecha no válida' : tableDateFormatter.format(date)
+}
+
 export function formatDate(value: string | null): string {
   if (value === null) return '—'
   const date = new Date(value)

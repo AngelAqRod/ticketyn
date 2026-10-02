@@ -60,13 +60,13 @@ export function QuickCatalogCreate(props: Props) {
   }
 
   return <dialog ref={dialog} aria-labelledby="quick-create-title" aria-describedby="quick-create-description" aria-modal="true"
-    className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 text-slate-800 shadow-xl backdrop:bg-slate-900/30"
+    className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-md border border-slate-200 bg-white p-5 text-slate-800 shadow-xl backdrop:bg-slate-900/30"
     onCancel={(event) => { event.preventDefault(); if (!sending.current) props.onCancel() }}>
     <h2 id="quick-create-title" className="text-xl font-semibold">{title}</h2>
-    <p id="quick-create-description" className="mb-5 mt-2 text-sm text-slate-500">Se creará un registro activo. El ticket se guarda por separado.</p>
+    <p id="quick-create-description" className="mb-4 mt-2 text-sm text-slate-500">Se creará un registro activo. El ticket se guarda por separado.</p>
     {props.kind === 'circuit' && <p className="mb-4 text-sm"><span className="font-medium">Cliente: </span>{props.customer.customer_code} — {props.customer.name}</p>}
     <form aria-label={`Crear ${customerMode ? 'cliente' : 'circuito'} rápido`} onSubmit={submit} noValidate>
-      <fieldset disabled={saving} className="space-y-4"><legend className="sr-only">Datos del registro</legend>
+      <fieldset disabled={saving} className="space-y-3"><legend className="sr-only">Datos del registro</legend>
         <FormField id="quick-code" label={customerMode ? 'Código de cliente' : 'Código de circuito'} required><input ref={codeInput} id="quick-code" className="form-input" required value={code} onChange={(event) => setCode(event.target.value)} /></FormField>
         <FormField id="quick-text" label={customerMode ? 'Nombre' : 'Descripción'} required><input id="quick-text" className="form-input" required value={text} onChange={(event) => setText(event.target.value)} /></FormField>
       </fieldset>
