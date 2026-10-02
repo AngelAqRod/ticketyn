@@ -1,5 +1,9 @@
 import { getJson, ApiError } from './client'
-import type { Ticket } from '../types/ticket'
+import type { Ticket, TicketStats } from '../types/ticket'
+
+export async function getTicketStats(signal?: AbortSignal): Promise<TicketStats> {
+  return getJson<TicketStats>('/api/tickets/stats', signal)
+}
 
 export async function getHealth(signal?: AbortSignal): Promise<void> {
   const health = await getJson<{ status: string }>('/health', signal)

@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ticketyn.api.crud import save_item
@@ -13,6 +13,15 @@ RELATED_MODELS = {
     "department_id": Department,
     "incident_type_id": IncidentType,
 }
+
+
+def ticket_stats(session: Session) -> dict[str, int]:
+    row = session.execute(select(
+        func.count(Ticket.id).label("total"),
+        func.count(Ticket.id).filter(Ticket.status == "OPEN").label("open"),
+        func.count(Ticket.id).filter(Ticket.status == "CLOSED").label("closed"),
+    )).one()
+    return dict(row._mapping)
 
 
 def validate_ticket_values(session: Session, values: dict, changed_relations: set[str]) -> None:

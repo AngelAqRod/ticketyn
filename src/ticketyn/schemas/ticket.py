@@ -67,6 +67,12 @@ class TicketResponse(BaseModel):
     updated_at: datetime
 
 
+class TicketStats(BaseModel):
+    total: int
+    open: int
+    closed: int
+
+
 class TicketFilters(BaseModel):
     status: TicketStatus | None = None
     customer_id: PositiveId | None = None

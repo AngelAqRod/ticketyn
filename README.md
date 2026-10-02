@@ -115,8 +115,10 @@ npm run dev
 Abre `http://127.0.0.1:5173` (Vite indicará otro puerto si está ocupado).
 Su proxy envía `/api` y `/health` a `http://127.0.0.1:8000`. Los componentes
 utilizan URLs relativas y no requieren cambios de CORS en FastAPI.
-El dashboard resume la primera página de hasta 50 tickets; sus tarjetas están
-etiquetadas como métricas de página y no como conteos globales.
+El dashboard consulta `/api/tickets/stats` para mostrar total, abiertos y
+cerrados globales, calculados en PostgreSQL sin paginación. La tabla de
+recientes utiliza por separado la primera página de tickets; ambas consultas
+mantienen sus propios estados de carga/error.
 
 Desde `frontend/`, ejecuta las pruebas con fetch simulado y genera el build:
 

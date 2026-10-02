@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getJson } from './client'
-import { getHealth, listTickets } from './index'
+import { getHealth, getTicketStats, listTickets } from './index'
 import { jsonResponse, ticket } from '../test/fixtures'
 
 describe('cliente API', () => {
+  it('lee estadísticas globales sin parámetros de paginación', async () => {
+    const stats = { total: 123, open: 20, closed: 103 }
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(stats))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await getTicketStats()).toEqual(stats)
+    expect(fetchMock).toHaveBeenCalledWith('/api/tickets/stats', expect.any(Object))
+  })
   it('lee JSON y usa una URL relativa con paginación', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([ticket]))
     vi.stubGlobal('fetch', fetchMock)

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, Query
 from ticketyn.api import ticket_data
 from ticketyn.api.crud import DBSession, get_or_404
 from ticketyn.models import Ticket
-from ticketyn.schemas.ticket import TicketCreate, TicketFilters, TicketResponse, TicketUpdate
+from ticketyn.schemas.ticket import TicketCreate, TicketFilters, TicketResponse, TicketStats, TicketUpdate
 
 router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 
@@ -18,6 +18,11 @@ def create_ticket(payload: TicketCreate, session: DBSession):
 @router.get("", response_model=list[TicketResponse])
 def list_tickets(session: DBSession, filters: Annotated[TicketFilters, Query()]):
     return ticket_data.list_tickets(session, filters.model_dump())
+
+
+@router.get("/stats", response_model=TicketStats)
+def get_ticket_stats(session: DBSession):
+    return ticket_data.ticket_stats(session)
 
 
 @router.get("/{id}", response_model=TicketResponse)

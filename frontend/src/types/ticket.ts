@@ -1,5 +1,11 @@
 export type TicketStatus = 'OPEN' | 'CLOSED'
 
+export interface TicketStats {
+  total: number
+  open: number
+  closed: number
+}
+
 export interface Ticket {
   id: number
   ticket_number: number

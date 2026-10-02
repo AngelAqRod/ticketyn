@@ -7,19 +7,24 @@ import { jsonResponse, ticket } from './test/fixtures'
 function mockApi(healthy = true) {
   vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(path === '/health'
     ? jsonResponse({ status: 'ok' }, healthy ? 200 : 503)
+    : path === '/api/tickets/stats' ? jsonResponse({ total: 123, open: 20, closed: 103 })
     : jsonResponse([ticket]))))
 }
 
 describe('aplicación', () => {
-  it('renderiza el layout, la conexión y métricas de página explícitas', async () => {
+  it('renderiza el layout, la conexión y estadísticas globales independientes del listado', async () => {
     mockApi()
     render(<MemoryRouter><App /></MemoryRouter>)
     expect(screen.getByText('Ticketyn', { exact: false })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Navegación principal' })).toBeInTheDocument()
     expect(await screen.findByText('API conectada')).toBeInTheDocument()
-    const summary = screen.getByRole('region', { name: 'Resumen de la página cargada' })
+    const summary = screen.getByRole('region', { name: 'Estadísticas globales de tickets' })
     expect(within(summary).getByText('Tickets totales')).toBeInTheDocument()
-    expect(within(summary).getByText(/No representa un conteo global/)).toBeInTheDocument()
+    expect(await within(summary).findByText('123')).toBeInTheDocument()
+    expect(within(summary).getByText('20')).toBeInTheDocument()
+    expect(within(summary).getByText('103')).toBeInTheDocument()
+    expect(screen.queryByText(/primera página de hasta 50/)).not.toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith('/api/tickets/stats', expect.any(Object))
     expect(await screen.findByText('TEST-003')).toBeInTheDocument()
   })
   it('navega a placeholders y tickets dentro del layout', async () => {
@@ -44,8 +49,47 @@ describe('aplicación', () => {
   it('no presenta métricas inventadas cuando falla la API', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     render(<MemoryRouter><App /></MemoryRouter>)
-    await screen.findByRole('alert')
-    const summary = screen.getByRole('region', { name: 'Resumen de la página cargada' })
+    await screen.findByText('Error al cargar estadísticas')
+    const summary = screen.getByRole('region', { name: 'Estadísticas globales de tickets' })
     expect(within(summary).getAllByText('—')).toHaveLength(3)
+  })
+  it('muestra estadísticas en carga sin inventar ceros', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+    render(<MemoryRouter><App /></MemoryRouter>)
+    expect(screen.getByText('Cargando estadísticas...')).toBeInTheDocument()
+    const summary = screen.getByRole('region', { name: 'Estadísticas globales de tickets' })
+    expect(within(summary).getAllByText('—')).toHaveLength(3)
+  })
+  it('muestra ceros globales para una base vacía', async () => {
+    vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(jsonResponse(
+      path === '/health' ? { status: 'ok' } : path === '/api/tickets/stats'
+        ? { total: 0, open: 0, closed: 0 } : [],
+    ))))
+    render(<MemoryRouter><App /></MemoryRouter>)
+    const summary = screen.getByRole('region', { name: 'Estadísticas globales de tickets' })
+    expect(await within(summary).findAllByText('0')).toHaveLength(3)
+    expect(await screen.findByText('No hay tickets')).toBeInTheDocument()
+  })
+  it('permite recuperar estadísticas sin bloquear los recientes', async () => {
+    let failStats = true
+    vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(path === '/health'
+      ? jsonResponse({ status: 'ok' }) : path === '/api/tickets/stats'
+      ? jsonResponse({ total: 123, open: 20, closed: 103 }, failStats ? 503 : 200)
+      : jsonResponse([ticket]))))
+    render(<MemoryRouter><App /></MemoryRouter>)
+    expect(await screen.findByText('Error al cargar estadísticas')).toBeInTheDocument()
+    expect(await screen.findByText('TEST-003')).toBeInTheDocument()
+    failStats = false
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar estadísticas' }))
+    expect(await screen.findByText('123')).toBeInTheDocument()
+    expect(screen.queryByText('Error al cargar estadísticas')).not.toBeInTheDocument()
+  })
+  it('conserva los conteos globales aunque fallen los recientes', async () => {
+    vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(path === '/health'
+      ? jsonResponse({ status: 'ok' }) : path === '/api/tickets/stats'
+      ? jsonResponse({ total: 123, open: 20, closed: 103 }) : jsonResponse({}, 503))))
+    render(<MemoryRouter><App /></MemoryRouter>)
+    expect(await screen.findByText('Error al cargar tickets')).toBeInTheDocument()
+    expect(await screen.findByText('123')).toBeInTheDocument()
   })
 })
