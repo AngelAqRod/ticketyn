@@ -5,6 +5,7 @@ class CircuitCreate(InputSchema):
     customer_id: PositiveId
     circuit_code: NonEmptyString
     description: NonEmptyString
+    active: bool = True
 
 
 class CircuitUpdate(InputSchema):

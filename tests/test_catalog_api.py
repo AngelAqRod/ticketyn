@@ -263,3 +263,17 @@ def test_docs_and_openapi(api_client):
 def test_services_endpoints_removed(api_client, method, path):
     kwargs = {"json": {"name": "Recurso eliminado"}} if method in {"post", "patch"} else {}
     assert getattr(api_client, method)(path, **kwargs).status_code == 404
+
+
+def test_create_inactive_catalog(api_client, resource):
+    path, _, payload = resource
+    item = create(api_client, path, {**payload, "active": False})
+    assert item["active"] is False
+    assert api_client.get(path).json() == []
+    assert api_client.get(path, params={"include_inactive": True}).json() == [item]
+    assert api_client.get(f"{path}/{item['id']}").json() == item
+
+
+def test_create_null_active_rejected(api_client, resource):
+    path, _, payload = resource
+    assert api_client.post(path, json={**payload, "active": None}).status_code == 422

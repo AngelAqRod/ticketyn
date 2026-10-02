@@ -1,11 +1,11 @@
 import { getJson, postJson, patchJson, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats } from '../types/ticket'
-import type { Circuit, Customer, Department, IncidentType, Sector } from '../types/catalog'
+import type { Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
 
-async function activeCatalog<T>(path: string, signal?: AbortSignal, filters: Record<string, string> = {}): Promise<T[]> {
+async function catalogList<T>(path: string, signal?: AbortSignal, filters: Record<string, string> = {}, includeInactive = false): Promise<T[]> {
   const items: T[] = []
   for (let offset = 0; ; offset += 200) {
-    const query = new URLSearchParams({ ...filters, include_inactive: 'false', limit: '200', offset: String(offset) })
+    const query = new URLSearchParams({ ...filters, include_inactive: String(includeInactive), limit: '200', offset: String(offset) })
     const page = await getJson<T[]>(`${path}?${query}`, signal)
     if (!Array.isArray(page)) throw new ApiError('La API no devolvió un catálogo válido.')
     items.push(...page)
@@ -13,12 +13,12 @@ async function activeCatalog<T>(path: string, signal?: AbortSignal, filters: Rec
   }
 }
 
-export const listCustomers = (signal?: AbortSignal) => activeCatalog<Customer>('/api/customers', signal)
-export const listSectors = (signal?: AbortSignal) => activeCatalog<Sector>('/api/sectors', signal)
-export const listDepartments = (signal?: AbortSignal) => activeCatalog<Department>('/api/departments', signal)
-export const listIncidentTypes = (signal?: AbortSignal) => activeCatalog<IncidentType>('/api/incident-types', signal)
-export const listCircuits = (customerId: number, signal?: AbortSignal) =>
-  activeCatalog<Circuit>('/api/circuits', signal, { customer_id: String(customerId) })
+export const listCustomers = (signal?: AbortSignal, includeInactive = false) => catalogList<Customer>('/api/customers', signal, {}, includeInactive)
+export const listSectors = (signal?: AbortSignal, includeInactive = false) => catalogList<Sector>('/api/sectors', signal, {}, includeInactive)
+export const listDepartments = (signal?: AbortSignal, includeInactive = false) => catalogList<Department>('/api/departments', signal, {}, includeInactive)
+export const listIncidentTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<IncidentType>('/api/incident-types', signal, {}, includeInactive)
+export const listCircuits = (customerId?: number, signal?: AbortSignal, includeInactive = false) =>
+  catalogList<Circuit>('/api/circuits', signal, customerId === undefined ? {} : { customer_id: String(customerId) }, includeInactive)
 
 export function createTicket(payload: TicketCreateInput, signal?: AbortSignal): Promise<Ticket> {
   return postJson<Ticket>('/api/tickets', payload, signal)
@@ -55,3 +55,18 @@ export async function getTicketCatalogs(ticket: Ticket, signal?: AbortSignal) {
   ])
   return { customer, circuit, sector, department, incidentType }
 }
+
+export const createCustomer = (payload: CustomerInput, signal?: AbortSignal) => postJson<Customer>('/api/customers', payload, signal)
+export const updateCustomer = (id: number, payload: Partial<CustomerInput>, signal?: AbortSignal) => patchJson<Customer>(`/api/customers/${id}`, payload, signal)
+
+export const createCircuit = (payload: CircuitInput, signal?: AbortSignal) => postJson<Circuit>('/api/circuits', payload, signal)
+export const updateCircuit = (id: number, payload: Partial<CircuitInput>, signal?: AbortSignal) => patchJson<Circuit>(`/api/circuits/${id}`, payload, signal)
+
+export const createSector = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Sector>('/api/sectors', payload, signal)
+export const updateSector = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Sector>(`/api/sectors/${id}`, payload, signal)
+
+export const createDepartment = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Department>('/api/departments', payload, signal)
+export const updateDepartment = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Department>(`/api/departments/${id}`, payload, signal)
+
+export const createIncidentType = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<IncidentType>('/api/incident-types', payload, signal)
+export const updateIncidentType = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<IncidentType>(`/api/incident-types/${id}`, payload, signal)

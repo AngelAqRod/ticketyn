@@ -4,6 +4,7 @@ from ticketyn.schemas.common import InputSchema, NonEmptyString, ResponseSchema
 class CustomerCreate(InputSchema):
     customer_code: NonEmptyString
     name: NonEmptyString
+    active: bool = True
 
 
 class CustomerUpdate(InputSchema):

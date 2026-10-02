@@ -6,6 +6,7 @@ export class ApiError extends Error {
 }
 
 const fieldLabels: Record<string, string> = {
+  name: 'Nombre', customer_code: 'Código de cliente', circuit_code: 'Código de circuito',
   title: 'Título', description: 'Descripción', customer_id: 'Cliente', circuit_id: 'Circuito',
   sector_id: 'Sector', department_id: 'Departamento', incident_type_id: 'Tipo de incidencia',
   start_at: 'Inicio', end_at: 'Fin', status: 'Estado',

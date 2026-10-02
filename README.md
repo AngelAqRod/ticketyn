@@ -132,6 +132,13 @@ La referencia del listado abre `/tickets/:id`; **Editar ticket** abre
 los cambios se persisten únicamente al pulsar **Guardar cambios**. Estado y
 Fin siguen siendo independientes: reabrir no borra Fin automáticamente.
 
+`/customers` y `/circuits` permiten administrar clientes y circuitos con búsqueda
+local. `/catalogs` reúne sectores, departamentos y tipos de incidencia mediante
+un selector. Estas pantallas incluyen activos e inactivos y usan formularios en
+paneles para crear/editar. Desactivar requiere confirmación, conserva el registro
+y las referencias históricas; no hay borrado físico. Los selectores de tickets
+nuevos siguen mostrando solo registros activos.
+
 Desde `frontend/`, ejecuta las pruebas con fetch simulado y genera el build:
 
 ```bash

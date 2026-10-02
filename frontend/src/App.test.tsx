@@ -8,7 +8,7 @@ function mockApi(healthy = true) {
   vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(path === '/health'
     ? jsonResponse({ status: 'ok' }, healthy ? 200 : 503)
     : path === '/api/tickets/stats' ? jsonResponse({ total: 123, open: 20, closed: 103 })
-    : jsonResponse([ticket]))))
+    : path.startsWith('/api/tickets') ? jsonResponse([ticket]) : jsonResponse([]))))
 }
 
 describe('aplicación', () => {
@@ -27,14 +27,14 @@ describe('aplicación', () => {
     expect(fetch).toHaveBeenCalledWith('/api/tickets/stats', expect.any(Object))
     expect(await screen.findByText('TEST-003')).toBeInTheDocument()
   })
-  it('navega a placeholders y tickets dentro del layout', async () => {
+  it('navega a administración, configuración y tickets dentro del layout', async () => {
     mockApi()
     render(<MemoryRouter initialEntries={['/customers']}><App /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument()
     const nav = screen.getByRole('navigation')
     for (const title of ['Circuitos', 'Catálogos', 'Configuración']) {
       fireEvent.click(within(nav).getByRole('link', { name: title }))
-      expect(screen.getByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: title === 'Catálogos' ? 'Sectores' : title, level: 1 })).toBeInTheDocument()
     }
     fireEvent.click(within(nav).getByRole('link', { name: 'Tickets' }))
     expect(await screen.findByText('TEST-003')).toBeInTheDocument()
@@ -75,7 +75,7 @@ describe('aplicación', () => {
     vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(path === '/health'
       ? jsonResponse({ status: 'ok' }) : path === '/api/tickets/stats'
       ? jsonResponse({ total: 123, open: 20, closed: 103 }, failStats ? 503 : 200)
-      : jsonResponse([ticket]))))
+      : path.startsWith('/api/tickets') ? jsonResponse([ticket]) : jsonResponse([]))))
     render(<MemoryRouter><App /></MemoryRouter>)
     expect(await screen.findByText('Error al cargar estadísticas')).toBeInTheDocument()
     expect(await screen.findByText('TEST-003')).toBeInTheDocument()
