@@ -92,6 +92,45 @@ Respuesta: `{"status":"ok"}`. `/health` comprueba que la aplicación responde;
 no verifica la disponibilidad de PostgreSQL. El motor conecta cuando se utiliza
 una sesión; Alembic sí necesita PostgreSQL para ejecutar migraciones online.
 
+## Frontend en desarrollo
+
+El frontend está en `frontend/` y usa React, TypeScript, Vite y Tailwind CSS.
+Requiere Node.js 22.22.2+, 24.15+ o 26+ y npm. En Arch puedes instalarlos con
+`sudo pacman -Syu nodejs npm`.
+
+Desde la raíz, inicia el backend como siempre:
+
+```bash
+.venv/bin/uvicorn ticketyn.main:app --reload
+```
+
+En otra terminal instala las dependencias reproducibles y arranca el frontend:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Abre `http://127.0.0.1:5173` (Vite indicará otro puerto si está ocupado).
+Su proxy envía `/api` y `/health` a `http://127.0.0.1:8000`. Los componentes
+utilizan URLs relativas y no requieren cambios de CORS en FastAPI.
+El dashboard resume la primera página de hasta 50 tickets; sus tarjetas están
+etiquetadas como métricas de página y no como conteos globales.
+
+Desde `frontend/`, ejecuta las pruebas con fetch simulado y genera el build:
+
+```bash
+npm test
+npm run build
+```
+
+`npm run test:watch` ejecuta las pruebas en modo interactivo. El build verifica
+TypeScript y genera `frontend/dist/`. Los archivos compilados se podrán servir
+estáticamente en producción, con fallback a `index.html` para las rutas de la
+aplicación y proxy de `/api` y `/health` al backend. Vite no será el servidor de
+producción; no se configura Nginx en esta etapa.
+
 ## Migraciones
 
 La primera revisión es `alembic/versions/0001_initial_catalogs.py`. Crea
