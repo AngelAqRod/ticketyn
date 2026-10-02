@@ -6,7 +6,6 @@ import pytest
 RESOURCES = [
     ("customers", "customer_code", {"customer_code": "SGgt-00000", "name": "Empresa ABC"}),
     ("circuits", "circuit_code", {"circuit_code": "SGgt-00000.00000", "description": "Internet principal"}),
-    ("services", "name", {"name": "Internet simetrico"}),
     ("sectors", "name", {"name": "Sector Norte"}),
 ]
 
@@ -187,11 +186,11 @@ def test_null_active_and_unknown_fields_are_rejected(api_client, resource):
 
 def test_default_limit(api_client):
     for number in range(51):
-        create(api_client, "/api/services", {"name": f"Servicio {number:03d}"})
-    response = api_client.get("/api/services")
+        create(api_client, "/api/sectors", {"name": f"Sector {number:03d}"})
+    response = api_client.get("/api/sectors")
     assert response.status_code == 200
     assert len(response.json()) == 50
-    assert api_client.get("/api/services", params={"offset": 50}).json()[0]["name"] == "Servicio 050"
+    assert api_client.get("/api/sectors", params={"offset": 50}).json()[0]["name"] == "Sector 050"
 
 
 def test_circuit_customer_filter_and_reassignment(api_client):
@@ -248,7 +247,17 @@ def test_docs_and_openapi(api_client):
     response = api_client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
+    assert not any(path.startswith("/api/services") for path in paths)
     for name, _, _ in RESOURCES:
         assert set(paths[f"/api/{name}"]) == {"get", "post"}
         assert set(paths[f"/api/{name}/{{id}}"]) == {"get", "patch"}
         assert "delete" not in paths[f"/api/{name}/{{id}}"]
+
+
+@pytest.mark.parametrize("method, path", [
+    ("post", "/api/services"), ("get", "/api/services"),
+    ("get", "/api/services/1"), ("patch", "/api/services/1"),
+])
+def test_services_endpoints_removed(api_client, method, path):
+    kwargs = {"json": {"name": "Recurso eliminado"}} if method in {"post", "patch"} else {}
+    assert getattr(api_client, method)(path, **kwargs).status_code == 404

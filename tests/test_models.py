@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from ticketyn.models import Circuit, Customer, Sector, Service
+from ticketyn.models import Circuit, Customer, Sector
 
 
 def test_customer_creation(db_session):
@@ -64,14 +64,13 @@ def test_circuit_rejects_nonexistent_customer(db_session):
     assert error.value.orig.diag.constraint_name == "fk_circuits_customer_id_customers"
 
 
-@pytest.mark.parametrize("model", [Service, Sector])
-def test_catalog_creation(db_session, model):
-    item = model(name="Catálogo de prueba")
+def test_sector_creation(db_session):
+    item = Sector(name="Catálogo de prueba")
     db_session.add(item)
     db_session.commit()
     db_session.expire_all()
 
-    stored = db_session.get(model, item.id)
+    stored = db_session.get(Sector, item.id)
     assert stored.id > 0
     assert stored.name == "Catálogo de prueba"
     assert stored.active is True
@@ -81,7 +80,6 @@ def test_catalog_creation(db_session, model):
 @pytest.mark.parametrize("model, field, constraint", [
     (Customer, "customer_code", "uq_customers_customer_code"),
     (Circuit, "circuit_code", "uq_circuits_circuit_code"),
-    (Service, "name", "uq_services_name"),
     (Sector, "name", "uq_sectors_name"),
 ])
 def test_business_identifier_is_unique(db_session, model, field, constraint):
@@ -117,7 +115,6 @@ def test_business_identifier_is_unique(db_session, model, field, constraint):
     (Circuit, {"description": "Sin código"}, "circuit_code"),
     (Circuit, {"circuit_code": "SGgt-00000.00000"}, "description"),
     (Circuit, {"circuit_code": "SGgt-00000.00000", "description": "Sin cliente"}, "customer_id"),
-    (Service, {}, "name"),
     (Sector, {}, "name"),
 ])
 def test_required_fields(db_session, model, values, missing_field):

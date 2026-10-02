@@ -14,7 +14,6 @@ Model = TypeVar("Model", bound=Base)
 UNIQUE_ERRORS = {
     "uq_customers_customer_code": "Ya existe un cliente con ese customer_code",
     "uq_circuits_circuit_code": "Ya existe un circuito con ese circuit_code",
-    "uq_services_name": "Ya existe un servicio con ese name",
     "uq_sectors_name": "Ya existe un sector con ese name",
 }
 

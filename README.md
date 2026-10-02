@@ -13,7 +13,7 @@ src/ticketyn/
   core/config.py   # Variables de entorno y .env
   db/base.py       # Base ORM y nombres de restricciones
   db/session.py    # Motor y sesiones SQLAlchemy
-  models/          # Customer, Circuit, Service, Sector y campos comunes
+  models/          # Customer, Circuit, Sector y campos comunes
 alembic/           # Entorno y revisiones de esquema
 tests/             # Pruebas automáticas
 ```
@@ -97,13 +97,26 @@ una sesión; Alembic sí necesita PostgreSQL para ejecutar migraciones online.
 La primera revisión es `alembic/versions/0001_initial_catalogs.py`. Crea
 `customers`, `circuits`, `services` y `sectors`, con sus restricciones e índices.
 Esta revisión ya fue revisada y aplicada manualmente a la base de desarrollo.
-La etapa de API reutiliza ese esquema sin crear nuevas migraciones.
+Se conserva sin modificaciones como parte del historial.
+
+La nueva revisión `alembic/versions/0002_remove_services.py`, posterior a
+`0001_initial_catalogs`, elimina el catálogo histórico Service porque Circuit
+ya representa el circuito/servicio contratado por un cliente. Está pendiente
+de revisión y aplicación manual a la base de desarrollo.
+
+`upgrade()` de 0002 elimina la tabla `services`, incluidos sus registros y
+restricciones. No convierte datos de Service en Circuit ni modifica las otras
+tablas. `downgrade()` vuelve a crear `services` con el mismo esquema original:
+`name` VARCHAR único, `id` INTEGER IDENTITY y PK, `active` BOOLEAN con
+predeterminado `true`, `created_at` TIMESTAMP WITH TIME ZONE con predeterminado
+`now()`, todos NOT NULL. El downgrade restaura la estructura vacía, no los datos
+eliminados.
 
 Para ver la revisión actual y generar el SQL sin ejecutar cambios:
 
 ```bash
 alembic current
-alembic upgrade head --sql
+alembic upgrade 0001_initial_catalogs:0002_remove_services --sql
 ```
 
 Solo después de revisar y aprobar la migración, puedes aplicarla manualmente
@@ -126,9 +139,8 @@ Referencia: [Autogeneración de Alembic](https://alembic.sqlalchemy.org/en/lates
 
 | Modelo | Identificador visible | Relación |
 | --- | --- | --- |
-| Customer | `customer_code`, VARCHAR único y manual | Tiene múltiples circuitos |
-| Circuit | `circuit_code`, VARCHAR único y manual | `customer_id` referencia `customers.id` |
-| Service | `name`, VARCHAR único | Catálogo independiente |
+| Customer | `customer_code`, VARCHAR único y manual | Representa al cliente; tiene múltiples circuitos |
+| Circuit | `circuit_code`, VARCHAR único y manual | Representa el circuito/servicio contratado; `customer_id` referencia `customers.id` |
 | Sector | `name`, VARCHAR único | Catálogo independiente |
 
 Cada tabla tiene una PK entera `id` generada por PostgreSQL mediante
@@ -170,18 +182,21 @@ una transacción independiente que se revierte al finalizar.
 
 Las pruebas de persistencia y API no usan la conexión de `.env` ni
 `DATABASE_URL`: la API sustituye la dependencia de sesión por la sesión del
-clúster temporal. No se conectan a la base de desarrollo ni aplican migraciones.
+clúster temporal. No se conectan a la base de desarrollo.
 Verifican los modelos sobre
 PostgreSQL real, incluidos valores predeterminados, campos obligatorios,
-unicidad y claves foráneas. Una prueba adicional compara el SQL de la migración
-con el SQL de los modelos en modo offline, sin ejecutar sentencias. Para
+unicidad y claves foráneas. Una prueba compara el SQL de las tablas conservadas
+de 0001 con el SQL de los modelos en modo offline. Otra prueba ejecuta 0001,
+el upgrade de 0002 y su downgrade en un esquema exclusivo dentro del clúster
+temporal, verificando que `services` se crea, se elimina y se restaura con
+idéntica estructura. Los cambios de esa prueba se revierten al finalizar. Para
 ejecutar solo la prueba HTTP:
 
 ```bash
 pytest tests/test_health.py
 ```
 
-La suite de API verifica los cuatro recursos, respuestas, actualizaciones
+La suite de API verifica los tres recursos, respuestas, actualizaciones
 parciales, conflictos con rollback, filtros, búsquedas, activos/inactivos,
 paginación, validación y documentación automática.
 
@@ -194,7 +209,6 @@ La especificación OpenAPI está en `/openapi.json`.
 | --- | --- | --- |
 | Customers | `POST /api/customers`, `GET /api/customers` | `GET /api/customers/{id}`, `PATCH /api/customers/{id}` |
 | Circuits | `POST /api/circuits`, `GET /api/circuits` | `GET /api/circuits/{id}`, `PATCH /api/circuits/{id}` |
-| Services | `POST /api/services`, `GET /api/services` | `GET /api/services/{id}`, `PATCH /api/services/{id}` |
 | Sectors | `POST /api/sectors`, `GET /api/sectors` | `GET /api/sectors/{id}`, `PATCH /api/sectors/{id}` |
 
 No hay DELETE físico. Para desactivar o reactivar, envía un PATCH con
@@ -204,7 +218,6 @@ No hay DELETE físico. Para desactivar o reactivar, envía un PATCH con
 | --- | --- | --- | --- |
 | Customers | `customer_code`, `name` | `customer_code`, `name`, `active` | Busca por código/nombre; ordena por `customer_code` |
 | Circuits | `customer_id`, `circuit_code`, `description` | `customer_id`, `circuit_code`, `description`, `active` | Busca por código/descripción; ordena por `circuit_code` |
-| Services | `name` | `name`, `active` | Busca y ordena por `name` |
 | Sectors | `name` | `name`, `active` | Busca y ordena por `name` |
 
 POST devuelve 201 y los campos del registro junto con `id`, `active` y
@@ -288,9 +301,11 @@ compartirá datos con otras instalaciones. No existe todavía `install.sh`.
 
 ## Alcance actual
 
-La capa funcional actual contiene los cuatro modelos ORM, su primera
-migración y endpoints REST de creación, consulta y actualización. Service y Sector son catálogos
-independientes. Las futuras relaciones de tickets usarán claves foráneas hacia
+La capa funcional actual contiene Customer, Circuit y Sector, dos revisiones
+de esquema y endpoints REST de creación, consulta y actualización. Customer
+representa al cliente; Circuit representa su circuito/servicio contratado;
+Sector es un catálogo independiente, sin relación con Circuit.
+Las futuras relaciones de tickets usarán claves foráneas hacia
 estas entidades, permitiendo buscar o crear registros durante el flujo de
 creación del ticket cuando se implementen API e interfaz.
 
