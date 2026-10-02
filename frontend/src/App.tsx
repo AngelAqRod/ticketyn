@@ -2,12 +2,14 @@ import { Link, Route, Routes } from 'react-router'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { Tickets } from './pages/Tickets'
+import { NewTicket } from './pages/NewTicket'
 import { Placeholder } from './pages/Placeholder'
 
 export default function App() {
   return <Routes><Route element={<Layout />}>
     <Route index element={<Dashboard />} />
     <Route path="tickets" element={<Tickets />} />
+    <Route path="tickets/new" element={<NewTicket />} />
     <Route path="customers" element={<Placeholder title="Clientes" description="Clientes y sus códigos de negocio." />} />
     <Route path="circuits" element={<Placeholder title="Circuitos" description="Circuitos y servicios contratados por tus clientes." />} />
     <Route path="catalogs" element={<Placeholder title="Catálogos" description="Sectores, departamentos y tipos de incidencia." />} />

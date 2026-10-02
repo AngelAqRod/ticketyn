@@ -1,7 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render as renderReact, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { Tickets } from './Tickets'
 import { jsonResponse, ticket } from '../test/fixtures'
+
+const render = (element: ReactElement) => renderReact(element, { wrapper: MemoryRouter })
 
 describe('listado de tickets', () => {
   it('muestra el estado de carga', () => {

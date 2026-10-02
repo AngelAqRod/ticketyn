@@ -1,5 +1,28 @@
-import { getJson, ApiError } from './client'
-import type { Ticket, TicketStats } from '../types/ticket'
+import { getJson, postJson, ApiError } from './client'
+import type { Ticket, TicketCreateInput, TicketStats } from '../types/ticket'
+import type { Circuit, Customer, Department, IncidentType, Sector } from '../types/catalog'
+
+async function activeCatalog<T>(path: string, signal?: AbortSignal, filters: Record<string, string> = {}): Promise<T[]> {
+  const items: T[] = []
+  for (let offset = 0; ; offset += 200) {
+    const query = new URLSearchParams({ ...filters, include_inactive: 'false', limit: '200', offset: String(offset) })
+    const page = await getJson<T[]>(`${path}?${query}`, signal)
+    if (!Array.isArray(page)) throw new ApiError('La API no devolvió un catálogo válido.')
+    items.push(...page)
+    if (page.length < 200) return items
+  }
+}
+
+export const listCustomers = (signal?: AbortSignal) => activeCatalog<Customer>('/api/customers', signal)
+export const listSectors = (signal?: AbortSignal) => activeCatalog<Sector>('/api/sectors', signal)
+export const listDepartments = (signal?: AbortSignal) => activeCatalog<Department>('/api/departments', signal)
+export const listIncidentTypes = (signal?: AbortSignal) => activeCatalog<IncidentType>('/api/incident-types', signal)
+export const listCircuits = (customerId: number, signal?: AbortSignal) =>
+  activeCatalog<Circuit>('/api/circuits', signal, { customer_id: String(customerId) })
+
+export function createTicket(payload: TicketCreateInput, signal?: AbortSignal): Promise<Ticket> {
+  return postJson<Ticket>('/api/tickets', payload, signal)
+}
 
 export async function getTicketStats(signal?: AbortSignal): Promise<TicketStats> {
   return getJson<TicketStats>('/api/tickets/stats', signal)

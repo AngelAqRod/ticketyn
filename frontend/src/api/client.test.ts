@@ -1,9 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getJson } from './client'
-import { getHealth, getTicketStats, listTickets } from './index'
+import { getHealth, getTicketStats, listCustomers, listTickets } from './index'
 import { jsonResponse, ticket } from '../test/fixtures'
 
 describe('cliente API', () => {
+  it('carga todas las páginas del catálogo activo, sin limitar el selector a la primera', async () => {
+    const firstPage = Array.from({ length: 200 }, (_, index) => ({ id: index + 1 }))
+    const lastPage = [{ id: 201 }]
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(firstPage))
+      .mockResolvedValueOnce(jsonResponse(lastPage))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await listCustomers()).toEqual([...firstPage, ...lastPage])
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/customers?include_inactive=false&limit=200&offset=0', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/customers?include_inactive=false&limit=200&offset=200', expect.any(Object))
+  })
   it('lee estadísticas globales sin parámetros de paginación', async () => {
     const stats = { total: 123, open: 20, closed: 103 }
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(stats))
@@ -19,7 +29,7 @@ describe('cliente API', () => {
   })
   it('expone errores HTTP', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ detail: 'error' }, 503)))
-    await expect(listTickets()).rejects.toMatchObject({ status: 503, message: expect.stringContaining('503') })
+    await expect(listTickets()).rejects.toMatchObject({ status: 503, message: 'error' })
   })
   it('expone fallos de conexión', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))

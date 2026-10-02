@@ -6,6 +6,19 @@ export interface TicketStats {
   closed: number
 }
 
+export interface TicketCreateInput {
+  title: string
+  description: string
+  customer_id: number
+  circuit_id: number
+  sector_id: number
+  department_id: number
+  incident_type_id: number
+  start_at: string
+  end_at: string | null
+  status: TicketStatus
+}
+
 export interface Ticket {
   id: number
   ticket_number: number

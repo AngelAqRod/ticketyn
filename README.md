@@ -120,6 +120,13 @@ cerrados globales, calculados en PostgreSQL sin paginación. La tabla de
 recientes utiliza por separado la primera página de tickets; ambas consultas
 mantienen sus propios estados de carga/error.
 
+Desde `/tickets`, **Nuevo ticket** abre `/tickets/new`. El formulario carga
+catálogos activos y filtra los circuitos por el ID del cliente seleccionado.
+Inicio y Fin se editan en hora local del navegador; los botones **Ahora** son
+atajos y los timestamps se convierten a ISO UTC conservando el instante elegido.
+Fin puede quedar vacío, independientemente del estado Abierto/Cerrado.
+Tras guardar, el listado muestra la referencia asignada por el backend.
+
 Desde `frontend/`, ejecuta las pruebas con fetch simulado y genera el build:
 
 ```bash
