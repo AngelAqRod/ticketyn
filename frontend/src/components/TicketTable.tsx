@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import type { Ticket } from '../types/ticket'
 import { formatDate, formatDuration } from '../lib/format'
 import { StatusBadge } from './StatusBadge'
@@ -13,7 +14,7 @@ export function TicketTable({ tickets }: { tickets: Ticket[] }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {tickets.map((ticket) => <tr key={ticket.id} className="hover:bg-slate-50">
-            <th scope="row" className="whitespace-nowrap px-5 py-5 font-medium text-emerald-800">{ticket.reference}</th>
+            <th scope="row" className="whitespace-nowrap px-5 py-5 font-medium text-emerald-800"><Link to={`/tickets/${ticket.id}`} className="underline underline-offset-4">{ticket.reference}</Link></th>
             <td className="max-w-80 min-w-48 px-5 py-5 text-slate-900">{ticket.title}</td>
             <td className="px-5 py-5"><StatusBadge status={ticket.status} /></td>
             <td className="whitespace-nowrap px-5 py-5 text-slate-500"><time dateTime={ticket.start_at}>{formatDate(ticket.start_at)}</time></td>

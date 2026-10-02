@@ -1,4 +1,4 @@
-import { getJson, postJson, ApiError } from './client'
+import { getJson, postJson, patchJson, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats } from '../types/ticket'
 import type { Circuit, Customer, Department, IncidentType, Sector } from '../types/catalog'
 
@@ -41,4 +41,17 @@ export async function listTickets(
   const tickets = await getJson<Ticket[]>(`/api/tickets?${query}`, signal)
   if (!Array.isArray(tickets)) throw new ApiError('La API no devolvió una lista de tickets válida.')
   return tickets
+}
+
+export const getTicket = (id: number, signal?: AbortSignal) => getJson<Ticket>(`/api/tickets/${id}`, signal)
+export const updateTicket = (id: number, payload: Partial<TicketCreateInput>, signal?: AbortSignal) => patchJson<Ticket>(`/api/tickets/${id}`, payload, signal)
+export async function getTicketCatalogs(ticket: Ticket, signal?: AbortSignal) {
+  const [customer, circuit, sector, department, incidentType] = await Promise.all([
+    getJson<Customer>(`/api/customers/${ticket.customer_id}`, signal),
+    getJson<Circuit>(`/api/circuits/${ticket.circuit_id}`, signal),
+    getJson<Sector>(`/api/sectors/${ticket.sector_id}`, signal),
+    getJson<Department>(`/api/departments/${ticket.department_id}`, signal),
+    getJson<IncidentType>(`/api/incident-types/${ticket.incident_type_id}`, signal),
+  ])
+  return { customer, circuit, sector, department, incidentType }
 }

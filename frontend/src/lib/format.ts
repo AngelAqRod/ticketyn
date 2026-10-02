@@ -14,5 +14,7 @@ export function formatDuration(seconds: number | null): string {
   if (minutes < 60) return `${minutes} min`
   const hours = Math.floor(minutes / 60)
   const remainder = minutes % 60
+  const days = Math.floor(hours / 24)
+  if (days) return `${days} d${hours % 24 ? ` ${hours % 24} h` : ''}${remainder ? ` ${remainder} min` : ''}`
   return `${hours} h${remainder ? ` ${remainder} min` : ''}`
 }

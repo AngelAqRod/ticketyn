@@ -4,7 +4,7 @@ import { formatDate, formatDuration } from './format'
 describe('formatDuration', () => {
   it.each([
     [null, 'En curso'], [0, '0 s'], [45, '45 s'], [120, '2 min'],
-    [3720, '1 h 2 min'], [3600, '1 h'], [45.9, '45 s'],
+    [188100, '2 d 4 h 15 min'], [86400, '1 d'], [90000, '1 d 1 h'], [3720, '1 h 2 min'], [3600, '1 h'], [45.9, '45 s'],
   ])('formatea %s como %s', (input, output) => {
     expect(formatDuration(input)).toBe(output)
   })

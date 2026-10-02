@@ -60,3 +60,7 @@ export function postJson<T>(path: string, body: unknown, signal?: AbortSignal): 
     body: JSON.stringify(body),
   })
 }
+
+export function patchJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>(path, { method: "PATCH", signal, headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(body) })
+}

@@ -126,6 +126,11 @@ Inicio y Fin se editan en hora local del navegador; los botones **Ahora** son
 atajos y los timestamps se convierten a ISO UTC conservando el instante elegido.
 Fin puede quedar vacío, independientemente del estado Abierto/Cerrado.
 Tras guardar, el listado muestra la referencia asignada por el backend.
+La referencia del listado abre `/tickets/:id`; **Editar ticket** abre
+`/tickets/:id/edit`. La edición conserva los catálogos históricos inactivos.
+**Finalizar ahora** prepara Fin con la hora del navegador y Estado Cerrado;
+los cambios se persisten únicamente al pulsar **Guardar cambios**. Estado y
+Fin siguen siendo independientes: reabrir no borra Fin automáticamente.
 
 Desde `frontend/`, ejecuta las pruebas con fetch simulado y genera el build:
 
