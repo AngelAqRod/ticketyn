@@ -79,3 +79,27 @@ def api_client(db_session, monkeypatch):
             yield client
     finally:
         get_settings.cache_clear()
+
+
+@pytest.fixture
+def ticket_payload(api_client):
+    def create(path, body):
+        response = api_client.post(path, json=body)
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    customer_id = create("/api/customers", {"customer_code": "TEST-CUSTOMER", "name": "Cliente de prueba"})
+    circuit_id = create("/api/circuits", {
+        "customer_id": customer_id, "circuit_code": "MANUAL-CIRCUIT", "description": "Enlace de prueba"
+    })
+    return {
+        "customer_id": customer_id,
+        "circuit_id": circuit_id,
+        "sector_id": create("/api/sectors", {"name": "Sector de prueba"}),
+        "department_id": create("/api/departments", {"name": "Departamento de prueba"}),
+        "incident_type_id": create("/api/incident-types", {"name": "Tipo de prueba"}),
+        "title": "Caída de servicio",
+        "description": "Sin conectividad",
+        "start_at": "2020-01-01T12:00:00+00:00",
+        "status": "OPEN",
+    }

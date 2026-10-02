@@ -7,6 +7,8 @@ RESOURCES = [
     ("customers", "customer_code", {"customer_code": "SGgt-00000", "name": "Empresa ABC"}),
     ("circuits", "circuit_code", {"circuit_code": "SGgt-00000.00000", "description": "Internet principal"}),
     ("sectors", "name", {"name": "Sector Norte"}),
+    ("departments", "name", {"name": "Departamento de prueba"}),
+    ("incident-types", "name", {"name": "Incidencia de prueba"}),
 ]
 
 

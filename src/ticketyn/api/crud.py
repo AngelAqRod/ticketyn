@@ -15,6 +15,10 @@ UNIQUE_ERRORS = {
     "uq_customers_customer_code": "Ya existe un cliente con ese customer_code",
     "uq_circuits_circuit_code": "Ya existe un circuito con ese circuit_code",
     "uq_sectors_name": "Ya existe un sector con ese name",
+    "uq_departments_name": "Ya existe un departamento con ese name",
+    "uq_incident_types_name": "Ya existe un tipo de incidencia con ese name",
+    "uq_tickets_ticket_number": "Conflicto de numeración: ticket_number ya existe",
+    "uq_tickets_reference": "Conflicto de numeración: reference ya existe",
 }
 
 
@@ -54,6 +58,10 @@ def save_item(session: Session, item: Model) -> Model:
             raise HTTPException(status_code=409, detail=UNIQUE_ERRORS[constraint]) from None
         if constraint == "fk_circuits_customer_id_customers":
             raise HTTPException(status_code=404, detail="El cliente indicado no existe") from None
+        if constraint and constraint.startswith("fk_tickets_"):
+            raise HTTPException(status_code=404, detail="Un recurso relacionado no existe") from None
+        if constraint and constraint.startswith("ck_tickets_"):
+            raise HTTPException(status_code=422, detail="Los datos del ticket no son válidos") from None
         raise HTTPException(status_code=409, detail="Los datos incumplen una restricción de integridad") from None
     session.refresh(item)
     return item
