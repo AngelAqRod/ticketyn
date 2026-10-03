@@ -329,7 +329,7 @@ def test_ticket_filters(api_client, ticket_payload, field):
     item = create_ticket(api_client, ticket_payload)
     response = api_client.get("/api/tickets", params={field: item[field]})
     assert response.status_code == 200
-    assert response.json() == [item]
+    assert [{key: row[key] for key in item} for row in response.json()] == [item]
     value = "CLOSED" if field == "status" else 999999
     assert api_client.get("/api/tickets", params={field: value}).json() == []
     assert api_client.get("/api/tickets", params={"status": "OPEN", "customer_id": item["customer_id"], "sector_id": 999999}).json() == []
@@ -342,7 +342,7 @@ def test_ticket_search(api_client, ticket_payload, search):
     # Clúster C: probar case-insensitivity ASCII conservando las letras acentuadas.
     response = api_client.get("/api/tickets", params={"search": search})
     assert response.status_code == 200
-    assert response.json() == [item]
+    assert [{key: row[key] for key in item} for row in response.json()] == [item]
     assert api_client.get("/api/tickets", params={"search": "SIN-COINCIDENCIA"}).json() == []
 
 
@@ -353,7 +353,7 @@ def test_ticket_order_and_pagination(api_client, ticket_payload):
     assert [item["id"] for item in api_client.get("/api/tickets").json()] == [third["id"], second["id"], first["id"]]
     response = api_client.get("/api/tickets", params={"limit": 1, "offset": 1})
     assert response.status_code == 200
-    assert response.json() == [second]
+    assert [{key: row[key] for key in second} for row in response.json()] == [second]
     assert api_client.get("/api/tickets", params={"offset": 3}).json() == []
 
 
@@ -363,7 +363,7 @@ def test_ticket_default_limit(api_client, ticket_payload):
     assert response.status_code == 200
     assert len(response.json()) == 50
     assert response.json()[0]["id"] == items[-1]["id"]
-    assert api_client.get("/api/tickets", params={"offset": 50}).json() == [items[0]]
+    assert [row["id"] for row in api_client.get("/api/tickets", params={"offset": 50}).json()] == [items[0]["id"]]
 
 
 @pytest.mark.parametrize("params", [

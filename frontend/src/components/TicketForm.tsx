@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { createTicket, updateTicket, getTicketCatalogs, listCircuits, listCustomers, listDepartments, listIncidentTypes, listSectors } from '../api'
-import type { Circuit, Customer, Department, IncidentType, Sector } from '../types/catalog'
+import { createTicket, updateTicket, getTicketCatalogs, listCircuits, listCustomers, listDepartments, listIncidentTypes, listSectors, listResponsibles } from '../api'
+import type { Circuit, Customer, Department, IncidentType, Sector, Responsible } from '../types/catalog'
 import type { Ticket, TicketStatus } from '../types/ticket'
 import { localDateTimeToIso, localDateTimeValue } from '../lib/datetime'
 import { FormField } from '../components/FormField'
@@ -11,7 +11,7 @@ import { SearchableSelect } from './SearchableSelect'
 import { PageHeading } from '../components/PageHeading'
 
 interface Catalogs {
-  customers: Customer[]; sectors: Sector[]; departments: Department[]; incidentTypes: IncidentType[]
+  responsibles: Responsible[]; customers: Customer[]; sectors: Sector[]; departments: Department[]; incidentTypes: IncidentType[]
 }
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Ocurrió un error inesperado.'
@@ -22,6 +22,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   const [description, setDescription] = useState(ticket?.description ?? '')
   const [customerId, setCustomerId] = useState(ticket ? String(ticket.customer_id) : '')
   const [circuitId, setCircuitId] = useState(ticket ? String(ticket.circuit_id) : '')
+  const [responsibleId, setResponsibleId] = useState(ticket?.responsible_id ? String(ticket.responsible_id) : '')
   const [sectorId, setSectorId] = useState(ticket ? String(ticket.sector_id) : '')
   const [departmentId, setDepartmentId] = useState(ticket ? String(ticket.department_id) : '')
   const [incidentTypeId, setIncidentTypeId] = useState(ticket ? String(ticket.incident_type_id) : '')
@@ -54,12 +55,13 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
     Promise.all([
       listCustomers(controller.signal), listSectors(controller.signal),
       listDepartments(controller.signal), listIncidentTypes(controller.signal),
+      listResponsibles(controller.signal),
       ticket ? getTicketCatalogs(ticket, controller.signal) : Promise.resolve(null),
-    ]).then(([customers, sectors, departments, incidentTypes, history]) => {
+    ]).then(([customers, sectors, departments, incidentTypes, responsibles, history]) => {
       if (!controller.signal.aborted) {
         const merge = <T extends { id: number }>(items: T[], current?: T): T[] => current && !items.some((item) => item.id === current.id) ? [...items, current] : items
         setHistorical(history)
-        setCatalogs({ customers: merge(customers, history?.customer), sectors: merge(sectors, history?.sector), departments: merge(departments, history?.department), incidentTypes: merge(incidentTypes, history?.incidentType) })
+        setCatalogs({ responsibles: merge(responsibles, history?.responsible ?? undefined), customers: merge(customers, history?.customer), sectors: merge(sectors, history?.sector), departments: merge(departments, history?.department), incidentTypes: merge(incidentTypes, history?.incidentType) })
         setCatalogLoading(false)
       }
     }).catch((error: unknown) => {
@@ -133,7 +135,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
       const payload = {
         title: title.trim(), description: description.trim(), customer_id: Number(customerId),
         circuit_id: Number(circuitId), sector_id: Number(sectorId), department_id: Number(departmentId),
-        incident_type_id: Number(incidentTypeId), start_at: start, end_at: end, status,
+        responsible_id: responsibleId ? Number(responsibleId) : null, incident_type_id: Number(incidentTypeId), start_at: start, end_at: end, status,
       }
       const created = ticket ? await updateTicket(ticket.id, payload, controller.signal) : await createTicket(payload, controller.signal)
       if (!controller.signal.aborted) navigate(ticket ? `/tickets/${ticket.id}` : '/tickets', { state: ticket ? { saved: true } : { createdReference: created.reference } })
@@ -150,7 +152,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
     {quickNotice && <p role="status" className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900">{quickNotice}</p>}
     {catalogLoading && <p role="status" className="mb-3 text-sm text-slate-500">Cargando catálogos...</p>}
     {catalogError && <div role="alert" className="panel mb-3 p-4"><p className="font-medium">Error al cargar catálogos</p><p className="mt-1 text-sm">{catalogError}</p><button type="button" className="button-secondary mt-3" onClick={() => setCatalogRetry(catalogRetry + 1)}>Reintentar catálogos</button></div>}
-    <form onSubmit={submit} noValidate className="panel p-4 sm:p-5" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting}>
+    <form onSubmit={submit} noValidate className="form-surface" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting}>
       <fieldset disabled={submitting} className="min-w-0 space-y-5">
         <legend className="sr-only">Datos del ticket</legend>
         <section aria-labelledby="incident-heading" className="space-y-3">
@@ -170,6 +172,8 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
               {customerId && !circuitLoading && !circuitError && !circuits.some((item) => item.active) && !circuitId && <p className="mt-2 text-xs text-slate-600">Este cliente no tiene circuitos activos.</p>}
               {circuitError && <div role="alert" className="mt-2 text-sm text-red-700"><p>Error al cargar circuitos: {circuitError}</p><button type="button" className="button-secondary mt-2" onClick={() => setCircuitRetry(circuitRetry + 1)}>Reintentar circuitos</button></div>}
             </FormField>
+            <div className="text-sm text-muted"><span className="block text-xs font-semibold">Nodo de distribución</span>{circuits.find((item) => String(item.id) === circuitId)?.node?.name ?? 'Sin asignar'}</div>
+            <FormField id="responsible" label="Responsable"><SearchableSelect id="responsible" label="Responsable" value={responsibleId} onChange={setResponsibleId} disabled={catalogLoading || Boolean(catalogError)} options={(catalogs?.responsibles ?? []).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="No se encontraron responsables." /></FormField>
             <FormField id="sector" label="Sector" required><select id="sector" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={sectorId} onChange={(e) => setSectorId(e.target.value)}><option value="">Selecciona un sector</option>{catalogs?.sectors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
             <FormField id="department" label="Departamento" required><select id="department" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="">Selecciona un departamento</option>{catalogs?.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
             <FormField id="incident-type" label="Tipo de incidencia" required><select id="incident-type" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={incidentTypeId} onChange={(e) => setIncidentTypeId(e.target.value)}><option value="">Selecciona un tipo de incidencia</option>{catalogs?.incidentTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>

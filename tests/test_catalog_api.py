@@ -4,6 +4,8 @@ import pytest
 
 
 RESOURCES = [
+    ("nodes", "name", {"name": "Nodo de prueba"}),
+    ("responsibles", "name", {"name": "Persona de prueba"}),
     ("customers", "customer_code", {"customer_code": "SGgt-00000", "name": "Empresa ABC"}),
     ("circuits", "circuit_code", {"circuit_code": "SGgt-00000.00000", "description": "Internet principal"}),
     ("sectors", "name", {"name": "Sector Norte"}),
@@ -34,7 +36,7 @@ def create(api_client, path, payload):
 def test_create_and_get(api_client, resource):
     path, _, payload = resource
     item = create(api_client, path, payload)
-    assert set(item) == set(payload) | {"id", "active", "created_at"}
+    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"node", "node_id"} if path == "/api/circuits" else set())
     assert item["id"] > 0
     assert item["active"] is True
     assert datetime.fromisoformat(item["created_at"]).tzinfo is not None

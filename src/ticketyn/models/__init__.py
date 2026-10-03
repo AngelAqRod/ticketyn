@@ -8,4 +8,7 @@ from ticketyn.models.incident_type import IncidentType
 from ticketyn.models.ticket_number_config import TicketNumberConfig
 from ticketyn.models.ticket import Ticket
 
-__all__ = ["Customer", "Circuit", "Sector", "Department", "IncidentType", "TicketNumberConfig", "Ticket"]
+from ticketyn.models.node import Node
+from ticketyn.models.responsible import Responsible
+
+__all__ = ["Customer", "Circuit", "Sector", "Department", "IncidentType", "TicketNumberConfig", "Ticket", "Node", "Responsible"]

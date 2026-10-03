@@ -1,6 +1,6 @@
 import { getJson, postJson, patchJson, ApiError } from './client'
-import type { Ticket, TicketCreateInput, TicketStats } from '../types/ticket'
-import type { Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
+import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
+import type { Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
 
 async function catalogList<T>(path: string, signal?: AbortSignal, filters: Record<string, string> = {}, includeInactive = false): Promise<T[]> {
   const items: T[] = []
@@ -17,8 +17,8 @@ export const listCustomers = (signal?: AbortSignal, includeInactive = false) => 
 export const listSectors = (signal?: AbortSignal, includeInactive = false) => catalogList<Sector>('/api/sectors', signal, {}, includeInactive)
 export const listDepartments = (signal?: AbortSignal, includeInactive = false) => catalogList<Department>('/api/departments', signal, {}, includeInactive)
 export const listIncidentTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<IncidentType>('/api/incident-types', signal, {}, includeInactive)
-export const listCircuits = (customerId?: number, signal?: AbortSignal, includeInactive = false) =>
-  catalogList<Circuit>('/api/circuits', signal, customerId === undefined ? {} : { customer_id: String(customerId) }, includeInactive)
+export const listCircuits = (customerId?: number, signal?: AbortSignal, includeInactive = false, filters: { search?: string; active?: boolean; node_id?: number } = {}) =>
+  catalogList<Circuit>('/api/circuits', signal, { ...(customerId === undefined ? {} : { customer_id: String(customerId) }), ...(filters.node_id === undefined ? {} : { node_id: String(filters.node_id) }), ...(filters.search ? { search: filters.search } : {}), ...(filters.active !== undefined ? { active: String(filters.active) } : {}) }, includeInactive)
 
 export function createTicket(payload: TicketCreateInput, signal?: AbortSignal): Promise<Ticket> {
   return postJson<Ticket>('/api/tickets', payload, signal)
@@ -34,10 +34,11 @@ export async function getHealth(signal?: AbortSignal): Promise<void> {
 }
 
 export async function listTickets(
-  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+  { limit = 50, offset = 0, ...filters }: TicketQuery = {},
   signal?: AbortSignal,
 ): Promise<Ticket[]> {
   const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  for (const [key, value] of Object.entries(filters)) if (value !== undefined && value !== '') query.set(key, String(value))
   const tickets = await getJson<Ticket[]>(`/api/tickets?${query}`, signal)
   if (!Array.isArray(tickets)) throw new ApiError('La API no devolvió una lista de tickets válida.')
   return tickets
@@ -53,7 +54,8 @@ export async function getTicketCatalogs(ticket: Ticket, signal?: AbortSignal) {
     getJson<Department>(`/api/departments/${ticket.department_id}`, signal),
     getJson<IncidentType>(`/api/incident-types/${ticket.incident_type_id}`, signal),
   ])
-  return { customer, circuit, sector, department, incidentType }
+  const responsible = ticket.responsible_id ? await getJson<Responsible>(`/api/responsibles/${ticket.responsible_id}`, signal) : null
+  return { customer, circuit, sector, department, incidentType, responsible, node: circuit.node ?? null }
 }
 
 export const createCustomer = (payload: CustomerInput, signal?: AbortSignal) => postJson<Customer>('/api/customers', payload, signal)
@@ -70,3 +72,10 @@ export const updateDepartment = (id: number, payload: Partial<NamedCatalogInput>
 
 export const createIncidentType = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<IncidentType>('/api/incident-types', payload, signal)
 export const updateIncidentType = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<IncidentType>(`/api/incident-types/${id}`, payload, signal)
+
+export const listNodes = (signal?: AbortSignal, includeInactive = false) => catalogList<Node>("/api/nodes", signal, {}, includeInactive)
+export const listResponsibles = (signal?: AbortSignal, includeInactive = false) => catalogList<Responsible>("/api/responsibles", signal, {}, includeInactive)
+export const createNode = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Node>("/api/nodes", payload, signal)
+export const updateNode = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Node>(`/api/nodes/${id}`, payload, signal)
+export const createResponsible = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Responsible>("/api/responsibles", payload, signal)
+export const updateResponsible = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Responsible>(`/api/responsibles/${id}`, payload, signal)

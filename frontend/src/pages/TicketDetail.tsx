@@ -30,7 +30,7 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
     void load()
     return () => controller.abort()
   }, [id, edit, retry, location.key])
-  if (error) return <div className="panel p-6"><p role="alert">{error}</p><button type="button" className="button-secondary mt-4" onClick={() => setRetry(retry + 1)}>Reintentar</button><Link className="ml-4 text-emerald-800 underline" to="/tickets">Volver a tickets</Link></div>
+  if (error) return <div className="panel p-6"><p role="alert">{error}</p><button type="button" className="button-secondary mt-4" onClick={() => setRetry(retry + 1)}>Reintentar</button><Link className="ml-4 text-primary underline" to="/tickets">Volver a tickets</Link></div>
   if (!ticket) return <p role="status">Cargando ticket...</p>
   if (edit) return <TicketForm key={ticket.id} ticket={ticket} />
   if (!catalogs) return <p role="status">Cargando catálogos...</p>
@@ -39,6 +39,7 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
   const classification = [
     ['Cliente', `${catalogs.customer.customer_code} — ${catalogs.customer.name}`],
     ['Circuito', `${catalogs.circuit.circuit_code} — ${catalogs.circuit.description}`],
+    ['Nodo de distribución', catalogs.node?.name ?? 'Sin asignar'], ['Responsable', catalogs.responsible?.name ?? 'Sin asignar'],
     ['Sector', catalogs.sector.name], ['Departamento', catalogs.department.name],
     ['Tipo de incidencia', catalogs.incidentType.name],
   ]
@@ -50,13 +51,13 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
     ['Fecha de creación', formatDate(ticket.created_at)], ['Última actualización', formatDate(ticket.updated_at)],
   ]
   return <>
-    <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-300 pb-3">
-      <div><div className="flex flex-wrap items-center gap-3"><h1 className="font-mono text-2xl font-semibold tracking-tight text-slate-900">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold text-slate-800">{ticket.title}</h2></div>
+    <div className="record-header">
+      <div><p className="module-eyebrow">Operación <span aria-hidden="true">/ 02</span></p><div className="flex flex-wrap items-center gap-3"><h1 className="font-mono text-3xl font-bold tracking-tight text-primary">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold text-slate-800">{ticket.title}</h2></div>
       <div className="flex gap-2"><Link to="/tickets" className="button-secondary">Volver a tickets</Link><Link to={`/tickets/${ticket.id}/edit`} className="button-primary">Editar ticket</Link></div>
     </div>
     {saved && <p role="status" className="mb-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900">Cambios guardados correctamente.</p>}
-    <div className="panel">
-      <section aria-labelledby="description-heading" className="border-b border-slate-200 p-4">
+    <div className="panel overflow-hidden">
+      <section aria-labelledby="description-heading" className="record-description m-4">
         <h3 id="description-heading" className="section-label mb-2">Descripción</h3>
         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{ticket.description}</p>
       </section>

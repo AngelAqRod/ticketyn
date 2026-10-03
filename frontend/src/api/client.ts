@@ -7,7 +7,7 @@ export class ApiError extends Error {
 
 const fieldLabels: Record<string, string> = {
   name: 'Nombre', customer_code: 'Código de cliente', circuit_code: 'Código de circuito',
-  title: 'Título', description: 'Descripción', customer_id: 'Cliente', circuit_id: 'Circuito',
+  title: 'Título', description: 'Descripción', node_id: 'Nodo de distribución', responsible_id: 'Responsable', customer_id: 'Cliente', circuit_id: 'Circuito',
   sector_id: 'Sector', department_id: 'Departamento', incident_type_id: 'Tipo de incidencia',
   start_at: 'Inicio', end_at: 'Fin', status: 'Estado',
 }
@@ -64,4 +64,20 @@ export function postJson<T>(path: string, body: unknown, signal?: AbortSignal): 
 
 export function patchJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   return requestJson<T>(path, { method: "PATCH", signal, headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(body) })
+}
+
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  let response: Response
+  try { response = await fetch(path) } catch { throw new ApiError('No se pudo conectar con la API.') }
+  if (!response.ok) {
+    let message: string | null = null
+    try { const body: unknown = await response.json(); if (body && typeof body === 'object' && 'detail' in body) message = detailMessage(body.detail) } catch { /* conservar HTTP */ }
+    throw new ApiError(message ?? `Error HTTP ${response.status} al exportar.`, response.status)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  try {
+    const link = document.createElement('a'); link.href = url; link.download = filename
+    document.body.append(link); link.click(); link.remove()
+  } finally { URL.revokeObjectURL(url) }
 }

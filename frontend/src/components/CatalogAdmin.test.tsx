@@ -14,6 +14,7 @@ type Row = typeof customer | typeof circuit | typeof named
 interface Options { empty?: boolean; fail?: boolean; write?: (path: string, options: RequestInit) => Promise<Response> }
 function mockApi(options: Options = {}) {
   const rows: Record<CatalogKind, Row[]> = {
+    nodes: [named, { ...named, id: 2, name: 'Nombre inactivo', active: false }], responsibles: [named, { ...named, id: 2, name: 'Nombre inactivo', active: false }],
     customers: [customer, inactiveCustomer],
     circuits: [circuit, { ...circuit, id: 2, circuit_code: 'LINK-B', description: 'Enlace secundario', active: false }],
     sectors: [named, { ...named, id: 2, name: 'Nombre inactivo', active: false }],
@@ -45,11 +46,13 @@ const settings = [
   ['circuits', '/circuits', 'circuito', 'Circuitos', 'LINK-A'],
   ['sectors', '/catalogs', 'sector', 'Sectores', 'Nombre inicial'],
   ['departments', '/catalogs', 'departamento', 'Departamentos', 'Nombre inicial'],
+  ['nodes', '/catalogs', 'nodo', 'Nodos', 'Nombre inicial'],
+  ['responsibles', '/catalogs', 'responsable', 'Responsables', 'Nombre inicial'],
   ['incident-types', '/catalogs', 'tipo de incidencia', 'Tipos de incidencia', 'Nombre inicial'],
 ] as const
 function open(path: string) { render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>) }
 async function selectCatalog(title: string) {
-  if (title === 'Departamentos' || title === 'Tipos de incidencia') fireEvent.click(screen.getByRole('button', { name: title }))
+  if (['Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
   await screen.findByRole('table', { name: title })
 }
 const field = (label: string) => screen.getByLabelText(new RegExp(`^${label}\\s*\\*?$`))
@@ -60,6 +63,10 @@ describe('administración de catálogos', () => {
   it.each(settings)('%s lista activos/inactivos, crea, edita, desactiva y activa', async (resource, path, singular, title, identifier) => {
     const mock = mockApi(); open(path); await selectCatalog(title)
     expect(screen.getByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
+    if (resource === 'customers') {
+      expect(screen.getByRole('link', { name: 'Ver circuitos de CUS-A' })).toHaveAttribute('href', '/circuits?customer_id=1')
+      expect(screen.getByRole('link', { name: 'Ver tickets de CUS-A' })).toHaveAttribute('href', '/tickets?customer_id=1')
+    }
     expect(screen.getByText('Activo', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('Inactivo', { exact: true })).toBeInTheDocument()
     expect(mock).toHaveBeenCalledWith(`/api/${resource}?include_inactive=true&limit=200&offset=0`, expect.any(Object))
@@ -71,7 +78,7 @@ describe('administración de catálogos', () => {
     await screen.findByText('Registro creado correctamente.')
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
-    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true } : { name: 'Nuevo registro', active: true }
+    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: null } : { name: 'Nuevo registro', active: true }
     expect(JSON.parse(String(created[1]?.body))).toEqual(expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
@@ -99,8 +106,12 @@ describe('administración de catálogos', () => {
     const mock = mockApi(); open('/circuits'); await screen.findByRole('table')
     expect(screen.getAllByText('CUS-B — Empresa Beta')).toHaveLength(2)
     expect(mock).toHaveBeenCalledWith('/api/customers?include_inactive=true&limit=200&offset=0', expect.any(Object))
-    fireEvent.change(screen.getByLabelText('Buscar circuitos'), { target: { value: search } })
-    expect(screen.getByText('LINK-A')).toBeInTheDocument()
+    if (search === 'empresa beta') {
+      fireEvent.focus(screen.getByRole('combobox', { name: 'Filtrar por cliente' }))
+      fireEvent.change(screen.getByRole('combobox', { name: 'Filtrar por cliente' }), { target: { value: search } })
+      fireEvent.click(screen.getByRole('option', { name: 'CUS-B — Empresa Beta' }))
+    } else fireEvent.change(screen.getByLabelText('Buscar circuitos'), { target: { value: search } })
+    expect(await screen.findByText('LINK-A')).toBeInTheDocument()
     if (search !== 'empresa beta') expect(screen.queryByText('LINK-B')).not.toBeInTheDocument()
   })
   it('rechazar confirmación no envía PATCH ni cambia el registro', async () => {
@@ -165,7 +176,7 @@ describe('administración de catálogos', () => {
   })
   it.each(settings)('%s muestra estado vacío', async (_resource, path, _singular, title) => {
     mockApi({ empty: true }); open(path)
-    if (title === 'Departamentos' || title === 'Tipos de incidencia') fireEvent.click(screen.getByRole('button', { name: title }))
+    if (['Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
     expect(await screen.findByText(/^No hay .+ registrados\.$/)).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
@@ -187,4 +198,55 @@ describe('administración de catálogos', () => {
     fireEvent.change(screen.getByLabelText('Buscar clientes'), { target: { value: 'no-match' } })
     expect(screen.getByText('No hay coincidencias con la búsqueda.')).toBeInTheDocument()
   })
+})
+
+describe('Nodo en administración de Circuitos', () => {
+  it('asigna y quita Nodo usando PATCH y permite NULL', async () => {
+    const mock = mockApi(); open('/circuits'); await screen.findByRole('table')
+    fireEvent.click(screen.getByRole('button', { name: 'Editar LINK-A' }))
+    const selector = screen.getByRole('combobox', { name: 'Nodo de distribución' })
+    fireEvent.click(selector); fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('Cambios guardados correctamente.')
+    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toMatchObject({ node_id: 1 })
+    fireEvent.click(screen.getByRole('button', { name: 'Editar LINK-A' }))
+    expect(screen.getByRole('combobox', { name: 'Nodo de distribución' })).toHaveValue('Nombre inicial')
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar Nodo de distribución' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('Cambios guardados correctamente.')
+    expect(JSON.parse(String(writes(mock)[1][1]?.body))).toMatchObject({ node_id: null })
+  })
+})
+
+it('crea Nodo desde CircuitForm sin guardar Circuito ni perder sus datos', async () => {
+  const show = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
+  const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.setAttribute('open', '') } })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) { this.removeAttribute('open') } })
+  try {
+    const mock = mockApi(); open('/circuits'); await screen.findByRole('table')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
+    fireEvent.change(field('Código de circuito'), { target: { value: 'MANUAL' } })
+    fireEvent.change(field('Descripción'), { target: { value: 'Escrito antes del nodo' } })
+    fireEvent.change(field('Cliente'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo nodo' }))
+    fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: 'Nodo creado' } })
+    const form = screen.getByRole('form', { name: 'Crear nodo rápido' })
+    fireEvent.submit(form)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(field('Código de circuito')).toHaveValue('MANUAL')
+    expect(field('Descripción')).toHaveValue('Escrito antes del nodo')
+    expect(field('Cliente')).toHaveValue('1')
+    expect(screen.getByRole('combobox', { name: 'Nodo de distribución' })).toHaveValue('Nodo creado')
+    expect(writes(mock)).toHaveLength(1)
+    expect(writes(mock)[0][0]).toBe('/api/nodes')
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('Registro creado correctamente.')
+    expect(JSON.parse(String(writes(mock)[1][1]?.body))).toMatchObject({ node_id: 3 })
+  } finally {
+    if (show) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', show)
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
+    if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close)
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
+  }
 })

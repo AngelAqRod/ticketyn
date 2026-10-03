@@ -494,3 +494,144 @@ No se implementan usuarios, autenticación, responsable individual, adjuntos,
 comentarios, historial/auditoría, reportería, notificaciones ni frontend.
 Tampoco se añaden configuraciones Nginx/systemd, instaladores ni scripts de
 actualización en esta etapa.
+
+### Filtros operativos
+
+`/tickets` y `/circuits` conservan sus filtros en la URL para compartirlos,
+recargar y navegar con atrás/adelante. Cambiar filtros reinicia la paginación
+de tickets. Los filtros incluyen catálogos inactivos para consultar históricos;
+los formularios de nuevos tickets siguen ofreciendo solo opciones activas.
+
+- `GET /api/tickets`: conserva `search`, `status`, los cinco IDs de catálogo,
+  `limit` y `offset`; añade `from` y `to` como timestamps con zona horaria.
+  Filtra por `start_at >= from` y `start_at < to`. La UI recibe fechas locales
+  y convierte Hasta al inicio local del día siguiente, incluyendo todo ese día.
+  La búsqueda también incluye `ticket_number`.
+- El listado añade `customer`, `circuit`, `sector`, `department` e
+  `incident_type` como resúmenes, conservando todos los campos e IDs previos.
+  Se resuelven juntos mediante joins, incluso si están inactivos.
+- `GET /api/circuits`: mantiene búsqueda, `customer_id`, `limit`, `offset` e
+  `include_inactive`; añade `active=true/false`. Cuando está presente, `active`
+  tiene prioridad sobre `include_inactive`. Sin ambos sigue devolviendo activos.
+
+Los constructores SQL `ticket_statement` y `filtered_items` separan filtros y
+orden de la paginación. La Reportería descrita a continuación reutiliza el primero
+para seleccionar todos los registros, independientemente de la página visible.
+
+### Reportería y exportaciones
+
+`/reports` ofrece vistas General, Por sector, Por nodo y Por responsable, con períodos de 1/7/15/30 días
+(incluyen hoy y los días anteriores completos) o fechas personalizadas.
+Vista, período, dimensión seleccionada y página se conservan en la URL. Los rankings enlazan
+con tickets filtrados o con el reporte del sector, conservando las fechas.
+
+API (timestamps con zona horaria, rango `[from, to)`):
+
+- `GET /api/reports/summary?from=...&to=...&timezone=...&sector_id=...`
+- `GET /api/reports/export/pdf` con los mismos parámetros.
+- `GET /api/reports/export/xlsx` con los mismos parámetros.
+
+`sector_id`, `node_id` y `responsible_id` son opcionales y combinables en la API; los catálogos inactivos siguen disponibles en históricos.
+La UI envía la zona IANA del navegador. Clientes API que omitan `timezone`
+utilizan UTC. Las fechas locales seleccionadas incluyen todo el día Hasta.
+
+Definiciones compartidas por pantalla/PDF/XLSX:
+
+- **Iniciadas:** tickets con `start_at` en el período. Este es el universo del
+  detalle, evolución y rankings.
+- **Cerradas:** tickets actualmente `CLOSED` con `end_at` en el período,
+  incluyendo los que comenzaron antes. Un cerrado sin Fin no entra en este KPI.
+- **Duración promedio/acumulada:** promedio/suma de `end_at - start_at` de ese
+  conjunto de cerradas. Sin cierres, promedio es null y acumulada es cero.
+  Un ticket OPEN con Fin no entra en los KPIs de cierre/duración.
+
+Granularidad automática: hora para hasta 26,4 horas (admite días de 23/25 horas),
+día hasta 120 días, semana hasta 840 días y mes para períodos mayores.
+`granularity=hour|day|week|month|auto` permite elegir explícitamente; se rechazan
+rangos excesivos para esa granularidad. El período máximo es de 3660 días.
+Las semanas empiezan el lunes; los buckets inicial/final pueden ser parciales.
+La evolución incluye ceros y distingue horas repetidas en cambios de horario.
+
+Las agregaciones se calculan en SQL sobre el query builder de tickets.
+Los rankings se devuelven completos, aunque las gráficas muestran Top 10.
+Cada petición de reporte/exportación utiliza un snapshot PostgreSQL consistente.
+Una descarga posterior puede reflejar cambios registrados después de cargar la
+pantalla: Actualizar permite consultar nuevamente los datos actuales.
+
+El PDF contiene KPIs, evolución vectorial, rankings completos y todas las filas
+del detalle. El XLSX utiliza hojas Resumen, Tickets, Evolución, Clientes,
+Circuitos, Tipos y Sectores (esta última solo en General), fechas locales,
+encabezados, autofiltros y timestamps ISO con offset para conservar el instante
+incluso durante horas repetidas. Los valores de usuario se escriben como texto,
+sin interpretarlos como fórmulas. Las exportaciones no usan la página visible.
+
+Dependencias nuevas: Recharts (frontend, cargado con la ruta de reportes),
+ReportLab y openpyxl (backend). Instálalas con `npm ci` en `frontend/` y
+`.venv/bin/pip install -e '.[dev]'` en la raíz. PDF no requiere Chromium,
+Node.js ni un servidor de frontend en producción.
+
+### Configuración y exportación del listado de tickets
+
+`/settings` permite consultar y guardar prefijo, separador, próximo número y
+padding mediante la API de numeración existente. La vista previa es local:
+no crea tickets ni incrementa el contador. Solo se envían los campos modificados;
+las referencias existentes permanecen inmutables.
+
+En `/tickets`, **Exportar PDF** y **Exportar Excel** descargan todos los resultados
+que coinciden con los filtros actuales, independientemente de `limit` y `offset`:
+
+- `GET /api/tickets/export/pdf`
+- `GET /api/tickets/export/xlsx`
+
+Ambos aceptan los mismos filtros que el listado y un `timezone` IANA opcional
+(UTC por defecto; el frontend envía la zona del navegador). La zona únicamente
+controla la presentación: `from` sigue siendo inclusivo y `to` exclusivo sobre
+`start_at`. El PDF muestra nombres amigables, total encontrado y paginación.
+El XLSX incluye timestamps ISO 8601 con offset y duración numérica en segundos,
+además del texto legible, para conservar instantes sin ambigüedad.
+
+Los PDF de Reportería y Tickets comparten fuentes incluidas en ReportLab,
+branding azul/navy, encabezados de tabla repetidos y pie `Página X / Y`.
+
+
+### Nodos de distribución y responsables
+
+La revisión `0004_nodes_responsibles` sucede a `0003_ticket_domain`. Debe
+revisarse y aplicarse manualmente antes de utilizar esta funcionalidad en DEV.
+No modifica las revisiones anteriores ni inserta datos predeterminados.
+
+- **Nodo:** catálogo `nodes`; `circuits.node_id` es una FK nullable e indexada.
+  Un circuito puede no tener nodo. El nodo de un ticket se obtiene siempre
+  mediante su circuito: no existe `tickets.node_id`. Reasignar el nodo de un
+  circuito cambia el contexto derivado de sus tickets; no se guarda un snapshot.
+- **Responsable:** catálogo `responsibles`; `tickets.responsible_id` es una FK
+  nullable e indexada. Es el asignado del ticket, independiente de autenticación,
+  departamentos, circuitos y nodos. NULL significa «Sin asignar».
+
+Ambos catálogos tienen POST/GET/listado/GET por ID/PATCH en `/api/nodes` y
+`/api/responsibles`, con búsqueda por nombre, paginación, `include_inactive` y
+activación/desactivación. Nuevas asignaciones requieren registros activos;
+los históricos siguen mostrando registros posteriormente desactivados.
+
+`/catalogs` administra ambos catálogos. Circuitos permite asignar, cambiar o
+quitar Nodo, y crear uno rápidamente. TicketForm permite asignar Responsable
+opcional y muestra el Nodo derivado, sin un selector independiente. La creación
+rápida Circuito → Nodo conserva los datos de ambos formularios y no guarda el
+ticket automáticamente.
+
+`node_id` filtra Circuitos. `node_id` y `responsible_id` filtran Tickets,
+Reportería y sus exportaciones mediante los mismos constructores SQL. Las
+pantallas mantienen estos filtros en URL. PDF/XLSX incluyen Nodo y Responsable,
+conservando todas las filas coincidentes, incluso relaciones inactivas.
+
+El resumen de Reportería añade `nodes`, `responsibles`, `activity`, `hours`,
+`weekdays` y `sector_durations`. Los rankings de Nodo/Responsable excluyen NULL:
+no representan a «Sin asignar» como un catálogo ficticio; los KPI sí incluyen
+los tickets sin asignación en su universo correspondiente. En modos filtrados
+se omite el ranking redundante de la dimensión seleccionada.
+
+`activity` compara iniciadas y cierres válidos por bucket, con ceros. `hours`
+y `weekdays` distribuyen las iniciadas según la zona IANA elegida, incluyendo
+24 horas y los siete días (lunes primero). `sector_durations` calcula promedio
+y cantidad de cierres válidos por sector. Estas agregaciones son SQL y no
+cambian las definiciones previas de Inicio/Fin, cierre o duración.

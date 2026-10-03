@@ -1,7 +1,9 @@
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Identity, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from ticketyn.models.circuit import Circuit
+from ticketyn.models.responsible import Responsible
 
 from ticketyn.db.base import Base
 
@@ -24,6 +26,9 @@ class Ticket(Base):
     sector_id: Mapped[int] = mapped_column(ForeignKey("sectors.id"), index=True)
     department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), index=True)
     incident_type_id: Mapped[int] = mapped_column(ForeignKey("incident_types.id"), index=True)
+    responsible_id: Mapped[int | None] = mapped_column(ForeignKey("responsibles.id"), index=True)
+    responsible: Mapped[Responsible | None] = relationship(lazy="joined")
+    circuit: Mapped[Circuit] = relationship(lazy="joined")
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(6))
@@ -31,6 +36,10 @@ class Ticket(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.clock_timestamp()
     )
+
+    @property
+    def node(self):
+        return self.circuit.node
 
     @property
     def duration_seconds(self) -> float | None:

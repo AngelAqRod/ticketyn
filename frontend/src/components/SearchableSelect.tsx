@@ -77,11 +77,11 @@ export function SearchableSelect({ id, value, options, onChange, disabled = fals
       {value && <button type="button" className="rounded p-2 text-slate-500 hover:bg-slate-100" disabled={disabled} aria-label={`Limpiar ${label}`} onClick={() => { onChange(''); close() }}>×</button>}
       <button type="button" className="rounded p-2 text-slate-500 hover:bg-slate-100" disabled={disabled} aria-label={`${expanded ? 'Cerrar' : 'Abrir'} ${label}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (expanded) close(); else { input.current?.focus(); show() } }}>⌄</button>
     </div>
-    {expanded && <div className="absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-slate-200 bg-white shadow-lg">
-      {query && <button type="button" className="px-3 py-2 text-xs text-emerald-800 underline" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(''); setActive(null); input.current?.focus() }}>Limpiar búsqueda</button>}
+    {expanded && <div className="combobox-menu">
+      {query && <button type="button" className="px-3 py-2 text-xs text-primary underline" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(''); setActive(null); input.current?.focus() }}>Limpiar búsqueda</button>}
       <ul id={listId} role="listbox" aria-label={label} className="max-h-60 overflow-y-auto py-1">
         {matches.map((option, index) => <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={value === option.value} aria-disabled={option.disabled || undefined}
-          className={`px-3 py-2 text-sm ${option.disabled ? 'cursor-not-allowed text-slate-400' : `cursor-pointer hover:bg-emerald-50 ${active === option.value ? 'bg-emerald-50 text-emerald-900' : 'text-slate-800'}`}`}
+          className={`px-3 py-2 text-sm ${option.disabled ? 'cursor-not-allowed text-slate-400' : `cursor-pointer hover:bg-primary-soft ${active === option.value ? 'bg-primary-soft text-ink' : 'text-slate-800'}`}`}
           onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => { if (!option.disabled) setActive(option.value) }} onClick={() => select(option)}>
           {option.label}{option.disabled && <span className="ml-2 text-xs">(Inactivo)</span>}{value === option.value && <span aria-hidden="true" className="ml-2">✓</span>}
         </li>)}

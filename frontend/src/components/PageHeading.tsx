@@ -1,13 +1,20 @@
 import type { ReactNode } from 'react'
+import { useLocation } from 'react-router'
+import { identityFor } from './moduleIdentity'
 
 export function PageHeading({ title, description, action }: {
   title: string; description: string; action?: ReactNode
 }) {
-  return (
-    <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-300 pb-3">
-      <div><h1 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h1>
-        <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p></div>
-      {action}
+  const identity = identityFor(useLocation().pathname)
+  return <div className="page-heading" data-module={identity?.number}>
+    <div className="flex min-w-0 items-center gap-4">
+      {identity && <span aria-hidden="true" className="heading-emblem">{identity.number}</span>}
+      <div>
+      {identity && <p className="module-eyebrow">{identity.group}<span aria-hidden="true">/ {identity.number}</span></p>}
+      <h1 className="page-title">{title}</h1>
+      <p className="page-description">{description}</p>
+      </div>
     </div>
-  )
+    <div className="heading-actions">{action}</div>
+  </div>
 }

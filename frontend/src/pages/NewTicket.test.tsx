@@ -18,7 +18,7 @@ function mockApi(post?: (options: RequestInit) => Promise<Response>) {
     if (path === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
     if (path.startsWith('/api/customers')) return Promise.resolve(jsonResponse(customers))
     if (path.startsWith('/api/circuits')) return Promise.resolve(jsonResponse(path.includes('customer_id=1') ? [circuit] : [{ ...circuit, id: 6, customer_id: 2, circuit_code: 'OTHER-CIRCUIT' }]))
-    if (/^\/api\/(sectors|departments|incident-types)/.test(path)) return Promise.resolve(jsonResponse(named))
+    if (/^\/api\/(sectors|departments|incident-types|nodes|responsibles)/.test(path)) return Promise.resolve(jsonResponse(named))
     return Promise.resolve(jsonResponse([ticket]))
   })
   vi.stubGlobal('fetch', mock)
@@ -111,7 +111,7 @@ describe('creación de tickets', () => {
     expect(screen.getByRole('heading', { name: 'Tickets', level: 1 })).toBeInTheDocument()
     expect(payload).toEqual({
       title: 'Incidencia retroactiva', description: 'Sin conexión', customer_id: 1, circuit_id: 5,
-      sector_id: 1, department_id: 1, incident_type_id: 1,
+      sector_id: 1, department_id: 1, incident_type_id: 1, responsible_id: null,
       start_at: new Date(2026, 9, 2, 16, 20).toISOString(), end_at: null, status: 'OPEN',
     })
   })

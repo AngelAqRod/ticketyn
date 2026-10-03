@@ -7,11 +7,51 @@ from uuid import uuid4
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import create_mock_engine, inspect, text
+from sqlalchemy import create_mock_engine, inspect, text, MetaData
 from sqlalchemy.exc import IntegrityError
 
 from ticketyn.db.base import Base
 from ticketyn import models  # noqa: F401
+
+def normalized_ddl(statements):
+    result = set()
+    for statement in statements:
+        value = ' '.join(statement.split())
+        if not value:
+            continue
+        if value.startswith('CREATE TABLE '):
+            start = value.index('(')
+            body = value[start + 1:-1]
+            parts, current, depth = [], '', 0
+            for character in body:
+                if character == ',' and depth == 0:
+                    parts.append(current.strip()); current = ''; continue
+                depth += (character == '(') - (character == ')')
+                current += character
+            parts.append(current.strip())
+            value = value[:start] + '(' + ', '.join(sorted(parts)) + ')'
+        result.add(value)
+    return result
+
+
+def historical_metadata():
+    metadata = MetaData(naming_convention=Base.metadata.naming_convention)
+    for table in Base.metadata.sorted_tables:
+        if table.name not in {'nodes', 'responsibles'}:
+            table.to_metadata(metadata)
+    for table_name, field in [('circuits', 'node_id'), ('tickets', 'responsible_id')]:
+        table = metadata.tables[table_name]
+        for constraint in list(table.constraints):
+            if field in constraint.columns:
+                table.constraints.remove(constraint)
+        for index in list(table.indexes):
+            if field in index.columns:
+                table.indexes.remove(index)
+        for foreign_key in list(table.c[field].foreign_keys):
+            table.foreign_keys.discard(foreign_key)
+        table._columns.remove(table.c[field])
+    return metadata
+
 
 INITIAL_TABLES = {"customers", "circuits", "sectors"}
 
@@ -19,6 +59,7 @@ INITIAL_TABLES = {"customers", "circuits", "sectors"}
 def test_applied_migrations_are_unchanged():
     versions = Path(__file__).resolve().parents[1] / "alembic/versions"
     expected = {
+        "0003_ticket_domain.py": "c21135545cb6e23afbf75d2413ff733d3f2c2591a0652a51f2049a1d5d6eba89",
         "0001_initial_catalogs.py": "ee2a7351ba4028f4b7a49661bb700574e04a571246f9d1795c1c097829bcc648",
         "0002_remove_services.py": "bc1ceae086cc1be911a2ccee190af1cd544e9e4f76f954c1f615e33ae6a817ec",
     }
@@ -45,12 +86,13 @@ def test_retained_initial_tables_match_models():
         model_statements.append(str(statement.compile(dialect=engine.dialect)))
 
     engine = create_mock_engine("postgresql+psycopg://", collect)
-    Base.metadata.create_all(
-        engine, tables=[Base.metadata.tables[name] for name in INITIAL_TABLES], checkfirst=False
+    legacy = historical_metadata()
+    legacy.create_all(
+        engine, tables=[legacy.tables[name] for name in INITIAL_TABLES], checkfirst=False
     )
 
     def normalize(statements):
-        return {" ".join(statement.split()) for statement in statements if statement.strip()}
+        return normalized_ddl(statements)
 
     initial_statements = [
         statement for statement in output.getvalue().split(";")
@@ -146,8 +188,8 @@ def test_ticket_migration_matches_models_offline():
         model_statements.append(str(statement.compile(dialect=engine.dialect)))
 
     engine = create_mock_engine("postgresql+psycopg://", collect)
-    Base.metadata.create_all(engine, checkfirst=False)
-    normalize = lambda statements: {" ".join(statement.split()) for statement in statements}
+    historical_metadata().create_all(engine, checkfirst=False)
+    normalize = normalized_ddl
     assert normalize(migration_statements) == normalize(model_statements)
 
 
@@ -188,7 +230,7 @@ def test_ticket_migration_upgrade_and_downgrade(postgres_engine):
             with Operations.context(context):
                 tickets["upgrade"]()
             inspector = inspect(connection)
-            assert set(inspector.get_table_names(schema=schema)) == set(Base.metadata.tables)
+            assert set(inspector.get_table_names(schema=schema)) == set(historical_metadata().tables)
             assert original_structure() == before
             for table in ("departments", "incident_types", "ticket_number_config", "tickets"):
                 assert connection.scalar(text(f'SELECT count(*) FROM "{table}"')) == 0

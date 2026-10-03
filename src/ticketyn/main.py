@@ -1,5 +1,8 @@
 from fastapi import FastAPI
+from ticketyn.api.nodes import router as nodes_router
+from ticketyn.api.responsibles import router as responsibles_router
 
+from ticketyn.api.reports import router as reports_router
 from ticketyn.api.health import router as health_router
 from ticketyn.api.customers import router as customers_router
 from ticketyn.api.circuits import router as circuits_router
@@ -15,6 +18,8 @@ def create_app() -> FastAPI:
     get_settings()
     app = FastAPI(title="Ticketyn", version="0.1.0")
     app.include_router(health_router)
+    app.include_router(nodes_router)
+    app.include_router(responsibles_router)
     app.include_router(customers_router)
     app.include_router(circuits_router)
     app.include_router(sectors_router)
@@ -22,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(incident_types_router)
     app.include_router(settings_router)
     app.include_router(tickets_router)
+    app.include_router(reports_router)
     return app
 
 

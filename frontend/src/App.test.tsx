@@ -7,6 +7,7 @@ import { jsonResponse, ticket } from './test/fixtures'
 function mockApi(healthy = true) {
   vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(path === '/health'
     ? jsonResponse({ status: 'ok' }, healthy ? 200 : 503)
+    : path === '/api/settings/ticket-number' ? jsonResponse({ id: 1, prefix: '', separator: '', next_number: 1, padding: 0 })
     : path === '/api/tickets/stats' ? jsonResponse({ total: 123, open: 20, closed: 103 })
     : path.startsWith('/api/tickets') ? jsonResponse([ticket]) : jsonResponse([]))))
 }

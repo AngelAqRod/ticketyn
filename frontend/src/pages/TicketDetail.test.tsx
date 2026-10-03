@@ -22,6 +22,7 @@ function mockApi(initial: Ticket = ticket, patch?: (options: RequestInit) => Pro
     if (path === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
     if (path === '/api/tickets/1') return Promise.resolve(jsonResponse(current))
     if (path.startsWith('/api/tickets?')) return Promise.resolve(jsonResponse([current]))
+    if (path.startsWith('/api/responsibles') || path.startsWith('/api/nodes')) return Promise.resolve(jsonResponse([]))
     const catalogs = { customers: customer, circuits: circuit, sectors: sector, departments: department, 'incident-types': incidentType }
     for (const [resource, item] of Object.entries(catalogs)) {
       if (path === `/api/${resource}/1`) return Promise.resolve(jsonResponse(item))
@@ -121,7 +122,7 @@ describe('edición de tickets', () => {
     expect(await screen.findByText('Cambios guardados correctamente.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Título corregido' })).toBeInTheDocument()
     const payload = JSON.parse(String(mock.mock.calls.find(([, options]) => options?.method === 'PATCH')?.[1]?.body))
-    expect(payload).toEqual({ title: 'Título corregido', description: ticket.description, customer_id: 1, circuit_id: 1, sector_id: 1, department_id: 1, incident_type_id: 1, start_at: new Date(2025, 9, 2, 16, 20).toISOString(), end_at: null, status: 'OPEN' })
+    expect(payload).toEqual({ title: 'Título corregido', description: ticket.description, customer_id: 1, circuit_id: 1, sector_id: 1, department_id: 1, incident_type_id: 1, responsible_id: null, start_at: new Date(2025, 9, 2, 16, 20).toISOString(), end_at: null, status: 'OPEN' })
   })
   it('mantiene segundos originales cuando las fechas no se cambian', async () => {
     const initial = { ...ticket, start_at: '2026-01-01T12:00:37Z', end_at: '2026-01-01T13:10:42Z' }

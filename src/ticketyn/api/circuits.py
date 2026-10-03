@@ -1,9 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, HTTPException, Path, Query
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from ticketyn.api.crud import DBSession, get_or_404, list_items, save_item, update_item
-from ticketyn.models import Circuit, Customer
+from ticketyn.models import Circuit, Customer, Node
 from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate
 
 router = APIRouter(prefix="/api/circuits", tags=["circuits"])
@@ -12,6 +15,7 @@ router = APIRouter(prefix="/api/circuits", tags=["circuits"])
 @router.post("", response_model=CircuitResponse, status_code=201)
 def create_circuit(payload: CircuitCreate, session: DBSession):
     get_or_404(session, Customer, payload.customer_id)
+    validate_node(session, payload.node_id)
     return save_item(session, Circuit(**payload.model_dump()))
 
 
@@ -20,14 +24,16 @@ def list_circuits(
     session: DBSession,
     search: str | None = None,
     include_inactive: bool = False,
+    active: bool | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    node_id: Annotated[int | None, Query(gt=0)] = None,
     customer_id: Annotated[int | None, Query(gt=0)] = None,
 ):
     return list_items(
         session, Circuit, search=search, search_fields=('circuit_code', 'description'),
         order_field="circuit_code", include_inactive=include_inactive,
-        limit=limit, offset=offset, customer_id=customer_id,
+        limit=limit, offset=offset, customer_id=customer_id, active=active, node_id=node_id,
     )
 
 
@@ -42,4 +48,16 @@ def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, sessio
     values = payload.model_dump(exclude_unset=True)
     if "customer_id" in values:
         get_or_404(session, Customer, values["customer_id"])
+    if "node_id" in values and values["node_id"] != item.node_id:
+        validate_node(session, values["node_id"])
     return update_item(session, item, values)
+
+
+def validate_node(session: Session, node_id: int | None) -> None:
+    if node_id is None:
+        return
+    node = session.scalar(select(Node).where(Node.id == node_id).with_for_update(read=True))
+    if node is None:
+        raise HTTPException(404, "El nodo indicado no existe")
+    if not node.active:
+        raise HTTPException(422, "El nodo indicado está inactivo")

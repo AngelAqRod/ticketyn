@@ -12,6 +12,8 @@ DBSession = Annotated[Session, Depends(get_session)]
 Model = TypeVar("Model", bound=Base)
 
 UNIQUE_ERRORS = {
+    "uq_nodes_name": "Ya existe un nodo con ese name",
+    "uq_responsibles_name": "Ya existe un responsable con ese name",
     "uq_customers_customer_code": "Ya existe un cliente con ese customer_code",
     "uq_circuits_circuit_code": "Ya existe un circuito con ese circuit_code",
     "uq_sectors_name": "Ya existe un sector con ese name",
@@ -29,13 +31,16 @@ def get_or_404(session: Session, model: type[Model], id: int) -> Model:
     return item
 
 
-def list_items(
-    session: Session, model: type[Model], *, search: str | None,
-    search_fields: tuple[str, ...], order_field: str, include_inactive: bool,
-    limit: int, offset: int, customer_id: int | None = None,
-) -> list[Model]:
+def filtered_items(
+    model: type[Model], *, search: str | None, search_fields: tuple[str, ...],
+    order_field: str, include_inactive: bool, customer_id: int | None = None,
+    active: bool | None = None, node_id: int | None = None,
+):
+    """Query reutilizable antes de paginar. active explícito prevalece sobre include_inactive."""
     statement = select(model)
-    if not include_inactive:
+    if active is not None:
+        statement = statement.where(model.active.is_(active))
+    elif not include_inactive:
         statement = statement.where(model.active.is_(True))
     if search:
         statement = statement.where(or_(
@@ -43,8 +48,19 @@ def list_items(
         ))
     if customer_id is not None:
         statement = statement.where(model.customer_id == customer_id)
-    statement = statement.order_by(getattr(model, order_field), model.id).limit(limit).offset(offset)
-    return list(session.scalars(statement))
+    if node_id is not None:
+        statement = statement.where(model.node_id == node_id)
+    return statement.order_by(getattr(model, order_field), model.id)
+
+
+def list_items(
+    session: Session, model: type[Model], *, search: str | None,
+    search_fields: tuple[str, ...], order_field: str, include_inactive: bool,
+    limit: int, offset: int, customer_id: int | None = None, active: bool | None = None, node_id: int | None = None,
+) -> list[Model]:
+    statement = filtered_items(model, search=search, search_fields=search_fields, order_field=order_field,
+                               include_inactive=include_inactive, customer_id=customer_id, active=active, node_id=node_id)
+    return list(session.scalars(statement.limit(limit).offset(offset)))
 
 
 def save_item(session: Session, item: Model) -> Model:
