@@ -1,0 +1,31 @@
+# Template only: installer and account/database provisioning are not implemented.
+[Unit]
+Description=Ticketyn incident management API
+After=network.target postgresql.service
+Wants=postgresql.service
+# Debian/Ubuntu provide an umbrella postgresql.service; no cluster-specific unit.
+# Ordering alone is not a database readiness check.
+
+[Service]
+Type=simple
+User=ticketyn
+Group=ticketyn
+WorkingDirectory=/opt/ticketyn/current
+EnvironmentFile=/etc/ticketyn/ticketyn.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/ticketyn/current/.venv/bin/uvicorn ticketyn.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3s
+StandardOutput=journal
+StandardError=journal
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+# Keep temporary directories writable for SpooledTemporaryFile and openpyxl.
+# Application/releases are root-owned and read-only to the ticketyn account.
+# Validate sandbox directives in the target LXC before deployment.
+
+[Install]
+WantedBy=multi-user.target

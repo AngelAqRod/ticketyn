@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 .venv/
+.venv-*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -13,3 +14,46 @@ htmlcov/
 node_modules/
 frontend/coverage/
 *.tsbuildinfo
+
+# IDE and editor temporary files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.tmp
+*.temp
+
+# Test/coverage artifacts (keep documentation and legitimate PDF/XLSX assets)
+.coverage.*
+coverage/
+.tox/
+.nox/
+.ruff_cache/
+.mypy_cache/
+artifacts/
+test-results/
+/tests/generated/
+/frontend/test-results/
+
+# Logs, database dumps and backups
+*.log
+*.dump
+*.backup
+*.backup.sql
+*.dump.sql
+dump-*.sql
+ticketyn-backup-*.sql
+dumps/
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.dump.gz
+backups/
+
+# Private keys and certificate bundles
+*.key
+*.pem
+*.p12
+*.pfx
+*.pkcs12

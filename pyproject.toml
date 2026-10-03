@@ -7,6 +7,8 @@ name = "ticketyn"
 version = "0.1.0"
 description = "Sistema web simple de gestión de tickets"
 requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
 dependencies = [
     "fastapi>=0.115,<1",
     "uvicorn>=0.30,<1",
