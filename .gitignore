@@ -9,6 +9,8 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+!frontend/dist/
+!frontend/dist/**
 .coverage
 htmlcov/
 node_modules/
