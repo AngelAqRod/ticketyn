@@ -359,6 +359,42 @@ El entorno exacto de generación figura en el lock. La matriz Python/Debian/Ubun
 y el empaquetado de wheels/checksums quedan para FASE 2; no copiar una venv DEV
 ni asumir que una resolución en una plataforma valida todas las demás.
 
-Pendientes: aceptación del instalador en sistema limpio, actualizador, backup/restauración, CI, artefactos
-versionados, validación LXC limpia y política HTTPS/acceso. No hay tags/releases
+Pendientes: actualizador, restauración, CI, artefactos versionados y política HTTPS/acceso. No hay tags/releases
 creados automáticamente.
+
+
+### Backups de producción
+
+Desde el checkout/release de Ticketyn, como root ejecuta `./backup.sh` (o
+`sudo ./backup.sh`). No detiene Ticketyn ni modifica PostgreSQL/configuración.
+Requiere la instalación estándar local, herramientas cliente PostgreSQL compatibles,
+configuración root:root 0600 y autenticación peer local del usuario postgres.
+No usa ni muestra la contraseña de Ticketyn.
+
+Publica en `/var/backups/ticketyn` (root:root 0700) un archivo privado 0600:
+`ticketyn-backup-<timestamp UTC>-v<versión>-<identificador aleatorio>.tar`.
+Incluye `database.dump` (PostgreSQL custom comprimido), `ticketyn.env`,
+`metadata.txt`, `MANIFEST.txt` y `SHA256SUMS`. Metadata registra release activa,
+tag esperado, revisión Alembic, versión PostgreSQL/pg_dump y encoding.
+El código no se copia: conserva/publica la release correspondiente por separado.
+
+La publicación es exclusiva y atómica después de verificar componentes, hashes
+SHA-256 y lectura completa del dump mediante pg_restore sin ejecutar SQL.
+No reemplaza backups existentes ni aplica retención automática. Errores y
+SIGINT/SIGTERM limpian temporales propios. SIGKILL/apagado puede dejar un
+subdirectorio oculto privado `.ticketyn-backup.*`; no se elimina automáticamente
+porque otra ejecución podría estar utilizándolo. No es un backup publicado.
+Se requiere aproximadamente espacio para dump y tar simultáneamente.
+Evita migraciones/cambios de release o configuración concurrentes al backup.
+
+Para inspeccionar sin restaurar, extrae como root en un directorio privado 0700
+con umask 077 y ejecuta `sha256sum --check --strict SHA256SUMS` y
+`pg_restore --list database.dump`. No extraigas archivos de backups no confiables.
+Los hashes detectan corrupción, no autenticidad. El archivo **no está cifrado** y
+contiene credenciales: transferencias y copias externas deben protegerse.
+
+`restore.sh` todavía no existe. Restaurar en otro servidor requerirá una release
+compatible, crear el rol local ticketyn y sincronizar su contraseña con la
+configuración recuperada. El dump contiene una sola DB con objetos, datos,
+secuencias y permisos; no incluye roles globales, configuración PostgreSQL,
+Nginx/systemd ni recuperación a un instante mediante WAL.
