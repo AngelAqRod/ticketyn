@@ -23,9 +23,10 @@ Versión actual: `0.1.0`.
 - Exportaciones PDF/XLSX de reportes y todos los tickets filtrados.
 
 No hay usuarios/auth, adjuntos, auditoría, comentarios, SLA ni borrado físico.
-El despliegue automatizado está **en preparación**: no existen `install.sh`,
-`update.sh` ni `backup.sh`. Los archivos de `deploy/` son templates; no constituyen
-un procedimiento definitivo de instalación manual.
+Existe un instalador de primera instalación, `install.sh`, para sistemas
+soportados con frontend precompilado. No existen `update.sh`, `backup.sh`
+ni rollback automático. La aceptación end-to-end en un sistema limpio sigue
+siendo necesaria antes de desplegar datos reales.
 
 ## Stack y estructura
 
@@ -42,9 +43,9 @@ src/ticketyn/
   schemas/         # Entradas/respuestas Pydantic
   main.py          # ticketyn.main:app
 alembic/versions/  # Historial inmutable de esquema
-frontend/         # Source, tests y lockfile npm; dist generado e ignorado
+frontend/         # Source, tests, lockfile npm y dist precompilado
 tests/           # Tests backend con PostgreSQL descartable
-deploy/          # Templates Nginx/systemd (no instalados automáticamente)
+deploy/          # Templates Nginx/systemd utilizados por install.sh
 requirements.lock # Versiones runtime Python resueltas y verificadas
 ```
 
@@ -124,7 +125,7 @@ npm run build
 ```
 
 `npm run test:watch` permite pruebas interactivas. Build verifica TypeScript y
-produce `frontend/dist`, que no se versiona. Los tests de exportaciones verifican
+produce `frontend/dist`, incluido actualmente para permitir instalación sin Node/npm. Los tests de exportaciones verifican
 PDF/XLSX, reportes, relaciones Node/Responsible y datos históricos. Algunos tests
 escriben documentos de inspección en el directorio temporal del sistema.
 
@@ -196,7 +197,7 @@ PDF conserva gráficos vectoriales, rankings completos, detalle y paginación.
 Distribución horaria: 24 barras sin tabla duplicada en PDF; API/XLSX conservan
 los 24 buckets. XLSX contiene datos completos, ISO con offset y duración numérica.
 
-## Producción: preparación, no instalador definitivo
+## Producción: primera instalación
 
 Objetivo Debian estable/Ubuntu LTS en LXC:
 
@@ -219,15 +220,111 @@ Layout previsto:
 No se necesitan directorios propios de datos/logs por ahora: PostgreSQL conserva
 los datos; stdout/stderr van a journald.
 
-Templates disponibles, **sin instalar en /etc**:
+### Uso del instalador
 
-- `deploy/systemd/ticketyn.service`: usuario/grupo ticketyn, sin reload, localhost,
-  restart ante fallo, journal y hardening moderado. La unidad PostgreSQL umbrella
-  no verifica readiness. Validar permisos y restricciones en el LXC objetivo.
-- `deploy/nginx/ticketyn.conf`: HTTP, SPA fallback, proxy conservando /api, assets
-  cacheables, index sin cache largo y timeouts para exportaciones. TLS y control
-  de acceso deben definirse antes de exposición. Docs/OpenAPI pueden bloquearse
-  o habilitarse deliberadamente en Nginx; ocultarlos no es autenticación.
+Sistemas iniciales: Debian 12/13 y Ubuntu 24.04 LTS, con systemd en ejecución.
+Funciona en LXC, VM o servidor físico; no depende del tipo de virtualización.
+Requiere acceso a apt y al índice Python. No instala Node.js ni npm.
+
+```bash
+git clone https://github.com/AngelAqRod/ticketyn.git
+cd ticketyn
+sudo ./install.sh
+```
+
+Si ya estás trabajando como root (sudo no es necesario ni se utiliza internamente):
+
+```bash
+./install.sh
+```
+
+**Prerequisito importante:** `frontend/dist` debe venir ya compilado y corresponder
+a la versión del backend. El repositorio actual incluye este build mediante una
+excepción explícita en .gitignore, por lo que el checkout proporciona los archivos
+estáticos. Las futuras releases deberán incluir el build de su misma versión.
+Si falta dist, el instalador se detiene: no lo descarga ni lo compila en producción.
+
+El instalador pregunta únicamente **Puerto HTTP [80]**. Enter elige 80; valida
+1–65535, permite elegir otro puerto ante conflicto y C cancela. 8000 y 5432 están
+reservados. Después muestra un resumen y pide confirmación (Enter = Sí).
+
+PostgreSQL, usuario/base `ticketyn`, usuario Linux y rutas son automáticos.
+Genera una contraseña aleatoria local y guarda solo la configuración externa
+root:root `0600`, sin mostrarla. Crea la DB UTF-8 explícitamente con C.UTF-8.
+Instala runtime desde requirements.lock y el paquete no editable, ejecuta Alembic
+y verifica HEAD antes de activar el release. Instala los templates Nginx/systemd
+con el puerto elegido; Nginx conserva `/api`, descargas y rutas SPA.
+
+La versión del directorio se toma de `project.version` en pyproject.toml. Si el
+checkout tiene un tag exacto, debe coincidir con `v<version>`. No se sobrescriben
+releases de la misma versión. La copia usa una lista positiva de archivos, sin
+.git, .env, node_modules ni cachés. `current` solo se crea tras preparar Python,
+imports, dependencias y migraciones correctamente.
+
+### Reejecución y seguridad
+
+Es un instalador inicial, no un actualizador. Una instalación completada o recursos
+preexistentes sin prueba de propiedad se rechazan; nunca borra DB, roles ni releases.
+Un usuario Linux existente solo se reutiliza si es compatible (sistema, grupo
+ticketyn, nologin y home /nonexistent).
+
+Una instalación interrumpida puede reanudarse ejecutando **el mismo árbol fuente**
+y `install.sh`, con la confirmación normal. Conserva el puerto previamente elegido.
+El estado `/etc/ticketyn/install-state` es root:root `0700`, con archivos `0600`:
+versión, fingerprint del contenido fuente, identificador aleatorio, puerto, fase,
+resultado e identidades/hashes de archivos. No contiene contraseñas ni DATABASE_URL;
+la configuración secreta permanece únicamente en `ticketyn.env` root:root `0600`.
+Rol y DB se identifican mediante comentarios PostgreSQL con ese identificador.
+Los comentarios son evidencia de creación, no un mecanismo de autenticación.
+
+Al reintentar, instala dependencias pendientes, repara el release propio todavía no
+publicado, repite/verifica Alembic y completa servicios y comprobaciones. Un release
+ya preparado/publicado no se recopia ni se reinstala con pip. No reemplaza `current`:
+solo reutiliza el enlace propio verificado. Después de las comprobaciones marca la
+instalación completa y deja de admitir reinstalación. No implementa rollback.
+
+SIGINT/SIGTERM conservan el estado de fallo y limpian la política temporal propia.
+SIGKILL o un apagado no permiten cleanup; el estado previamente persistido permite
+reintentar. Hay ventanas inevitables donde falta evidencia suficiente (por ejemplo,
+entre CREATE DATABASE y su COMMENT, o entre crear el archivo de configuración/directorio
+release y registrar su identidad, o entre apt y registrar el default). En esos casos exige revisión manual, sin asumir
+propiedad ni borrar datos. No resuelvas un fallo borrando la DB. Si apt/dpkg queda
+interrumpido, puede ser necesario reparar primero el gestor de paquetes.
+
+No reemplaza sitios Nginx ajenos. Detecta listeners y puertos configurados antes
+de instalar y vuelve a comprobar después; ante una directiva `listen` no interpretable
+con seguridad aborta. La configuración generada exige IPv4 y no requiere IPv6.
+Solo deshabilita el enlace **default recién generado por apt**, registrando su
+identidad al terminar apt y comprobando checksum, identidad y destino inmediatamente
+antes de retirarlo; conserva el archivo y sitios
+preexistentes. **No modifiques Nginx concurrentemente durante la instalación.**
+
+Durante apt crea policy-rc.d únicamente si no existe una política del administrador.
+La política propia bloquea arranques solo mientras está ocupado el lock del instalador;
+sin lock activo (incluido tras reinicio) permite servicios, aunque el archivo haya
+quedado abandonado. Un reintento verifica su identidad/contenido antes de eliminarla.
+El descriptor del lock se cierra al invocar apt para que sus procesos hijos no lo
+retengan después de SIGKILL del instalador.
+Una política ajena/modificada nunca se elimina automáticamente.
+
+La copia incluye explícitamente frontend/dist y valida los árboles de código,
+migraciones, deploy y dist antes de copiar y ampliar permisos. Rechaza claves privadas
+comunes, .env inesperados, backups evidentes, .git anidados, symlinks y hardlinks
+inesperados. Excluye node_modules y cachés. Esto **no es detección perfecta de secretos**:
+la release debe revisarse antes de distribuirse. Los tags exactos deben coincidir con
+project.version; los errores reales de Git abortan, sin cambiar safe.directory global.
+Un checkout modificado o sin tag exacto muestra advertencias durante esta fase DEV.
+
+La instalación inicial utiliza **HTTP**. HTTPS y control de acceso deben
+configurarse posteriormente según el entorno; no expongas esta aplicación sin
+auth a Internet. El frontend/backend se verifican mediante Nginx, incluyendo una
+consulta DB real; `/health` por sí solo no comprueba PostgreSQL.
+
+Templates: `deploy/systemd/ticketyn.service` y `deploy/nginx/ticketyn.conf`.
+La unidad PostgreSQL umbrella no verifica readiness; el instalador sí comprueba
+conexión local. Validar las restricciones systemd en el sistema objetivo.
+Docs/OpenAPI no se proxían en el template: decidir su acceso deliberadamente
+no sustituye autenticación.
 
 Temporales: exports usan SpooledTemporaryFile (pasa a disco por encima de 2 MiB)
 y openpyxl write-only también escribe temporales. PrivateTmp permite esos
@@ -262,6 +359,6 @@ El entorno exacto de generación figura en el lock. La matriz Python/Debian/Ubun
 y el empaquetado de wheels/checksums quedan para FASE 2; no copiar una venv DEV
 ni asumir que una resolución en una plataforma valida todas las demás.
 
-Pendientes: instalador, actualizador, backup/restauración, CI, artefactos
+Pendientes: aceptación del instalador en sistema limpio, actualizador, backup/restauración, CI, artefactos
 versionados, validación LXC limpia y política HTTPS/acceso. No hay tags/releases
 creados automáticamente.

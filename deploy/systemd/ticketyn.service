@@ -1,4 +1,4 @@
-# Template only: installer and account/database provisioning are not implemented.
+# Installed by install.sh; keep this template versioned with the release.
 [Unit]
 Description=Ticketyn incident management API
 After=network.target postgresql.service
