@@ -765,3 +765,64 @@ capture_packaged_default
 ''')
     assert result.returncode != 0 and 'sin prueba' in result.stderr
     assert link.is_symlink() and default.exists()
+
+
+@pytest.mark.parametrize('persistent', [False, True])
+@pytest.mark.parametrize('curl_code, diagnostic', [
+    (22, 'curl: (22) The requested URL returned error: 502'),
+    (7, 'curl: (7) Failed to connect'),
+])
+def test_final_health_retries_silence_transient_errors_but_abort_on_exhaustion(
+        tmp_path, persistent, curl_code, diagnostic):
+    release, work = tmp_path/'release', tmp_path/'work'
+    dist = release/'frontend/dist'
+    (dist/'assets').mkdir(parents=True)
+    work.mkdir()
+    (dist/'index.html').write_text('<script src="/assets/app-test.js"></script>')
+    (dist/'assets/app-test.js').write_text('compiled fixture')
+    current = tmp_path/'current'
+    current.symlink_to(release)
+    trace = tmp_path/'requests'
+    result = shell(f'''
+HTTP_PORT=8080; WORK="{work}"; RELEASE="{release}"; CURRENT_FILE="{current}"
+HEALTH_ATTEMPTS=0
+systemctl() {{ return 0; }}
+ss() {{ echo 'LISTEN 0 128 127.0.0.1:8000 0.0.0.0:*'; }}
+sleep() {{ :; }}
+curl() {{
+    local url="${{@: -1}}"
+    printf '%s\\n' "$url" >> "{trace}"
+    case "$url" in
+        */health)
+            HEALTH_ATTEMPTS=$((HEALTH_ATTEMPTS + 1))
+            if [[ {1 if persistent else 0} == 1 || $HEALTH_ATTEMPTS == 1 ]]; then
+                printf '%s\\n' '{diagnostic}' >&2
+                return {curl_code}
+            fi
+            printf '%s' '{{"status":"ok"}}' ;;
+        */api/customers) printf '%s' '[]' ;;
+        */assets/app-test.js) cat "$RELEASE/frontend/dist/assets/app-test.js" ;;
+        */) cat "$RELEASE/frontend/dist/index.html" ;;
+        *) return 99 ;;
+    esac
+}}
+final_checks
+printf 'VERIFIED\\n'
+''')
+    assert diagnostic not in result.stdout + result.stderr
+    requests = trace.read_text().splitlines()
+    if persistent:
+        assert result.returncode != 0
+        assert 'tras 30 intentos' in result.stderr
+        assert 'http://127.0.0.1:8080/health' in result.stderr
+        assert 'Revisa ticketyn.service y Nginx' in result.stderr
+        assert 'VERIFIED' not in result.stdout
+        assert len(requests) == 30 and all(url.endswith('/health') for url in requests)
+    else:
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == '' and 'VERIFIED' in result.stdout
+        assert requests == [
+            'http://127.0.0.1:8080/health', 'http://127.0.0.1:8080/health',
+            'http://127.0.0.1:8080/', 'http://127.0.0.1:8080/assets/app-test.js',
+            'http://127.0.0.1:8080/api/customers',
+        ]

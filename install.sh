@@ -503,10 +503,10 @@ final_checks() {
     systemctl is-active --quiet nginx || fail 'Nginx no está activo.'
     local base="http://127.0.0.1:$HTTP_PORT" attempt ready=0 asset
     for attempt in {1..30}; do
-        if curl -fsS --max-time 3 "$base/health" > "$WORK/health.json"; then ready=1; break; fi
+        if curl -fsS --max-time 3 "$base/health" > "$WORK/health.json" 2>/dev/null; then ready=1; break; fi
         sleep 1
     done
-    [[ $ready == 1 ]] || fail 'El health check mediante Nginx no responde.'
+    [[ $ready == 1 ]] || fail "El health check mediante Nginx no respondió tras 30 intentos ($base/health). Revisa ticketyn.service y Nginx."
     systemctl is-active --quiet ticketyn || fail 'ticketyn.service no está activo.'
     curl -fsS --max-time 10 "$base/" > "$WORK/index.html" || fail 'El frontend no responde mediante Nginx.'
     cmp -s "$WORK/index.html" "$RELEASE/frontend/dist/index.html" || fail 'Nginx no sirve el frontend esperado.'
