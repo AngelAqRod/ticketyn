@@ -43,6 +43,10 @@ backup_release_version() {
     backup_secure_directory "$RELEASE"
     backup_secure_file "$RELEASE/pyproject.toml"
     VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$RELEASE/pyproject.toml")
+    if [[ -e $RELEASE/.ticketyn-release.json || -L $RELEASE/.ticketyn-release.json ]]; then
+        backup_secure_file "$RELEASE/.ticketyn-release.json"
+        VERSION=$(python3 -I "$(dirname -- "${BASH_SOURCE[0]}")/deploy/release_identity.py" "$RELEASE") || backup_fail 'Identidad del release inválida.'
+    fi
     [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9.+-]*)?$ && ${RELEASE##*/} == "$VERSION" ]] || backup_fail 'Versión/release activa inválida o incoherente.'
     CURRENT_ID=$(backup_identity "$CURRENT_FILE")
     RELEASE_METADATA_HASH=$(sha256sum -- "$RELEASE/pyproject.toml" | cut -d ' ' -f1)

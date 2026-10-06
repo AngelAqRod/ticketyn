@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Actualización explícita de releases; nunca ejecuta git pull sobre current.
+set +x
+set -Eeuo pipefail
+if (( EUID != 0 )); then
+    printf 'Error: ejecuta update.sh como root o mediante sudo.\n' >&2
+    exit 1
+fi
+if [[ $# != 1 ]]; then
+    printf 'Uso: ./update.sh vX.Y.Z (también admite prereleases SemVer)\n' >&2
+    exit 1
+fi
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+exec python3 -I -B "$SCRIPT_DIR/deploy/update_support.py" "$1"

@@ -139,7 +139,12 @@ def validate(archive, destination):
 def compatibility(content, release, head, server_number, client_version):
     data = metadata(Path(content)/'metadata.txt')
     project = Path(release)/'pyproject.toml'
-    version = tomllib.loads(project.read_text())['project']['version']
+    # Legacy releases retain pyproject identity; updated releases carry SemVer identity.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('release_identity', Path(__file__).with_name('release_identity.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    version = module.identity(release)
     if data['ticketyn_version'] != version or data['release_name'] != Path(release).name:
         fail('Versión/release incompatible.')
     if hashlib.sha256(project.read_bytes()).hexdigest() != data['pyproject_sha256']:

@@ -24,9 +24,10 @@ Versión actual: `0.1.0`.
 
 No hay usuarios/auth, adjuntos, auditoría, comentarios, SLA ni borrado físico.
 Existe un instalador de primera instalación, `install.sh`, para sistemas
-soportados con frontend precompilado. No existen `update.sh`, `backup.sh`
-ni rollback automático. La aceptación end-to-end en un sistema limpio sigue
-siendo necesaria antes de desplegar datos reales.
+soportados con frontend precompilado. Existen `update.sh`, `backup.sh`,
+`restore.sh` y `restore.sh --finalize`; no existe rollback automático de updates.
+El instalador y backup/restore fueron validados en Debian; el actualizador todavía
+requiere aceptación end-to-end en un entorno descartable antes de actualizar datos reales.
 
 ## Stack y estructura
 
@@ -215,7 +216,7 @@ Layout previsto:
 - `/opt/ticketyn/releases/<version>`: aplicación, venv y frontend; root escribe.
 - `/opt/ticketyn/current`: release activa.
 - `/etc/ticketyn/ticketyn.env`: secretos, root `0600`, cargado por systemd.
-- `/var/backups/ticketyn`: backups protegidos, implementación pendiente.
+- `/var/backups/ticketyn`: backups privados generados por `backup.sh`.
 
 No se necesitan directorios propios de datos/logs por ahora: PostgreSQL conserva
 los datos; stdout/stderr van a journald.
@@ -359,7 +360,7 @@ El entorno exacto de generación figura en el lock. La matriz Python/Debian/Ubun
 y el empaquetado de wheels/checksums quedan para FASE 2; no copiar una venv DEV
 ni asumir que una resolución en una plataforma valida todas las demás.
 
-Pendientes: actualizador, CI, artefactos versionados y política HTTPS/acceso. No hay tags/releases
+Pendientes: CI, artefactos versionados y política HTTPS/acceso. No hay tags/releases
 creados automáticamente.
 
 
@@ -521,3 +522,105 @@ de recuperación, backup y OIDs. Esto detecta inconsistencias; no protege contra
 un administrador root que falsifique coherentemente todos los registros.
 Un restore exitoso que no reemplazó una DB también puede finalizar: cierra su
 estado sin ejecutar ningún DROP ni exigir un backup previo inexistente.
+
+## Actualización de producción
+
+Ejecutar como root, o mediante sudo, indicando **un tag explícito** del repositorio
+oficial `https://github.com/AngelAqRod/ticketyn.git`:
+
+```bash
+./update.sh v0.2.0
+# También se admiten prereleases SemVer:
+./update.sh v0.1.1-test.1
+```
+
+No selecciona «latest», no ejecuta `git pull` en la instalación, no instala
+Node/npm ni modifica Nginx. Requiere una instalación administrada completada,
+servicios saludables, configuración privada, PostgreSQL local y DB en el HEAD
+Alembic de la release activa. Un restore pendiente debe finalizarse primero.
+Utiliza el mismo lock de install/restore; los subprocesos lo heredan para impedir
+un reintento mientras una dependencia/migración siga ejecutándose tras SIGKILL.
+No realizar cambios administrativos
+concurrentes en PostgreSQL, releases, configuración, systemd o Nginx.
+
+Obtiene exclusivamente el tag remoto solicitado, comprueba su objeto y commit,
+rechaza tags que cambien durante la descarga/reintento y copia únicamente el
+contenido permitido. Los tags no están firmados/verificados criptográficamente:
+se confía en HTTPS y en el control del repositorio oficial. Solo admite avance
+SemVer dentro de la misma versión mayor; rechaza misma versión, downgrade,
+build metadata y cadenas Alembic ramificadas o revisiones aplicadas modificadas.
+
+**Contrato de versionado:** `project.version` debe ser el núcleo numérico del tag
+(por ejemplo `0.1.1` para `v0.1.1-test.1` y para `v0.1.1`). Esto se aplica de forma
+uniforme, porque identificadores SemVer arbitrarios no son versiones Python
+PEP 440. El directorio sigue la identidad completa del tag, por ejemplo
+`releases/0.1.1-test.1`. `.ticketyn-release.json` liga tag, commit, versión del
+paquete y hash de pyproject; backup/restore reconocen esa identidad sin cambiar
+el formato de los backups. Las instalaciones originales sin manifiesto siguen
+usando pyproject y el nombre de su directorio. Una release debe incluir
+`frontend/dist` precompilado, lock, migraciones y helpers/scripts de mantenimiento.
+
+Prepara el venv en su ruta definitiva, con dependencias runtime exactamente
+bloqueadas y paquete no editable; comprueba `pip check`, imports, versiones,
+assets e integridad del código. Pip puede descargar las dependencias de build
+indicadas en pyproject en un entorno de build aislado; el lock actual fija
+versiones runtime, no hashes ni herramientas de build. No se sobreescribe una
+release destino preexistente: solo se retoma una preparación identificada por
+el estado propio y el inode del directorio.
+
+Antes de detener Ticketyn exige un backup íntegro de `backup.sh`, verifica su
+contenido/configuración/revisión y registra ruta y SHA-256. No elimina backups
+ni releases anteriores. Deshabilita temporalmente el arranque automático y
+luego detiene Ticketyn; esto evita arrancar código viejo tras un corte de energía
+durante una migración. Ejecuta Alembic con el venv/código destino únicamente si
+cambia HEAD; exige continuidad lineal y conserva las revisiones aplicadas. Una
+vez verificado el HEAD, activa `current` mediante intercambio atómico que
+preserva/rechaza objetos inesperados. Arranca y comprueba servicio, escucha
+**local** 127.0.0.1:8000, health/API mediante Nginx, index y assets. Los errores
+HTTP/conexión transitorios se reintentan silenciosamente; el fallo definitivo
+aborta. Tras éxito vuelve a habilitar el arranque automático.
+
+### Estado y recuperación de una actualización
+
+`/etc/ticketyn/update-state/state.json` (directorio 0700, archivo 0600, root:root)
+registra operación, origen/destino, commit/tag, revisiones Alembic, identidades de
+DB/clúster/directorios, hashes, backup, fase y resultado. No contiene contraseña
+ni DATABASE_URL. Tras éxito se archiva en
+`/etc/ticketyn/update-history/<operación>/state.json`; no bloquea otra actualización.
+Si el cierre se interrumpe con fase `complete`, repetir el mismo comando valida
+la instalación y termina de archivar.
+
+Antes de intentar migraciones, repetir **el mismo tag** puede retomar la descarga,
+preparación o backup. Revalida la instalación y el contenido y crea otro backup;
+no reutiliza silenciosamente una instantánea antigua. Si quedó detenido durante
+`stopping`, solo reactiva el origen tras demostrar pointer, OID, configuración
+y revisión originales. No borra destinos desconocidos ni operaciones de otro tag.
+
+Desde la fase `migrating` (registrada **antes** de DDL), un fallo deja Ticketyn
+**detenido y deshabilitado** y conserva ambas releases, backup y estado. Esta
+primera versión no realiza rollback automático, incluso cuando HEAD no cambió:
+no adivina compatibilidad. SIGINT/SIGTERM conservan el estado y ejecutan esta
+protección; SIGKILL/pérdida de energía pueden dejar una fase pendiente y un
+workspace privado `.ticketyn-update-*` en releases. Un reintento reconoce el
+estado y rechaza continuar desde el límite de migración/activación. No limpiar
+esos artefactos sin revisión; pueden contener una copia privada de la configuración
+extraída del backup. Los temporales normales se eliminan al salir.
+
+La recuperación posterior a ese límite requiere intervención del administrador:
+inspeccionar estado, revisión real y pointer; recuperar una DB compatible con el
+código elegido usando el backup conservado; comprobar configuración y servicios
+antes de habilitar el arranque. **No basta con apuntar current al código anterior
+si cambió el esquema, ni ejecutar Alembic downgrade genéricamente.** `restore.sh`
+exige identidad de release/revisión compatible y no debe forzarse sobre una
+combinación incompatible. No existe un comando automático de recuperación de
+updates en esta fase. Conservar/archivar el estado solo tras resolver y verificar
+la operación. Los hashes/identidades detectan inconsistencias, no falsificaciones
+coherentes realizadas por root.
+
+Prueba E2E recomendada: sobre una copia/LXC descartable v0.1.0 con datos y backup
+externo verificado, publicar un tag inmutable `v0.1.1-test.1` con project.version
+`0.1.1`, dist precompilado y esta implementación. Ejecutar update, comprobar
+preservación de datos/exports/configuración, HEAD, current, releases, backup e
+historial; reiniciar y repetir pruebas funcionales. Comprobar rechazo de misma
+versión/downgrade. Usar un segundo entorno descartable para probar un tag con
+migración y fallos/interrupciones; nunca retargetear un tag publicado para reintentar.
