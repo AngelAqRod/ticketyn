@@ -262,9 +262,10 @@ def test_existing_db_requires_replace(environment):
     assert json.loads(environment['db'].read_text()) == {'ticketyn': '100'}
 
 
-@pytest.mark.parametrize('answer', ['\n', 'n\n', 'yes\n', 'REEMPLAZAR\n', ''])
+@pytest.mark.parametrize('answer', ['\n', 'n\n', 'yes\n', 'REEMPLAZAR\n', '"REEMPLAZAR ticketyn"\n', ''])
 def test_enter_or_rejection_does_not_confirm(answer):
     result = shell('REPLACE=1\nrestore_confirm\necho SHOULD_NOT_RUN', answer)
+    assert 'Escribe exactamente "REEMPLAZAR ticketyn" para confirmar (Enter cancela): ' in result.stdout
     assert result.returncode != 0 and 'SHOULD_NOT_RUN' not in result.stdout
 
 

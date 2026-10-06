@@ -105,7 +105,7 @@ restore_validate() {
 restore_confirm() {
     [[ $REPLACE == 1 ]] || return 0
     printf 'Se reemplazará la base ticketyn. Se creará un backup de seguridad obligatorio.\n'
-    printf 'Escribe exactamente REEMPLAZAR ticketyn para confirmar (Enter cancela): '
+    printf 'Escribe exactamente "REEMPLAZAR ticketyn" para confirmar (Enter cancela): '
     local answer
     read -r answer || restore_fail 'Cancelado: no se recibió confirmación.'
     [[ $answer == 'REEMPLAZAR ticketyn' ]] || restore_fail 'Cancelado: no se confirmó explícitamente el reemplazo.'
