@@ -516,3 +516,24 @@ def test_inherited_lock_held_by_child(tmp_path):
     finally:
         child.wait()
         if other.lock_fd is not None:os.close(other.lock_fd)
+
+
+def test_real_release_tree_does_not_match_its_own_key_detector(tmp_path):
+    archive = tmp_path/'candidate.tar'
+    names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().strip('\0').split('\0')
+    with tarfile.open(archive, 'w') as output:
+        for name in names:
+            if u.selected(name):
+                output.add(ROOT/name, arcname=name, recursive=False)
+    candidate = tmp_path/'candidate'
+    u.extract_release(archive, candidate)
+    assert (candidate/'deploy/update_support.py').is_file()
+    assert (candidate/'frontend/dist/index.html').is_file()
+
+
+def test_key_detector_still_rejects_private_key_content(tmp_path):
+    archive = tmp_path/'source.tar'
+    payload = b'-----BEGIN PRIVATE KEY' + b'-----\nsynthetic\n'
+    archive.write_bytes(tar([('src/unexpected.txt', payload, tarfile.REGTYPE)]).read())
+    with pytest.raises(u.UpdateError, match='clave privada'):
+        u.extract_release(archive, tmp_path/'out')

@@ -154,7 +154,7 @@ def extract_release(archive, destination):
                 with source.extractfile(member) as stream, open(target, 'xb') as output:
                     shutil.copyfileobj(stream, output)
                 target.chmod(0o700 if member.mode & 0o111 else 0o600)
-                if b'PRIVATE KEY-----' in target.read_bytes():
+                if (b'PRIVATE KEY' + b'-----') in target.read_bytes():
                     fail('Posible clave privada en '+name)
     for name in FILES+MAINTENANCE+('frontend/dist/index.html', 'src/ticketyn/main.py', 'alembic/env.py', 'deploy/systemd/ticketyn.service', 'deploy/nginx/ticketyn.conf'):
         if not (Path(destination)/name).is_file():
