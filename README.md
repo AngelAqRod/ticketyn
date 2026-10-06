@@ -435,7 +435,8 @@ estado privado bajo `/etc/ticketyn/restore-state`. Detiene únicamente Ticketyn,
 bloquea conexiones a su DB y termina solo sesiones de esa DB. Restaura primero
 una DB identificada por la operación, en transacción y con propietario ticketyn,
 sin propietarios/ACL de otros roles. Comprueba revisión y propietarios antes de
-hacer un cambio transaccional de nombres. Nunca elimina automáticamente DBs.
+hacer un cambio transaccional de nombres. El flujo de restore no elimina DBs;
+la limpieza posterior requiere `--finalize` explícito.
 
 En `--replace`, la original queda bajo `ticketyn_previous_<identificador>`, con
 conexiones deshabilitadas. Conserva incluso escrituras posteriores al backup previo.
@@ -457,7 +458,8 @@ SIGINT/SIGTERM siguen esa misma política y limpian temporales propios. SIGKILL 
 pérdida de energía pueden dejar temporales, DB bloqueada o una operación parcial:
 revisar OIDs/estado y procesos antes de actuar. No reejecutar ciegamente. Incluso
 tras éxito, el estado y la DB anterior se conservan; una segunda restauración
-se bloquea hasta revisión y archivo/limpieza manual explícita de esos recursos.
+se bloquea hasta finalizar explícitamente la operación exitosa con `--finalize`.
+Los estados fallidos siguen requiriendo revisión manual.
 No se garantiza detener servicios si systemd falla: el diagnóstico lo indica.
 
 Primera versión: solo PostgreSQL local estándar y HTTP, sin migración entre
@@ -467,3 +469,55 @@ No preserva ACL personalizadas: normaliza objetos al rol Ticketyn. Reserva espac
 para DB original, DB restaurada y backup previo. No ejecutar instalación, migraciones,
 backups externos ni cambios administrativos concurrentes durante restore.
 No adapta automáticamente markers de `install-state`: restore no es reinstalación.
+
+
+### Finalizar una restauración verificada
+
+Cuando hayas revisado los datos restaurados, como root:
+
+```bash
+./restore.sh --finalize
+```
+
+Exige restore-state completado, archivos privados válidos y coincidencia de
+operación, OIDs, metadata/release/Alembic. Comprueba que ticketyn es la DB restaurada
+esperada y la anterior conserva su OID, propietario, UTF8 y conexiones deshabilitadas,
+sin sesiones activas. Valida el backup previo y su relación con previous.env.
+Exige servicio activo, health/API correctos mediante Nginx y Uvicorn en loopback.
+Todas estas comprobaciones preceden a cualquier cambio del estado/DB.
+
+Muestra el nombre/OID exactos de la DB anterior, advierte que dejará de estar
+disponible como rollback local y confirma que el backup de seguridad permanece.
+Exige escribir exactamente **FINALIZAR RESTAURACION**, sin comillas; Enter, texto
+parcial o con comillas cancela. Revalida bajo el lock de instalación y registra
+una intención durable antes del DROP. Solo elimina la DB registrada, nunca usa
+wildcards ni FORCE; no termina sesiones, modifica configuración, reinicia servicios,
+ejecuta migraciones ni elimina backups.
+
+Si el DROP falla, conserva restore-state y permite reintentar. Si SIGKILL/apagado
+ocurre después del DROP pero antes del cierre, otro `--finalize` reconoce la
+intención registrada, confirma que ese OID ya no existe y completa el archivo
+sin otro DROP. Una DB ausente sin intención, renombrada o con un nombre reutilizado
+por otro OID provoca aborto conservador. La confirmación se exige también al reintentar.
+SIGINT/SIGTERM antes del DROP son inocuos para la DB; después, conservan el estado
+necesario para completar. No realizar DDL/cambios administrativos concurrentes:
+el lock coordina scripts Ticketyn, no sesiones independientes de un administrador.
+
+Tras verificar la ausencia del OID anterior, conserva un registro mínimo sin
+secretos en `/etc/ticketyn/restore-history/<operación>.json` (root:root 0600,
+directorio 0700). Registra OIDs, release/Alembic, clúster, fecha de confirmación y
+ruta/hash del backup previo. Publica ese registro, retira restore-state mediante
+rename exclusivo y limpia únicamente sus archivos verificados, incluidos los
+secretos anteriores. Futuras restauraciones ya no quedan bloqueadas.
+Una interrupción durante esa última limpieza puede dejar un directorio privado
+`<operación>.pending` en restore-history; el cierre ya está registrado y no bloquea
+un restore nuevo. Revisar/limpiar ese residuo manualmente; no contiene una DB pendiente
+que deba eliminarse. No hay retención automática ni eliminación de backups.
+
+Los nuevos restores completados incluyen un comprobante de integridad que liga
+archivos, configuración, release y clúster. Los estados anteriores sin comprobante
+se aceptan únicamente mediante validación cruzada de progress, metadata, documento
+de recuperación, backup y OIDs. Esto detecta inconsistencias; no protege contra
+un administrador root que falsifique coherentemente todos los registros.
+Un restore exitoso que no reemplazó una DB también puede finalizar: cierra su
+estado sin ejecutar ningún DROP ni exigir un backup previo inexistente.

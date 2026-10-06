@@ -5,9 +5,10 @@ set -Eeuo pipefail
 
 restore_fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 restore_args() {
-    REPLACE=0
+    REPLACE=0; FINALIZE=0
+    if [[ $# == 1 && $1 == --finalize ]]; then FINALIZE=1; ARCHIVE=''; return; fi
     if [[ ${1:-} == --replace ]]; then REPLACE=1; shift; fi
-    [[ $# == 1 && -n $1 && $1 != -* ]] || restore_fail 'Uso: ./restore.sh [--replace] /ruta/backup.tar'
+    [[ $# == 1 && -n $1 && $1 != -* ]] || restore_fail 'Uso: ./restore.sh [--replace] /ruta/backup.tar | ./restore.sh --finalize'
     ARCHIVE=$1
 }
 restore_pg() {
@@ -58,7 +59,7 @@ restore_validate_dump() {
     env -i PATH=/usr/bin:/bin pg_restore --file=/dev/null "$1/database.dump" \
         > /dev/null 2> "$WORK/diagnostic.log" || restore_fail 'Dump PostgreSQL inválido o ilegible.'
 }
-restore_validate() {
+restore_environment() {
     local tool
     for tool in python3 runuser setsid psql pg_restore systemctl curl ss flock mktemp sha256sum sync locale; do
         command -v "$tool" >/dev/null || restore_fail "Falta herramienta: $tool"
@@ -74,12 +75,15 @@ restore_validate() {
     [[ -L $NGINX_LINK && $(readlink -e "$NGINX_LINK") == "$NGINX_SITE" ]] || restore_fail 'Sitio Nginx Ticketyn no habilitado de forma esperada.'
     systemctl is-active --quiet nginx || restore_fail 'Nginx debe estar activo antes de restaurar.'
     HTTP_PORT=$(python3 -I "$SUPPORT" port "$NGINX_SITE") || restore_fail 'No se pudo identificar el puerto HTTP.'
-    [[ ! -e $STATE && ! -L $STATE ]] || restore_fail "Hay una operación anterior pendiente en $STATE; requiere revisión manual."
-    python3 -I "$SUPPORT" validate "$ARCHIVE" "$CONTENT" || restore_fail 'Backup inválido; no se modificó la instalación.'
-    restore_validate_dump "$CONTENT"
     [[ -x $RELEASE/.venv/bin/python ]] || restore_fail 'No existe Python del release instalado.'
     HEAD=$("$RELEASE/.venv/bin/python" -I "$SUPPORT" head "$RELEASE") || restore_fail 'No se pudo determinar HEAD Alembic sin migrar.'
     [[ $HEAD =~ ^[A-Za-z0-9_]+$ ]] || restore_fail 'HEAD Alembic inválido.'
+}
+restore_validate() {
+    restore_environment
+    [[ ! -e $STATE && ! -L $STATE ]] || restore_fail "Hay una operación anterior pendiente en $STATE; requiere revisión manual."
+    python3 -I "$SUPPORT" validate "$ARCHIVE" "$CONTENT" || restore_fail 'Backup inválido; no se modificó la instalación.'
+    restore_validate_dump "$CONTENT"
     SERVER_NUMBER=$(restore_query "SELECT current_setting('server_version_num')") || restore_fail 'PostgreSQL local no accesible.'
     CLIENT_VERSION=$(env -i PATH=/usr/bin:/bin pg_restore --version)
     python3 -I "$SUPPORT" compatibility "$CONTENT" "$RELEASE" "$HEAD" "$SERVER_NUMBER" "$CLIENT_VERSION" \
@@ -132,6 +136,8 @@ restore_begin() {
     [[ $(restore_oid "$STAGE") == '' && $(restore_oid "$PREVIOUS") == '' ]] || restore_fail 'Colisión de nombre DB.'
     mkdir -m 0700 -- "$STATE" || restore_fail 'No se puede crear estado exclusivo.'
     chown root:root "$STATE"
+    printf 'ticketyn-restore-state-v2\n' > "$STATE/state-format"
+    chmod 0600 "$STATE/state-format"
     cp --no-dereference -- "$CONFIG_FILE" "$STATE/previous.env"
     chmod 0600 "$STATE/previous.env"
     chown root:root "$STATE/previous.env"
@@ -177,7 +183,7 @@ restore_disable_original() {
     fi
 }
 restore_revision() {
-    restore_pg psql --dbname="$1" -X -At --set=ON_ERROR_STOP=1 -c 'SELECT version_num FROM public.alembic_version' 2> "$STATE/diagnostic.log"
+    restore_pg psql --dbname="$1" -X -At --set=ON_ERROR_STOP=1 -c 'SELECT version_num FROM public.alembic_version' 2> "${REVISION_DIAGNOSTIC:-$STATE/diagnostic.log}"
 }
 restore_run() {
     PHASE=deteniendo; MUTATING=1; restore_record
@@ -218,6 +224,9 @@ restore_run() {
     systemctl start ticketyn > /dev/null 2> "$STATE/diagnostic.log" || restore_fail 'No se pudo arrancar Ticketyn.'
     restore_http_checks
     PHASE=completado; restore_record
+    local cluster_id
+    cluster_id=$(restore_query 'SELECT system_identifier FROM pg_control_system()') || restore_fail 'No se pudo registrar identidad del clúster.'
+    python3 -I "$SUPPORT" completion "$STATE" "$CONFIG_FILE" "$RELEASE" "$cluster_id" || restore_fail 'No se pudo sellar el estado completado.'
     printf '✓ Ticketyn restaurado y verificado. Estado: %s\n' "$STATE"
     if [[ -n $ORIGINAL_OID ]]; then printf 'DB anterior conservada, deshabilitada: %s\nBackup de seguridad: %s\n' "$PREVIOUS" "$SAFETY_BACKUP"; fi
 }
@@ -237,6 +246,9 @@ restore_cutover() {
 }
 restore_http_checks() {
     PHASE=comprobaciones; restore_record
+    restore_check_http
+}
+restore_check_http() {
     local kind path attempt ready base="http://127.0.0.1:$HTTP_PORT"
     systemctl is-active --quiet ticketyn && systemctl is-active --quiet nginx || restore_fail 'Servicio Ticketyn/Nginx no activo.'
     for kind in health api; do
@@ -252,6 +264,115 @@ restore_http_checks() {
     [[ $(ss -H -ltn 'sport = :8000' | awk '{print $4}') == 127.0.0.1:8000 ]] || restore_fail 'Uvicorn no escucha exclusivamente en loopback.'
     [[ $(readlink -e "$CURRENT_FILE") == "$RELEASE" ]] || restore_fail 'Release activo cambió.'
 }
+restore_finalize_validate() {
+    local REVISION_DIAGNOSTIC="$WORK/diagnostic.log"
+    restore_environment
+    backup_secure_directory "$STATE"
+    [[ $(stat -c %a "$STATE") == 700 ]] || restore_fail 'restore-state debe tener permisos 0700.'
+    local cluster server client
+    cluster=$(restore_query 'SELECT system_identifier FROM pg_control_system()') || restore_fail 'No se pudo identificar el clúster.'
+    python3 -I "$SUPPORT" finalize-snapshot "$STATE" "$CONFIG_FILE" "$RELEASE" "$cluster" "$SAFETY_DIR" "$WORK/finalize-values" \
+        || restore_fail 'Estado completado inválido/modificado; no se elimina ninguna DB.'
+    local values
+    mapfile -t values < "$WORK/finalize-values"
+    FINAL_TOKEN=${values[0]}; FINAL_PREVIOUS=${values[1]}; FINAL_ORIGINAL_OID=${values[2]}
+    FINAL_ACTIVE_OID=${values[3]}; FINAL_SAFETY=${values[4]}
+    mkdir -p -m 0700 "$WORK/finalize-compat"
+    cp -- "$STATE/source-metadata.txt" "$WORK/finalize-compat/metadata.txt"
+    server=$(restore_query "SELECT current_setting('server_version_num')")
+    client=$(env -i PATH=/usr/bin:/bin pg_restore --version)
+    python3 -I "$SUPPORT" compatibility "$WORK/finalize-compat" "$RELEASE" "$HEAD" "$server" "$client" \
+        || restore_fail 'Metadata/release/Alembic incompatibles con el estado.'
+    [[ $(restore_revision ticketyn) == "$HEAD" ]] || restore_fail 'Alembic activo no coincide con el estado.'
+    restore_finalize_database_identity
+    if [[ -n $FINAL_SAFETY && ! -d $WORK/finalize-safety ]]; then
+        python3 -I "$SUPPORT" validate "$FINAL_SAFETY" "$WORK/finalize-safety" || restore_fail 'Backup de seguridad inválido; no se finaliza.'
+        restore_validate_dump "$WORK/finalize-safety"
+        cmp -s "$WORK/finalize-safety/ticketyn.env" "$STATE/previous.env" || restore_fail 'La configuración anterior no corresponde al backup de seguridad.'
+    fi
+    local history="$CONFIG_DIR/restore-history"
+    if [[ -e $history || -L $history ]]; then
+        backup_secure_directory "$history"
+        [[ $(stat -c %a "$history") == 700 ]] || restore_fail 'Historial con permisos inesperados.'
+        [[ ! -e $history/$FINAL_TOKEN.pending && ! -L $history/$FINAL_TOKEN.pending ]] || restore_fail 'Hay un cierre archivado pendiente; requiere revisión manual.'
+    fi
+    python3 -I "$SUPPORT" finalize-history-validate "$STATE" "$WORK/finalize-values.json" "$history" \
+        || restore_fail 'Historial final ambiguo; no se elimina ninguna DB.'
+    restore_check_http
+}
+restore_finalize_database_identity() {
+    [[ $(restore_query "SELECT oid||':'||pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding)||':'||datallowconn FROM pg_database WHERE datname='ticketyn'") == "$FINAL_ACTIVE_OID:ticketyn:UTF8:true" ]] \
+        || restore_fail 'La DB activa no es exactamente la DB restaurada esperada.'
+    [[ $(restore_oid "ticketyn_restore_$FINAL_TOKEN") == '' ]] || restore_fail 'El nombre staging sigue ocupado; estado ambiguo.'
+    local oid
+    oid=$(restore_oid "$FINAL_PREVIOUS") || restore_fail 'No se pudo identificar DB anterior.'
+    FINAL_PREVIOUS_PRESENT=0
+    if [[ -n $FINAL_ORIGINAL_OID && -n $oid ]]; then
+        [[ $oid == "$FINAL_ORIGINAL_OID" && $oid != "$FINAL_ACTIVE_OID" ]] || restore_fail 'DB anterior con identidad inesperada; no se elimina.'
+        [[ $(restore_query "SELECT oid||':'||pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding)||':'||datallowconn FROM pg_database WHERE datname='$FINAL_PREVIOUS'") == "$FINAL_ORIGINAL_OID:ticketyn:UTF8:false" ]] \
+            || restore_fail 'DB anterior con propietario/encoding/conexiones inesperados.'
+        [[ $(restore_query "SELECT count(*) FROM pg_stat_activity WHERE datid=$FINAL_ORIGINAL_OID") == 0 ]] \
+            || restore_fail 'La DB anterior tiene sesiones; no se terminan automáticamente.'
+        FINAL_PREVIOUS_PRESENT=1
+    else
+        [[ -z $oid ]] || restore_fail 'Existe una DB anterior no registrada; no se elimina.'
+        if [[ -n $FINAL_ORIGINAL_OID ]]; then
+            [[ -f $STATE/finalize-intent.json ]] || restore_fail 'La DB anterior falta sin intención registrada; situación ambigua.'
+            [[ $(restore_query "SELECT count(*) FROM pg_database WHERE oid=$FINAL_ORIGINAL_OID") == 0 ]] \
+                || restore_fail 'El OID anterior existe bajo otro nombre; no se finaliza.'
+        fi
+    fi
+}
+restore_finalize_confirm() {
+    printf 'Se finalizará la restauración %s.\n' "$FINAL_TOKEN"
+    if [[ -n $FINAL_ORIGINAL_OID ]]; then
+        printf 'DB anterior registrada: %s (OID %s).\n' "$FINAL_PREVIOUS" "$FINAL_ORIGINAL_OID"
+        printf 'Se eliminará exclusivamente esa DB; dejará de estar disponible como rollback local.\n'
+        printf 'El backup de seguridad se conserva: %s\n' "$FINAL_SAFETY"
+    else printf 'No había DB anterior: se cerrará únicamente el estado de recuperación.\n'; fi
+    printf 'Escribe exactamente "FINALIZAR RESTAURACION" para eliminar la DB anterior (Enter cancela): '
+    local answer
+    read -r answer || restore_fail 'Finalización cancelada: sin confirmación.'
+    [[ $answer == 'FINALIZAR RESTAURACION' ]] || restore_fail 'Finalización cancelada: frase incorrecta.'
+}
+restore_finalize() {
+    PHASE=validando_finalizacion
+    restore_finalize_validate
+    local snapshot_hash
+    snapshot_hash=$(sha256sum "$WORK/finalize-values.json" | cut -d ' ' -f1)
+    restore_finalize_confirm
+    restore_lock
+    restore_finalize_validate
+    [[ $(sha256sum "$WORK/finalize-values.json" | cut -d ' ' -f1) == "$snapshot_hash" ]] || restore_fail 'El estado cambió tras la confirmación; no se elimina.'
+    python3 -I "$SUPPORT" finalize-intent "$STATE" "$WORK/finalize-values.json" || restore_fail 'No se pudo registrar intención durable; no se elimina.'
+    PHASE=finalizando
+    restore_finalize_database_identity
+    if [[ $FINAL_PREVIOUS_PRESENT == 1 ]]; then
+        # Revalidación en PostgreSQL inmediatamente antes del DROP. Nunca wildcard ni FORCE.
+        if ! restore_sql --file=- > /dev/null 2> "$WORK/diagnostic.log" <<SQL
+SELECT format('DROP DATABASE %I', datname) FROM pg_database
+WHERE datname='$FINAL_PREVIOUS' AND oid=$FINAL_ORIGINAL_OID
+AND oid<>$FINAL_ACTIVE_OID AND pg_get_userbyid(datdba)='ticketyn'
+AND NOT datallowconn AND pg_encoding_to_char(encoding)='UTF8'
+AND NOT EXISTS (SELECT FROM pg_stat_activity WHERE datid=$FINAL_ORIGINAL_OID)
+\gexec
+SQL
+        then restore_fail 'DROP de la DB anterior falló; restore-state se conserva para reintentar.'; fi
+        [[ $(restore_oid "$FINAL_PREVIOUS") == '' && \
+            $(restore_query "SELECT count(*) FROM pg_database WHERE oid=$FINAL_ORIGINAL_OID") == 0 ]] \
+            || restore_fail 'No se confirmó eliminación del OID anterior; se conserva restore-state.'
+    fi
+    [[ $(restore_oid ticketyn) == "$FINAL_ACTIVE_OID" ]] || restore_fail 'DB activa cambió; estado conservado para revisión.'
+    if ! python3 -I "$SUPPORT" finalize-archive "$STATE" "$WORK/finalize-values.json" "$CONFIG_DIR/restore-history"; then
+        if [[ -d $STATE ]]; then
+            restore_fail 'DB anterior ausente, pero cierre pendiente. Reejecuta --finalize para completar sin otro DROP.'
+        else
+            restore_fail 'Cierre registrado; limpieza del directorio privado .pending incompleta. Revisa restore-history; no se requiere otro DROP.'
+        fi
+    fi
+    printf '✓ Restauración finalizada. Backup previo conservado; futuras restauraciones ya no quedan bloqueadas.\n'
+}
+
 restore_main() {
     (( EUID == 0 )) || restore_fail 'Ejecuta restore.sh como root o mediante sudo.'
     restore_args "$@"
@@ -273,6 +394,7 @@ restore_main() {
     trap restore_cleanup EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
+    if [[ $FINALIZE == 1 ]]; then restore_finalize; return; fi
     printf 'Utiliza únicamente backups de confianza: los hashes no autentican el SQL restaurado.\n'
     restore_validate
     restore_confirm

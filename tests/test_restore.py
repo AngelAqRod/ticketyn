@@ -96,6 +96,7 @@ path=pathlib.Path(sys.argv[1]); trace=pathlib.Path(sys.argv[2]); args=sys.argv[3
 sql=args[args.index('-c')+1]; db=json.loads(path.read_text())
 if sql.startswith('SELECT oid '):
     print(db.get(re.search("datname='([^']+)'",sql)[1], ''))
+elif "system_identifier" in sql: print(987654321)
 elif "current_setting('server_version_num')" in sql: print(''' + str(MAJOR * 10000 + 6) + ''')
 elif sql.startswith("SELECT count(*) FROM pg_roles"): print(1)
 elif sql.startswith('SELECT pg_get_userbyid'): print('ticketyn:UTF8')
@@ -478,6 +479,20 @@ python3() {{
             finally:
                 old.dispose()
         assert stat_mode(i['env']) == 0o600
+        if replace:
+            with admin.connect() as conn:
+                conn.exec_driver_sql(f'ALTER DATABASE {previous} ALLOW_CONNECTIONS false')
+        i['work'].mkdir(mode=0o700)
+        finalize_result = shell(configure(i) + native + '\nrestore_lock() { :; }\nrestore_finalize',
+                                'FINALIZAR RESTAURACION\n')
+        assert finalize_result.returncode == 0, finalize_result.stderr
+        assert SECRET not in finalize_result.stdout + finalize_result.stderr
+        assert not (i['config']/'restore-state').exists()
+        with admin.connect() as conn:
+            assert conn.scalar(text("SELECT 1 FROM pg_database WHERE datname='ticketyn'")) == 1
+            if replace:
+                assert conn.scalar(text('SELECT count(*) FROM pg_database WHERE datname=:name'), {'name': previous}) == 0
+        assert len(list((i['config']/'restore-history').glob('*.json'))) == 1
     finally:
         if source is not None: source.dispose()
         with admin.connect() as conn:
