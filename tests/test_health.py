@@ -14,7 +14,11 @@ def test_health(monkeypatch):
 
         with TestClient(create_app()) as client:
             response = client.get("/health")
-        assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        assert response.status_code == 503
+        assert response.json()["status"] == "error"
+        assert "Fallo E2E deliberado posterior a migración" in response.json()["message"]
+        # El fallo es permanente; importar e iniciar la aplicación sigue siendo válido.
+        with TestClient(create_app()) as client:
+            assert client.get("/health").status_code == 503
     finally:
         get_settings.cache_clear()
