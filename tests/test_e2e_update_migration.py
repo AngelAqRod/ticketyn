@@ -1,6 +1,7 @@
 """Real Alembic roundtrip in a disposable DB; the application never maps the probe."""
 import pytest
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -111,7 +112,8 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
                 response = client.get('/api/tickets/'+str(ticket['id']))
                 assert response.status_code == 200 and response.json() == ticket
                 assert all(added_column not in response.json() for added_column in added_columns)
-            assert client.get('/health').status_code == 503
+            health = client.get('/health')
+            assert health.status_code == 200 and health.json() == {'status': 'ok'}
             updated = client.patch('/api/tickets/'+str(opened['id']), json={'title': 'Editado tras migración'})
             assert updated.status_code == 200
             added = post('tickets', {**payload, 'title': 'Creado tras migración'})
@@ -138,24 +140,28 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
 def test_candidate_release_and_real_migration_lineage(tmp_path):
     spec = importlib.util.spec_from_file_location('update_validator', ROOT/'deploy/update_support.py')
     updater = importlib.util.module_from_spec(spec); spec.loader.exec_module(updater)
-    assert updater.tag_version('v0.1.4-test.1') == '0.1.4-test.1'
-    updater.forward('0.1.2-test.1', '0.1.4-test.1')
-    assert updater.ri.project_version(ROOT) == '0.1.4'
+    assert updater.tag_version('v0.1.5-test.1') == '0.1.5-test.1'
+    updater.forward('0.1.4-test.1', '0.1.5-test.1')
+    assert updater.ri.project_version(ROOT) == '0.1.5'
     previous = tmp_path/'previous'; previous.mkdir()
-    shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('0006_e2e_postmigration_probe.py', '0007_e2e_recovery_probe.py', '__pycache__', '*.pyc'))
+    shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', previous/'alembic.ini')
     archive = tmp_path/'candidate.tar'
-    # Include tracked working files plus the new (not yet committed) migration.
+    # Recovery keeps every applied revision byte-for-byte; no new migration.
     names = set(subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().strip('\0').split('\0'))
-    names.add('alembic/versions/0007_e2e_recovery_probe.py')
     with tarfile.open(archive, 'w') as output:
         for name in sorted(names):
             if updater.selected(name):
                 output.add(ROOT/name, arcname=name, recursive=False)
     candidate = tmp_path/'candidate'
     updater.extract_release(archive, candidate)
-    assert updater.ri.project_version(candidate) == '0.1.4'
-    assert updater.migration_plan(previous, candidate, PREVIOUS) == HEAD
+    assert updater.ri.project_version(candidate) == '0.1.5'
+    assert updater.migration_plan(previous, candidate, HEAD) == HEAD
+    assert not list((ROOT/'alembic/versions').glob('0008*'))
+    assert not list((candidate/'alembic/versions').glob('0008*'))
+    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.1.5'
+    lock = json.loads((ROOT/'frontend/package-lock.json').read_text())
+    assert lock['version'] == lock['packages']['']['version'] == '0.1.5'
     assert (candidate/'frontend/dist/index.html').is_file()
 
     assert (candidate/'update.sh').read_bytes() == (ROOT/'update.sh').read_bytes()

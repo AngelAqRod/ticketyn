@@ -13,14 +13,13 @@ def test_health(monkeypatch):
         from ticketyn.main import create_app
 
         app = create_app()
-        assert app.version == "0.1.4"
+        assert app.version == "0.1.5"
         with TestClient(app) as client:
             response = client.get("/health")
-        assert response.status_code == 503
-        assert response.json()["status"] == "error"
-        assert "Fallo E2E deliberado posterior a migración de v0.1.4-test.1" in response.json()["message"]
-        # El fallo es permanente; importar e iniciar la aplicación sigue siendo válido.
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+        # Importar e iniciar la candidata saludable no requiere una conexión DB.
         with TestClient(create_app()) as client:
-            assert client.get("/health").status_code == 503
+            assert client.get("/health").status_code == 200
     finally:
         get_settings.cache_clear()

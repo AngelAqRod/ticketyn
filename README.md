@@ -3,15 +3,14 @@
 Ticketyn es un producto web de gestión de incidencias: tickets, clientes,
 circuitos/servicios contratados, catálogos, filtros operativos y reportería.
 Licencia **GNU AGPL v3, AGPL-3.0-only**; texto completo en [LICENSE](LICENSE).
-> **Candidata deliberadamente defectuosa `v0.1.4-test.1`: exclusivamente para
-> validar el fallo posterior a migración con updater v2 y preparar el E2E de
-> recovery en laboratorio.
-> `/health` devuelve permanentemente HTTP 503. No usar como release normal.
-> Para el E2E ejecuta el updater v2 de este checkout/candidata, no el updater
-> antiguo de `current` v0.1.2: cambiar la release destino no cambia el script
-> que ya está ejecutando la actualización.
 
-Versión del proyecto: `0.1.4`.
+> **Candidata temporal saludable `v0.1.5-test.1`: exclusivamente para validar
+> recovery hacia delante desde el fallo de v0.1.4-test.1 en laboratorio.
+> `/health` vuelve a HTTP 200; HEAD permanece en `0007_e2e_recovery_probe`.
+> No añade migraciones. No constituye una release normal de producción.
+> Ejecuta el updater v2; esta candidata no omite ninguna garantía de recovery.
+
+Versión del proyecto: `0.1.5`.
 
 > **Seguridad:** Ticketyn actualmente NO implementa autenticación ni autorización.
 > No expongas el servicio directamente a Internet. Para pruebas internas utiliza
@@ -146,12 +145,17 @@ La cadena actual tiene un único HEAD:
 0001_initial_catalogs
 → 0002_remove_services
 → 0003_ticket_domain
-→ 0004_nodes_responsibles (head)
+→ 0004_nodes_responsibles
+→ 0005_e2e_update_probe
+→ 0006_e2e_postmigration_probe
+→ 0007_e2e_recovery_probe (head)
 ```
 
 0001 crea los primeros catálogos; 0002 elimina Service histórico; 0003 añade
 Tickets, departamentos, tipos y numeración; 0004 añade Nodes/Responsibles y sus
-FK nullable. No modificar revisiones aplicadas. Una instalación vacía no contiene
+FK nullable. 0005–0007 añaden únicamente columnas internas nullable para las
+pruebas E2E; la aplicación no depende de ellas. Esta candidata mantiene HEAD
+0007 y no añade 0008. No modificar revisiones aplicadas. Una instalación vacía no contiene
 catálogos empresariales ni asignaciones ficticias.
 
 `alembic.ini` localiza `alembic/` respecto al propio archivo. `env.py` importa los
