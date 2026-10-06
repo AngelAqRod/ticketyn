@@ -3,11 +3,15 @@
 Ticketyn es un producto web de gestión de incidencias: tickets, clientes,
 circuitos/servicios contratados, catálogos, filtros operativos y reportería.
 Licencia **GNU AGPL v3, AGPL-3.0-only**; texto completo en [LICENSE](LICENSE).
-> **Candidata deliberadamente defectuosa `v0.1.3-test.1`: exclusivamente para
-> validar el fallo de actualización posterior a migración en laboratorio.
+> **Candidata deliberadamente defectuosa `v0.1.4-test.1`: exclusivamente para
+> validar el fallo posterior a migración con updater v2 y preparar el E2E de
+> recovery en laboratorio.
 > `/health` devuelve permanentemente HTTP 503. No usar como release normal.
+> Para el E2E ejecuta el updater v2 de este checkout/candidata, no el updater
+> antiguo de `current` v0.1.2: cambiar la release destino no cambia el script
+> que ya está ejecutando la actualización.
 
-Versión del proyecto: `0.1.3`.
+Versión del proyecto: `0.1.4`.
 
 > **Seguridad:** Ticketyn actualmente NO implementa autenticación ni autorización.
 > No expongas el servicio directamente a Internet. Para pruebas internas utiliza

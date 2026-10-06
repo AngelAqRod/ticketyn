@@ -8,5 +8,5 @@ router = APIRouter()
 def health() -> dict[str, str]:
     return {
         "status": "error",
-        "message": "Fallo E2E deliberado posterior a migración: candidata temporal no apta para producción.",
+        "message": "Fallo E2E deliberado posterior a migración de v0.1.4-test.1: candidata temporal no apta para producción.",
     }
