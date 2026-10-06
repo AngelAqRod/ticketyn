@@ -359,7 +359,7 @@ El entorno exacto de generación figura en el lock. La matriz Python/Debian/Ubun
 y el empaquetado de wheels/checksums quedan para FASE 2; no copiar una venv DEV
 ni asumir que una resolución en una plataforma valida todas las demás.
 
-Pendientes: actualizador, restauración, CI, artefactos versionados y política HTTPS/acceso. No hay tags/releases
+Pendientes: actualizador, CI, artefactos versionados y política HTTPS/acceso. No hay tags/releases
 creados automáticamente.
 
 
@@ -393,8 +393,77 @@ con umask 077 y ejecuta `sha256sum --check --strict SHA256SUMS` y
 Los hashes detectan corrupción, no autenticidad. El archivo **no está cifrado** y
 contiene credenciales: transferencias y copias externas deben protegerse.
 
-`restore.sh` todavía no existe. Restaurar en otro servidor requerirá una release
-compatible, crear el rol local ticketyn y sincronizar su contraseña con la
-configuración recuperada. El dump contiene una sola DB con objetos, datos,
+`restore.sh` permite recuperar el formato oficial en una instalación compatible;
+las restricciones y recuperación se describen a continuación. El dump contiene una sola DB con objetos, datos,
 secuencias y permisos; no incluye roles globales, configuración PostgreSQL,
 Nginx/systemd ni recuperación a un instante mediante WAL.
+
+
+### Restauración de producción
+
+Desde el árbol confiable de Ticketyn que contiene `restore.sh`, `backup.sh` y
+`deploy/restore_support.py`, como root:
+
+```bash
+./restore.sh /ruta/arbitraria/backup.tar
+# Para reemplazar una DB ticketyn existente, incluso si está vacía:
+./restore.sh --replace /ruta/arbitraria/backup.tar
+```
+
+Sin `--replace`, cualquier DB ticketyn existente causa aborto. `--replace` exige
+escribir **REEMPLAZAR ticketyn**; Enter/otra respuesta cancela. Antes de detener
+Ticketyn ejecuta obligatoriamente backup.sh y valida el backup de seguridad.
+Si ese backup falla, DB/configuración permanecen intactas.
+
+Requisitos: instalación estándar con current, Python/venv, Alembic, configuración
+root:root 0600, unidad Ticketyn y sitio Nginx activo. No instala otra release,
+no modifica current ni ejecuta migraciones. Exige coincidencia exacta de versión,
+hash del pyproject y HEAD Alembic; PostgreSQL servidor y herramientas cliente
+requieren la misma versión mayor que el backup. Un rol existente debe tener el
+marker del instalador/restore, LOGIN sin privilegios elevados, sin membresías ni
+otras DB propias. Un rol ajeno nunca se adopta. Puede crear el rol si falta.
+
+La validación inicial solo escribe temporales privados: rechaza symlinks en la
+ruta de entrada, TAR corruptos, rutas extrañas, componentes adicionales/duplicados,
+enlaces, dispositivos y extensiones inesperadas. Extrae únicamente los cinco
+archivos oficiales mediante streaming; comprueba hashes, configuración, metadata
+y lectura completa del dump. **Utiliza exclusivamente backups confiables**:
+SHA-256 no autentica un backup y pg_restore ejecuta su SQL.
+
+Después de confirmar toma el lock del instalador, revalida identidades y guarda
+estado privado bajo `/etc/ticketyn/restore-state`. Detiene únicamente Ticketyn,
+bloquea conexiones a su DB y termina solo sesiones de esa DB. Restaura primero
+una DB identificada por la operación, en transacción y con propietario ticketyn,
+sin propietarios/ACL de otros roles. Comprueba revisión y propietarios antes de
+hacer un cambio transaccional de nombres. Nunca elimina automáticamente DBs.
+
+En `--replace`, la original queda bajo `ticketyn_previous_<identificador>`, con
+conexiones deshabilitadas. Conserva incluso escrituras posteriores al backup previo.
+Se reemplaza la configuración de forma atómica (root:root 0600) y se sincroniza
+la contraseña recuperada mediante `psql \password`, por stdin y `setsid --wait`,
+sin secretos en argumentos/salida. Se habilita la DB restaurada solo después de
+sincronizar credenciales, se inicia Ticketyn y se comprueban health y customers
+**mediante Nginx**, con reintentos y validación JSON, más escucha loopback de Uvicorn.
+
+Si falla antes de intentar el cambio de nombres, puede habilitar/reiniciar la DB
+original únicamente cuando OID, configuración y release siguen coincidiendo y se
+habían bloqueado sus conexiones. Si falla después de intentar ese cambio, deja
+Ticketyn detenido: no hace rollback automático porque puede haber escrituras o
+un resultado ambiguo. Conserva DBs, backup previo, `previous.env`, diagnósticos
+privados y `progress.txt`/`RECUPERACION.txt`. No imprime errores PostgreSQL que
+pudieran contener datos sensibles. Un fallo al detener el servicio no toca la DB.
+
+SIGINT/SIGTERM siguen esa misma política y limpian temporales propios. SIGKILL o
+pérdida de energía pueden dejar temporales, DB bloqueada o una operación parcial:
+revisar OIDs/estado y procesos antes de actuar. No reejecutar ciegamente. Incluso
+tras éxito, el estado y la DB anterior se conservan; una segunda restauración
+se bloquea hasta revisión y archivo/limpieza manual explícita de esos recursos.
+No se garantiza detener servicios si systemd falla: el diagnóstico lo indica.
+
+Primera versión: solo PostgreSQL local estándar y HTTP, sin migración entre
+versiones, descarga de releases ni recuperación automática completa. Usa UTF8 con
+locale C para la DB restaurada; el formato v1 no registra la collation original.
+No preserva ACL personalizadas: normaliza objetos al rol Ticketyn. Reserva espacio
+para DB original, DB restaurada y backup previo. No ejecutar instalación, migraciones,
+backups externos ni cambios administrativos concurrentes durante restore.
+No adapta automáticamente markers de `install-state`: restore no es reinstalación.
