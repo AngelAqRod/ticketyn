@@ -610,16 +610,74 @@ estado y rechaza continuar desde el límite de migración/activación. No limpia
 esos artefactos sin revisión; pueden contener una copia privada de la configuración
 extraída del backup. Los temporales normales se eliminan al salir.
 
-La recuperación posterior a ese límite requiere intervención del administrador:
-inspeccionar estado, revisión real y pointer; recuperar una DB compatible con el
-código elegido usando el backup conservado; comprobar configuración y servicios
-antes de habilitar el arranque. **No basta con apuntar current al código anterior
-si cambió el esquema, ni ejecutar Alembic downgrade genéricamente.** `restore.sh`
-exige identidad de release/revisión compatible y no debe forzarse sobre una
-combinación incompatible. No existe un comando automático de recuperación de
-updates en esta fase. Conservar/archivar el estado solo tras resolver y verificar
-la operación. Los hashes/identidades detectan inconsistencias, no falsificaciones
-coherentes realizadas por root.
+### Recuperación hacia delante
+
+```bash
+# Siempre un tag explícito posterior a la release fallida:
+./update.sh --recover v0.2.1
+```
+
+No es rollback, downgrade ni restore. No hay `--force`. La recuperación requiere
+Ticketyn detenido **y deshabilitado**, sin listener backend, una DB/revisión,
+configuración, current, releases y backup coherentes con una operación fallida.
+También verifica que systemd/Nginx no cambiaron. Ante ambigüedad aborta sin
+modificar DB, current, configuración ni servicios.
+
+**Los estados antiguos `ticketyn-update-v1` no pueden recuperarse con este
+comando.** Les faltan huellas completas de la release anterior/venv, la identidad
+del symlink activado y checkpoints independientes. Esto incluye la operación
+fallida de laboratorio creada por el updater anterior en v0.1.3-test.1. No se
+convierte retrospectivamente ni se admiten excepciones por versión/tag. Para
+probar recovery habrá que generar una nueva operación fallida con este updater;
+este cambio no publica una nueva release ni modifica el laboratorio.
+
+Las operaciones nuevas usan `ticketyn-update-v2`. Cada checkpoint se escribe
+privadamente (directorios 0700, archivos 0600, root:root) en
+`/etc/ticketyn/update-evidence/<operación>/<checkpoint>.json` antes de publicar
+state.json. Incluye hashes del contenido y del Python instalado, identidades de
+DB/clúster/directorios/symlinks y backup; no incluye secretos. Recovery coteja
+state.json con esa evidencia independiente y con los recursos reales. Los
+checkpoints se conservan, no se eliminan automáticamente. No son firmas ni
+protegen contra un root malicioso que falsifique coordinadamente toda la evidencia.
+
+Prepara íntegramente la candidata sin cambiar current. Exige **otro backup** de
+la DB post-fallo, además del backup original. Ambos quedan conservados. Verifica
+una cadena Alembic única y revisiones previas intactas usando la release fallida
+como baseline. Si la DB ya está en HEAD no ejecuta migraciones; si HEAD es
+posterior migra únicamente hacia delante con el nuevo venv. Tras verificar DB,
+intercambia current atómicamente, arranca y comprueba loopback, health, API,
+frontend y assets. Solo entonces habilita autostart.
+
+La operación original permanece **fallida** en el mismo `update-history`.
+La recovery tiene su propio identificador, `parent_operation_id` y hash del
+registro padre, con su backup, revisiones y resultado. Una recovery fallida puede
+tener otra recovery posterior cuando todas las identidades/límites lo permiten.
+No se cambia el resultado original a success ni se eliminan releases/backups.
+
+SIGINT/SIGTERM conservan diagnóstico; después del límite sensible detienen y
+deshabilitan Ticketyn. Un reintento del mismo tag antes de migrar vuelve a
+verificar/preparar y crea otro backup. Un venv parcial sin huella de preparación completa
+exige intervención administrativa: no se ejecutan binarios no verificables ni se
+borran automáticamente. Después de una migración **confirmada**
+podrá completar activación sin repetir DDL, si DB, releases, backups y symlinks
+siguen exactamente como se registraron. Una interrupción durante una migración
+real exige intervención; no se deduce seguridad únicamente de alembic_version.
+Si no había cambio de HEAD, ese límite se puede retomar sin DDL.
+
+SIGKILL/pérdida de energía no ejecutan handlers. Se cotejan estado e identidades:
+la intención del intercambio registra el inode del nuevo symlink antes de
+activarlo, permitiendo distinguir ambos lados del intercambio. Si quedó un
+servicio activo/habilitado en una operación pendiente, recovery **rechaza**:
+el administrador debe inspeccionar y detener/deshabilitar Ticketyn antes de
+reintentar. No seguir funcionando automáticamente después de una situación
+ambigua. Pueden quedar temporales privados y symlinks de intercambio; no se
+borran automáticamente. Una recovery completada puede repetirse para verificar
+su estado/cerrar el archivo pendiente, sin migrar ni crear otro backup.
+
+No basta con volver current al código anterior si cambió el esquema. Para un
+estado v1 o una migración incierta sigue siendo necesaria recuperación
+administrativa sobre una combinación demostrablemente compatible. No ejecutar
+Alembic downgrade genéricamente ni forzar restore entre revisiones distintas.
 
 Prueba E2E recomendada: sobre una copia/LXC descartable v0.1.0 con datos y backup
 externo verificado, publicar un tag inmutable `v0.1.1-test.1` con project.version

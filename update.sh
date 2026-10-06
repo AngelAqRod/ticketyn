@@ -6,9 +6,9 @@ if (( EUID != 0 )); then
     printf 'Error: ejecuta update.sh como root o mediante sudo.\n' >&2
     exit 1
 fi
-if [[ $# != 1 ]]; then
-    printf 'Uso: ./update.sh vX.Y.Z (también admite prereleases SemVer)\n' >&2
+if ! { [[ $# == 1 && $1 != --* ]] || [[ $# == 2 && $1 == --recover ]]; }; then
+    printf 'Uso: ./update.sh [--recover] vX.Y.Z (también admite prereleases SemVer)\n' >&2
     exit 1
 fi
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
-exec python3 -I -B "$SCRIPT_DIR/deploy/update_support.py" "$1"
+exec python3 -I -B "$SCRIPT_DIR/deploy/update_support.py" "$@"

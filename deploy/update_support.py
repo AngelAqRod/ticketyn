@@ -91,11 +91,13 @@ def exchange(left, right):
         raise OSError(ctypes.get_errno(), 'No se pudo intercambiar current atómicamente.')
 
 
-def switch_current(current, target, previous, expected_inode, temporary):
+def switch_current(current, target, previous, expected_inode, temporary, intent=None):
     if not current.is_symlink() or stamp(current) != expected_inode or current.resolve() != previous:
         fail('current cambió antes de activación.')
     os.symlink(target, temporary)  # exclusive; never unlink an unexpected destination
     new_inode = stamp(temporary)
+    if intent:
+        intent(new_inode)  # durable before the atomic exchange
     exchange(temporary, current)
     if not temporary.is_symlink() or stamp(temporary) != expected_inode or temporary.resolve() != previous:
         # Exchange preserves the unexpected object instead of overwriting/deleting it.
@@ -197,8 +199,52 @@ def migration_plan(old, new, current):
     return head
 
 
+def release_snapshot(release):
+    """Independent fingerprints, including installed Python; omit volatile caches.
+
+    venv's standard links are recorded literally; all other links are rejected.
+    This is consistency evidence, not protection against a malicious root.
+    """
+    secure(release, directory=True)
+    result = {}
+    for root, dirs, files in os.walk(release, followlinks=False):
+        dirs[:] = [d for d in dirs if d not in ('__pycache__', '.pytest_cache')]
+        for name in dirs + files:
+            path = Path(root)/name
+            relative = path.relative_to(release).as_posix()
+            if name.endswith('.pyc'):
+                continue
+            if path.is_symlink():
+                if not relative.startswith('.venv/') or path.lstat().st_uid != os.geteuid():
+                    fail('Enlace inesperado en release: '+relative)
+                result[relative] = 'link:'+os.readlink(path)
+            elif path.is_dir():
+                secure(path, directory=True)
+            else:
+                secure(path)
+                result[relative] = digest(path)
+    if not result or 'pyproject.toml' not in result:
+        fail('Release sin evidencia de contenido.')
+    return result
+
+
+def read_json(path):
+    secure(path, private=True)
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                fail('JSON con campos duplicados.')
+            value[key] = item
+        return value
+    value = json.loads(Path(path).read_text(), object_pairs_hook=unique)
+    if not isinstance(value, dict):
+        fail('Estado JSON inválido.')
+    return value
+
+
 class Updater:
-    def __init__(self, tag, base='/opt/ticketyn', config='/etc/ticketyn', backups='/var/backups/ticketyn', lock='/run/ticketyn-install.lock'):
+    def __init__(self, tag, base='/opt/ticketyn', config='/etc/ticketyn', backups='/var/backups/ticketyn', lock='/run/ticketyn-install.lock', recover=False):
         self.tag, self.version = tag, tag_version(tag)
         self.base, self.config, self.backups, self.lock_path = map(Path, (base, config, backups, lock))
         self.current = self.base/'current'; self.releases = self.base/'releases'
@@ -208,6 +254,7 @@ class Updater:
         self.link = Path('/etc/nginx/sites-enabled/ticketyn')
         self.data = None; self.work = None; self.lock_fd = None; self.authorized = False
         self.scripts = Path(__file__).resolve().parent.parent
+        self.recover = recover; self.parent = None
 
     def run(self, args, **kwargs):
         # No inherited Git/Pip credential/config/trace variables. No secrets in argv.
@@ -287,6 +334,9 @@ class Updater:
         if shutil.disk_usage(self.releases).free < max(1024**3, self.tree_size(self.old)*3):
             fail('Espacio insuficiente: se requiere al menos 1 GiB y 3 veces el release actual.')
         self.read_state()
+        if self.recover and not self.data:
+            self.completed_recovery()
+            return
         if self.data:
             self.validate_resume()
         else:
@@ -306,13 +356,56 @@ class Updater:
         if not self.state.exists() and not self.state.is_symlink():
             return
         secure(self.state, directory=True, private=True)
+        if {path.name for path in self.state.iterdir()} != {'state.json'}:
+            fail('Estructura de update-state inesperada.')
         secure(self.state/'state.json', private=True)
-        data = json.loads((self.state/'state.json').read_text())
-        if data.get('format') != 'ticketyn-update-v1' or not re.fullmatch('[a-f0-9]{32}', data.get('operation', '')) or data.get('phase') not in PHASES or data.get('tag') != self.tag:
+        data = read_json(self.state/'state.json')
+        if data.get('format') not in ('ticketyn-update-v1', 'ticketyn-update-v2') or not re.fullmatch('[a-f0-9]{32}', data.get('operation', '')) or data.get('phase') not in PHASES or data.get('result') not in ('pending', 'interrupted_or_failed', 'success') or (not self.recover and data.get('tag') != self.tag):
             fail('Estado update inválido/otra operación pendiente; revisión manual requerida.')
+        if self.recover or data.get('format') == 'ticketyn-update-v2':
+            self.verify_checkpoint(data)
         self.data = data
 
+    def persist(self, path, data, exclusive=False):
+        if data['format'] == 'ticketyn-update-v2':
+            evidence = self.config/'update-evidence'
+            if not evidence.exists():
+                evidence.mkdir(mode=0o700)
+                rs.sync_directory(self.config)
+            secure(evidence, directory=True, private=True)
+            directory = evidence/data['operation']
+            if not directory.exists():
+                directory.mkdir(mode=0o700)
+                rs.sync_directory(evidence)
+            secure(directory, directory=True, private=True)
+            body = {key: value for key, value in data.items() if key != 'checkpoint'}
+            token = secrets.token_hex(16)
+            receipt = directory/(token+'.json')
+            write_json(receipt, body, exclusive=True)
+            data['checkpoint'] = {'id': token, 'sha256': digest(receipt)}
+        write_json(path, data, exclusive=exclusive)
+
+    def verify_checkpoint(self, data):
+        if data.get('format') != 'ticketyn-update-v2':
+            fail('Recovery rechazada: estado v1 sin huella de release anterior, identidad del symlink activado ni checkpoints independientes. No se convierte retrospectivamente.')
+        if not re.fullmatch('[a-f0-9]{32}', data.get('operation', '')):
+            fail('Identificador de operación inválido.')
+        checkpoint = data.get('checkpoint', {})
+        if not isinstance(checkpoint, dict) or not re.fullmatch('[a-f0-9]{32}', checkpoint.get('id', '')):
+            fail('Checkpoint de actualización ausente/inválido.')
+        evidence = self.config/'update-evidence'
+        secure(evidence, directory=True, private=True)
+        directory = evidence/data['operation']
+        secure(directory, directory=True, private=True)
+        receipt = directory/(checkpoint['id']+'.json')
+        body = read_json(receipt)
+        if digest(receipt) != checkpoint.get('sha256') or body != {key: value for key, value in data.items() if key != 'checkpoint'}:
+            fail('Estado modificado: no coincide con el checkpoint independiente.')
+
     def validate_resume(self):
+        if self.recover:
+            self.validate_recovery()
+            return
         d = self.data
         for key, expected in [('target', str(self.target)), ('env_hash', self.env_hash), ('db_oid', self.db_oid), ('cluster', self.cluster), ('origin', ORIGIN)]:
             if d.get(key) != expected:
@@ -335,22 +428,28 @@ class Updater:
 
     def record(self, phase, **fields):
         self.data.update(fields, phase=phase, updated_at=datetime.now(timezone.utc).isoformat())
-        write_json(self.state/'state.json', self.data)
+        self.persist(self.state/'state.json', self.data)
         print('Fase: '+phase, flush=True)
 
     def begin(self):
+        if self.recover:
+            self.begin_recovery()
+            return
         self.authorized = True
         if self.data:
             if self.data['phase'] == 'stopping':
                 # Only old pointer, original DB OID/schema and unchanged config proven.
                 self.run(['systemctl', 'enable', 'ticketyn']); self.run(['systemctl', 'start', 'ticketyn']); self.healthy(self.old)
             return
-        self.data = {'format': 'ticketyn-update-v1', 'operation': secrets.token_hex(16), 'tag': self.tag, 'origin': ORIGIN, 'source_version': self.source_version, 'target_version': self.version, 'previous': str(self.old), 'target': str(self.target), 'previous_inode': stamp(self.old), 'current_inode': stamp(self.current), 'source_head': self.revision, 'env_hash': self.env_hash, 'db_oid': self.db_oid, 'cluster': self.cluster, 'backup': '', 'phase': 'preparing', 'result': 'pending'}
+        self.data = self.initial_data()
         initial = self.config/('.update-state-'+self.data['operation'])
         initial.mkdir(mode=0o700)
-        write_json(initial/'state.json', self.data, exclusive=True)
+        self.persist(initial/'state.json', self.data, exclusive=True)
         rs.rename_exclusive(initial, self.state)
         rs.sync_directory(self.config)
+
+    def initial_data(self):
+        return {'format': 'ticketyn-update-v2', 'kind': 'update', 'operation': secrets.token_hex(16), 'tag': self.tag, 'origin': ORIGIN, 'source_version': self.source_version, 'target_version': self.version, 'previous': str(self.old), 'target': str(self.target), 'previous_inode': stamp(self.old), 'current_inode': stamp(self.current), 'source_snapshot': release_snapshot(self.old), 'source_head': self.revision, 'env_hash': self.env_hash, 'unit_hash': digest(self.unit) if self.unit.is_file() else None, 'site_hash': digest(self.site) if self.site.is_file() else None, 'db_oid': self.db_oid, 'cluster': self.cluster, 'backup': '', 'phase': 'preparing', 'result': 'pending'}
 
     def git(self, *args):
         return self.run(['git', '-c', 'core.hooksPath=/dev/null', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', *args])
@@ -418,12 +517,12 @@ class Updater:
         self.run([pip, 'install', '--no-cache-dir', '--no-deps', build])
         self.run([pip, 'check'])
         self.run([python, '-I', '-B', Path(__file__), 'verify-python', self.target, self.env], cwd='/')
-        self.data['target_head'] = self.run([python, '-I', '-B', Path(__file__), 'plan', self.old, self.target, self.revision], cwd=self.target)
+        self.data['target_head'] = self.run([python, '-I', '-B', Path(__file__), 'plan', getattr(self, 'baseline_release', self.old), self.target, self.data['source_head']], cwd=self.target)
         if not re.fullmatch('[A-Za-z0-9_]+', self.data['target_head']):
             fail('HEAD destino inválido.')
         self.verify_target()
         self.run(['sync', '-f', self.target])
-        self.record('backup', target_head=self.data['target_head'])
+        self.record('backup', target_head=self.data['target_head'], target_snapshot=release_snapshot(self.target))
 
     def backup(self):
         # A retry creates another backup, never silently reuses a stale snapshot.
@@ -466,6 +565,9 @@ class Updater:
             fail('La instalación cambió después del preflight.')
 
     def activate(self):
+        if self.recover:
+            self.activate_recovery()
+            return
         self.revalidate()
         self.verify_target()
         backup = Path(self.data['backup'])
@@ -480,17 +582,13 @@ class Updater:
             fail('Alembic no alcanzó HEAD destino.')
         self.record('migrated')
         # No writable release, no foreign links. venv contains expected Python links.
-        for root, dirs, files in os.walk(self.target, followlinks=False):
-            Path(root).chmod(0o755)
-            for name in files:
-                path = Path(root)/name
-                if not path.is_symlink():
-                    path.chmod(0o755 if path.stat().st_mode & 0o111 or root.endswith('/bin') else 0o644)
+        self.publish_permissions()
         self.record('activating')
         if not self.current.is_symlink() or self.current.resolve() != self.old:
             fail('current cambió; no se reemplaza.')
         temporary = self.base/('.current-'+self.data['operation'])
-        switch_current(self.current, self.target, self.old, self.data['current_inode'], temporary)
+        switch_current(self.current, self.target, self.old, self.data['current_inode'], temporary,
+                       lambda inode: self.record('activating', activated_current_inode=inode))
         self.record('starting'); self.run(['systemctl', 'start', 'ticketyn'])
         self.record('checking'); self.healthy(self.target)
         self.run(['systemctl', 'enable', 'ticketyn'])
@@ -544,12 +642,21 @@ class Updater:
             return
         phase = self.data['phase']
         try:
-            self.record(phase, result='interrupted_or_failed')
-            if phase not in SAFE_RETRY and phase != 'complete':
-                self.run(['systemctl', 'disable', 'ticketyn'])
-                self.run(['systemctl', 'stop', 'ticketyn'])
-                print('Ticketyn detenido: no se realiza rollback de esquema ni de current. Conservar backup y ambas releases; revisar update-state y recuperar manualmente una DB compatible.', file=sys.stderr)
-            elif phase == 'stopping':
+            if phase != 'complete':
+                self.record(phase, result='interrupted_or_failed')
+        except Exception:
+            print('No se pudo escribir el diagnóstico; se conserva el último checkpoint durable.', file=sys.stderr)
+        if phase not in SAFE_RETRY and phase != 'complete':
+            # Failure to write state/disable must not prevent an independent stop attempt.
+            errors = False
+            for command in ('disable', 'stop'):
+                try:
+                    self.run(['systemctl', command, 'ticketyn'])
+                except Exception:
+                    errors = True
+            print('Revisar detención/deshabilitación manualmente.' if errors else 'Ticketyn detenido y deshabilitado; no se realiza rollback de esquema ni de current.', file=sys.stderr)
+        try:
+            if phase == 'stopping' and not self.recover:
                 self.revalidate(); self.run(['systemctl', 'enable', 'ticketyn']); self.run(['systemctl', 'start', 'ticketyn'])
             print('Estado conservado: '+str(self.state)+'; fase '+phase+'.', file=sys.stderr)
         except Exception:
@@ -561,8 +668,14 @@ class Updater:
         try:
             self.preflight()
             if self.data and self.data['phase'] == 'complete':
-                self.archive_state(); return
+                if self.state.exists():
+                    self.archive_state()
+                print('La operación ya está completada y verificada; no se repite.')
+                return
             self.begin()
+            if self.recover and getattr(self, 'resume_activation', False):
+                self.finish_recovery_activation()
+                return
             # Publication must remain on the releases filesystem (no EXDEV from /tmp).
             shutil.rmtree(self.work)
             self.work = Path(tempfile.mkdtemp(prefix='.ticketyn-update-', dir=self.releases))
@@ -576,6 +689,291 @@ class Updater:
             shutil.rmtree(self.work)  # only mkdtemp-owned ephemeral workspace, no releases/backups
             if self.lock_fd is not None:
                 os.close(self.lock_fd)
+
+    def stopped(self):
+        if self.run(['systemctl', 'show', '--property=ActiveState', '--value', 'ticketyn']) not in ('inactive', 'failed'):
+            fail('Recovery requiere Ticketyn detenido.')
+        if self.run(['systemctl', 'show', '--property=UnitFileState', '--value', 'ticketyn']) != 'disabled':
+            fail('Recovery requiere autostart deshabilitado.')
+        if self.run(['ss', '-H', '-ltn', 'sport = :8000']).strip():
+            fail('Recovery requiere ausencia de listener backend.')
+
+    def bound_release(self, data, which):
+        path = Path(data[which])
+        version = data['source_version' if which == 'previous' else 'target_version']
+        ri.semver(version)
+        if path != self.releases/version or ri.identity(path) != version:
+            fail('Identidad de release incoherente: '+which)
+        secure(path, directory=True)
+        if stamp(path) != data[which+'_inode']:
+            fail('Directorio de release reemplazado: '+which)
+        fingerprint = data.get('source_snapshot' if which == 'previous' else 'target_snapshot')
+        if not fingerprint or release_snapshot(path) != fingerprint:
+            fail('Contenido de release alterado: '+which)
+        return path
+
+    def bound_backup(self, data, release, revision):
+        path = Path(data.get('backup', ''))
+        if path.parent != self.backups or path.suffix != '.tar':
+            fail('Backup registrado fuera del directorio administrado.')
+        secure(path, private=True)
+        if digest(path) != data.get('backup_sha256'):
+            fail('Backup registrado alterado.')
+        temporary = Path(tempfile.mkdtemp(prefix='validate-backup-', dir=self.work))
+        content = temporary/'content'
+        try:
+            rs.validate(path, content)
+            self.run(['pg_restore', '--file=/dev/null', content/'database.dump'])
+            metadata = rs.metadata(content/'metadata.txt')
+            if (metadata['ticketyn_version'] != ri.identity(release)
+                    or metadata['alembic_revision'] != revision
+                    or metadata['pyproject_sha256'] != digest(release/'pyproject.toml')
+                    or digest(content/'ticketyn.env') != data['env_hash']):
+                fail('Backup no corresponde a la operación registrada.')
+        finally:
+            shutil.rmtree(temporary)  # private mkdtemp only
+
+    def recovery_identity(self, data):
+        for key, value in [('origin', ORIGIN), ('env_hash', self.env_hash), ('db_oid', self.db_oid), ('cluster', self.cluster), ('unit_hash', digest(self.unit)), ('site_hash', digest(self.site))]:
+            if data.get(key) != value:
+                fail('Identidad de recovery incoherente: '+key)
+        if data.get('tag') != 'v'+data.get('target_version', ''):
+            fail('Tag registrado incoherente.')
+        forward(data['source_version'], data['target_version'])
+
+    def parent_record(self, data):
+        operation = data.get('parent_operation_id', '')
+        if not re.fullmatch('[a-f0-9]{32}', operation):
+            fail('Recovery sin parent_operation_id válido.')
+        history = self.config/'update-history'
+        secure(history, directory=True, private=True)
+        directory = history/operation
+        secure(directory, directory=True, private=True)
+        if {path.name for path in directory.iterdir()} != {'state.json'}:
+            fail('Estructura de historial padre inesperada.')
+        path = directory/'state.json'
+        parent = read_json(path)
+        self.verify_checkpoint(parent)
+        if parent['operation'] != operation or digest(path) != data.get('parent_sha256') or parent.get('result') != 'interrupted_or_failed':
+            fail('Historial padre incoherente/alterado.')
+        return parent
+
+    def validate_parent(self, parent):
+        self.verify_checkpoint(parent)
+        self.recovery_identity(parent)
+        if parent.get('phase') not in ('migrated', 'activating', 'starting', 'checking') or parent.get('result') not in ('pending', 'interrupted_or_failed'):
+            fail('Fase original no demuestra una migración completada recuperable.')
+        previous = self.bound_release(parent, 'previous')
+        target = self.bound_release(parent, 'target')
+        if self.head(target) != parent.get('target_head'):
+            fail('HEAD de release fallida incoherente.')
+        self.bound_backup(parent, previous, parent['source_head'])
+        return target
+
+    def validate_ancestors(self, data):
+        seen = set()
+        while data.get('kind') == 'recovery':
+            if data['operation'] in seen or len(seen) >= 100:
+                fail('Cadena de recovery cíclica/excesiva.')
+            seen.add(data['operation'])
+            data = self.parent_record(data)
+            self.validate_parent(data)
+
+    def pointer_matches(self, data, allow_target=False):
+        if not self.current.is_symlink():
+            fail('current inesperado.')
+        actual, inode = str(self.current.resolve(strict=True)), stamp(self.current)
+        if actual == data['previous'] and inode == data['current_inode']:
+            return False
+        if allow_target and actual == data['target'] and inode == data.get('activated_current_inode'):
+            return True
+        fail('current no corresponde a la identidad registrada.')
+
+    def validate_recovery(self):
+        d = self.data
+        if d.get('kind') not in ('update', 'recovery') or (d.get('result') == 'success' and d.get('phase') != 'complete'):
+            fail('Tipo/resultado de operación incoherente.')
+        self.recovery_identity(d)
+        if d.get('kind') == 'recovery' and d['tag'] == self.tag:
+            self.parent = self.parent_record(d)
+            self.baseline_release = self.validate_parent(self.parent)
+            self.validate_ancestors(self.parent)
+            self.bound_release(d, 'previous')
+            if d['source_head'] != self.parent['target_head']:
+                fail('Recovery no parte del esquema post-fallo registrado.')
+            if d['phase'] == 'complete':
+                self.validate_recovery_complete(d)
+                return
+            self.stopped()
+            if d['phase'] == 'migrating' and d.get('target_head') != d['source_head']:
+                fail('Recovery interrumpida durante migración: requiere intervención administrativa.')
+            if d['phase'] == 'migrating':
+                if self.revision != d['source_head']:
+                    fail('Revisión inesperada en recovery sin DDL.')
+                # No DDL was possible: same HEAD is a demonstrable safe boundary.
+                self.resume_activation = True
+            if d['phase'] in SAFE_RETRY:
+                self.pointer_matches(d)
+                if self.revision != d['source_head']:
+                    fail('Revisión DB inesperada antes de migrar recovery.')
+                if self.target.exists() or self.target.is_symlink():
+                    secure(self.target, directory=True, private=True)
+                    if stamp(self.target) != d.get('target_inode'):
+                        fail('Destino de recovery no demostrablemente propio.')
+                    if d.get('target_snapshot'):
+                        self.bound_release(d, 'target')
+                    elif (self.target/'.venv').exists() or (self.target/'.venv').is_symlink():
+                        fail('venv parcial sin huella verificable; requiere intervención antes de reintentar.')
+                self.old = Path(d['previous'])
+                self.source_version = d['source_version']
+                return
+            if d['phase'] not in ('migrating', 'migrated', 'activating', 'starting', 'checking'):
+                fail('Fase de recovery no recuperable.')
+            self.bound_release(d, 'target')
+            if self.revision != d.get('target_head') or self.head(self.target) != self.revision:
+                fail('Revisión DB inesperada después de migrar recovery.')
+            switched = self.pointer_matches(d, allow_target=d['phase'] not in ('migrating', 'migrated'))
+            if d['phase'] in ('starting', 'checking') and not switched:
+                fail('Fase de activación y current incoherentes.')
+            self.bound_backup(d, Path(d['previous']), d['source_head'])
+            self.old = Path(d['previous']); self.source_version = d['source_version']
+            self.resume_activation = True
+            return
+        # A new recovery, including a forward recovery of a failed recovery.
+        self.parent = dict(d)
+        self.baseline_release = self.validate_parent(d)
+        forward(d['target_version'], self.version)
+        self.stopped()
+        if self.revision != d.get('target_head'):
+            fail('Revisión DB no corresponde al límite post-migración registrado.')
+        switched = self.pointer_matches(d, allow_target=d['phase'] != 'migrated')
+        if d['phase'] in ('starting', 'checking') and not switched:
+            fail('Fase original incompatible con current.')
+        self.validate_ancestors(d)
+        if self.target.exists() or self.target.is_symlink():
+            fail('Release destino preexistente; no se modifica.')
+
+    def begin_recovery(self):
+        if self.data.get('kind') == 'recovery' and self.data['tag'] == self.tag:
+            self.authorized = True
+            return
+        # Keep the original failed, even if SIGKILL left a pending checkpoint.
+        if self.data.get('result') != 'interrupted_or_failed':
+            self.record(self.data['phase'], result='interrupted_or_failed')
+        parent = dict(self.data)
+        history = self.config/'update-history'
+        if not history.exists():
+            history.mkdir(mode=0o700); rs.sync_directory(self.config)
+        secure(history, directory=True, private=True)
+        archived = history/parent['operation']
+        if archived.exists():
+            secure(archived, directory=True, private=True)
+            if read_json(archived/'state.json') != parent:
+                fail('Historial original ya existe con contenido distinto.')
+        else:
+            initial = self.config/('.archive-'+secrets.token_hex(16))
+            initial.mkdir(mode=0o700)
+            write_json(initial/'state.json', parent, exclusive=True)
+            rs.rename_exclusive(initial, archived); rs.sync_directory(history)
+        data = self.initial_data()
+        data.update(kind='recovery', parent_operation_id=parent['operation'], parent_sha256=digest(archived/'state.json'),
+                    baseline_release=str(self.baseline_release), original_backup=parent['backup'])
+        initial = self.config/('.recovery-'+data['operation'])
+        initial.mkdir(mode=0o700)
+        self.persist(initial/'state.json', data, exclusive=True)
+        if read_json(self.state/'state.json') != parent:
+            fail('Estado original cambió antes de iniciar recovery.')
+        exchange(initial, self.state)
+        rs.sync_directory(self.config)
+        # Retain the exchanged original state privately as crash/recovery evidence.
+        self.data = data; self.parent = parent; self.authorized = True
+
+    def validate_recovery_complete(self, data):
+        self.bound_release(data, 'target')
+        if self.revision != data['target_head'] or data.get('result') != 'success' or not self.pointer_matches(data, allow_target=True):
+            fail('Recovery completada incoherente.')
+        self.bound_backup(data, Path(data['previous']), data['source_head'])
+        self.run(['systemctl', 'is-enabled', '--quiet', 'ticketyn'])
+        self.healthy(self.target)
+
+    def completed_recovery(self):
+        history = self.config/'update-history'
+        secure(history, directory=True, private=True)
+        matches = []
+        for path in history.iterdir():
+            secure(path, directory=True, private=True)
+            data = read_json(path/'state.json')
+            if data.get('kind') == 'recovery' and data.get('tag') == self.tag and data.get('phase') == 'complete':
+                matches.append(data)
+        if len(matches) != 1:
+            fail('Recovery requiere una operación incompleta administrada; no hay estado pendiente válido.')
+        self.data = matches[0]
+        self.verify_checkpoint(self.data)
+        self.validate_recovery()
+
+    def recovery_revalidate(self):
+        self.verify_checkpoint(read_json(self.state/'state.json'))
+        if read_json(self.state/'state.json') != self.data:
+            fail('Estado de recovery cambió.')
+        secure(self.env, private=True)
+        if (digest(self.env) != self.data['env_hash']
+                or self.pg("SELECT oid FROM pg_database WHERE datname='ticketyn'") != self.data['db_oid']
+                or self.pg('SELECT system_identifier FROM pg_control_system()') != self.data['cluster']):
+            fail('Identidad DB/configuración cambió durante recovery.')
+        self.stopped()
+        self.bound_release(self.data, 'previous')
+        self.validate_parent(self.parent_record(self.data))
+        self.recovery_identity(self.data)
+        self.validate_ancestors(self.data)
+
+    def finish_recovery_activation(self):
+        self.recovery_revalidate()
+        self.bound_release(self.data, 'target')
+        self.bound_backup(self.data, self.old, self.data['source_head'])
+        if self.db_revision() != self.data['target_head']:
+            fail('Revisión DB cambió antes de activar recovery.')
+        switched = self.pointer_matches(self.data, allow_target=True)
+        self.publish_permissions()
+        if not switched:
+            self.record('activating')
+            switch_current(self.current, self.target, self.old, self.data['current_inode'], self.base/('.current-'+secrets.token_hex(16)),
+                           lambda inode: self.record('activating', activated_current_inode=inode))
+        self.record('starting'); self.run(['systemctl', 'start', 'ticketyn'])
+        self.record('checking'); self.healthy(self.target)
+        if (not self.pointer_matches(self.data, allow_target=True)
+                or self.db_revision() != self.data['target_head']
+                or self.pg("SELECT oid FROM pg_database WHERE datname='ticketyn'") != self.data['db_oid']
+                or self.pg('SELECT system_identifier FROM pg_control_system()') != self.data['cluster']
+                or digest(self.env) != self.data['env_hash']):
+            fail('Identidad cambió después de comprobar recovery; no se habilita autostart.')
+        self.recovery_identity(self.data)
+        self.run(['systemctl', 'enable', 'ticketyn'])
+        self.record('complete', result='success'); self.archive_state()
+        print('✓ Recovery completada. Operación original fallida y ambos backups conservados en update-history.')
+
+    def publish_permissions(self):
+        for root, dirs, files in os.walk(self.target, followlinks=False):
+            Path(root).chmod(0o755)
+            for name in files:
+                path = Path(root)/name
+                if not path.is_symlink():
+                    path.chmod(0o755 if path.stat().st_mode & 0o111 or root.endswith('/bin') else 0o644)
+
+    def activate_recovery(self):
+        self.recovery_revalidate()
+        self.pointer_matches(self.data)
+        self.verify_target(); self.bound_release(self.data, 'target')
+        self.bound_backup(self.data, self.old, self.data['source_head'])
+        if self.db_revision() != self.data['source_head']:
+            fail('Revisión DB cambió antes de migrar recovery.')
+        self.record('stopping')
+        self.record('migrating')
+        if self.data['target_head'] != self.data['source_head']:
+            self.run([self.target/'.venv/bin/python', '-I', '-B', Path(__file__), 'migrate', self.target, self.env], cwd=self.target)
+        if self.db_revision() != self.data['target_head']:
+            fail('Alembic no alcanzó HEAD de recovery.')
+        self.record('migrated')
+        self.finish_recovery_activation()
 
 
 def auxiliary(args):
@@ -611,13 +1009,15 @@ if __name__ == '__main__':
         if sys.argv[1:2] and sys.argv[1] in ('plan', 'migrate', 'verify-python'):
             auxiliary(sys.argv[1:])
         else:
-            if os.geteuid() != 0 or len(sys.argv) != 2:
+            args = sys.argv[1:]
+            recover = len(args) == 2 and args[0] == '--recover'
+            if os.geteuid() != 0 or not (recover or len(args) == 1 and not args[0].startswith('--')):
                 fail('Se requiere root y un tag explícito.')
             os.umask(0o077)
             def interrupted(signum, frame):
                 raise UpdateError('Interrumpido por señal '+str(signum)+'.')
             signal.signal(signal.SIGINT, interrupted); signal.signal(signal.SIGTERM, interrupted)
-            Updater(sys.argv[1]).execute()
+            Updater(args[-1], recover=recover).execute()
     except (Exception, KeyboardInterrupt):
         # Never print CalledProcessError, arguments/env or third-party traceback:
         # migrations/imports may contain secrets in their diagnostic messages.
