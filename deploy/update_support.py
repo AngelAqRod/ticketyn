@@ -360,10 +360,12 @@ class Updater:
             fail('Estructura de update-state inesperada.')
         secure(self.state/'state.json', private=True)
         data = read_json(self.state/'state.json')
-        if data.get('format') not in ('ticketyn-update-v1', 'ticketyn-update-v2') or not re.fullmatch('[a-f0-9]{32}', data.get('operation', '')) or data.get('phase') not in PHASES or data.get('result') not in ('pending', 'interrupted_or_failed', 'success') or (not self.recover and data.get('tag') != self.tag):
+        if data.get('format') not in ('ticketyn-update-v1', 'ticketyn-update-v2') or not re.fullmatch('[a-f0-9]{32}', data.get('operation', '')) or data.get('phase') not in PHASES or data.get('result') not in ('pending', 'interrupted_or_failed', 'success') or (not self.recover and not getattr(self, 'aborting', False) and data.get('tag') != self.tag):
             fail('Estado update inválido/otra operación pendiente; revisión manual requerida.')
         if self.recover or data.get('format') == 'ticketyn-update-v2':
             self.verify_checkpoint(data)
+        if 'abort' in data and not getattr(self, 'aborting', False):
+            fail('Abort pendiente: ejecutar ticketyn-update --abort para completar el archivado; no se reanuda update/recovery.')
         self.data = data
 
     def persist(self, path, data, exclusive=False):
@@ -976,6 +978,102 @@ class Updater:
         self.finish_recovery_activation()
 
 
+class AbortUpdater(Updater):
+    """Read-only identity checks, then durable intent and atomic state archival.
+
+    Deliberately never calls failure(), begin(), backup() or activate().
+    """
+    def __init__(self, **paths):
+        super().__init__('v0.0.0', **paths)
+        self.aborting = True
+
+    def validate_abort(self):
+        for path in (self.base, self.releases, self.config):
+            secure(path, directory=True)
+        installed = self.config/'install-state'
+        secure(installed, directory=True, private=True)
+        for name, expected in [('format', '1'), ('status', 'complete')]:
+            secure(installed/name, private=True)
+            if (installed/name).read_text().strip() != expected:
+                fail('Abort requiere una instalación administrada completada.')
+        if (self.config/'restore-state').exists() or (self.config/'restore-state').is_symlink():
+            fail('restore-state pendiente: no se puede abortar update.')
+        self.data = None
+        self.read_state()
+        if not self.data:
+            fail('No existe update-state pendiente para abortar; no se modifica nada.')
+        d = self.data
+        if d.get('kind') != 'update' or d.get('format') != 'ticketyn-update-v2':
+            fail('Abort solo admite updates v2; no abandona recovery ni estados antiguos sin evidencia suficiente.')
+        self.verify_checkpoint(d)
+        if d.get('result') != 'interrupted_or_failed' or d['phase'] not in SAFE_RETRY:
+            fail('Abort rechazado: requiere interrupted_or_failed en SAFE_RETRY, antes del límite de migración.')
+        self.tag = d['tag']; self.version = tag_version(self.tag)
+        if d.get('target') != str(self.releases/self.version):
+            fail('Destino registrado incoherente.')
+        secure(self.env, private=True); rs.config(self.env)
+        secure(self.unit); secure(self.site)
+        if (not self.link.is_symlink() or self.link.lstat().st_uid != os.geteuid()
+                or self.link.resolve() != self.site):
+            fail('Identidad del enlace Nginx cambió.')
+        self.env_hash = digest(self.env)
+        self.db_oid = self.pg("SELECT oid FROM pg_database WHERE datname='ticketyn'")
+        self.cluster = self.pg('SELECT system_identifier FROM pg_control_system()')
+        self.revision = self.db_revision()
+        if self.pg("SELECT pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding) FROM pg_database WHERE datname='ticketyn'") != 'ticketyn:UTF8':
+            fail('Propietario/encoding DB inesperado; no se aborta.')
+        self.recovery_identity(d)
+        previous = self.bound_release(d, 'previous')
+        if (not self.current.is_symlink() or self.current.lstat().st_uid != os.geteuid()
+                or stamp(self.current) != d.get('current_inode') or self.current.resolve(strict=True) != previous):
+            fail('current cambió; no se puede demostrar abort seguro.')
+        if self.revision != d.get('source_head') or self.head(previous) != self.revision:
+            fail('DB/Alembic cambió; no se puede demostrar estado anterior a migración.')
+        history = self.config/'update-history'
+        if history.exists() or history.is_symlink():
+            secure(history, directory=True, private=True)
+            destination = history/d['operation']
+            if destination.exists() or destination.is_symlink():
+                fail('Ya existe un historial para esta operación; no se sobrescribe.')
+        intent = d.get('abort')
+        if intent is not None:
+            if (not isinstance(intent, dict) or set(intent) != {'requested_at', 'original_checkpoint', 'reason'}
+                    or intent['reason'] != 'voluntarily_aborted'):
+                fail('Intento de abort inválido.')
+            original = dict(d)
+            original.pop('abort')
+            original['checkpoint'] = intent['original_checkpoint']
+            self.verify_checkpoint(original)
+        return d
+
+    def execute(self):
+        self.lock()
+        try:
+            self.validate_abort()
+            # All invariants checked again immediately before publishing intent.
+            self.validate_abort()
+            history = self.config/'update-history'
+            if not history.exists():
+                history.mkdir(mode=0o700)
+            secure(history, directory=True, private=True)
+            # Make the destination parent durable BEFORE removing live state.
+            rs.sync_directory(history); rs.sync_directory(self.config)
+            if 'abort' not in self.data:
+                self.data['abort'] = {
+                    'reason': 'voluntarily_aborted',
+                    'requested_at': datetime.now(timezone.utc).isoformat(),
+                    'original_checkpoint': dict(self.data['checkpoint']),
+                }
+                # Preserve original phase, result and diagnostic fields verbatim.
+                self.persist(self.state/'state.json', self.data)
+            self.archive_state()
+            print('✓ Actualización abortada voluntariamente; diagnóstico conservado en update-history/'+self.data['operation']+'. DB, current, releases, backups y servicios sin cambios.')
+        finally:
+            if self.lock_fd is not None:
+                os.close(self.lock_fd)
+                self.lock_fd = None
+
+
 def auxiliary(args):
     if args[0] == 'plan':
         print(migration_plan(*args[1:])); return
@@ -1010,14 +1108,18 @@ if __name__ == '__main__':
             auxiliary(sys.argv[1:])
         else:
             args = sys.argv[1:]
+            abort = args == ['--abort']
             recover = len(args) == 2 and args[0] == '--recover'
-            if os.geteuid() != 0 or not (recover or len(args) == 1 and not args[0].startswith('--')):
+            if os.geteuid() != 0 or not (abort or recover or len(args) == 1 and not args[0].startswith('--')):
                 fail('Se requiere root y un tag explícito.')
             os.umask(0o077)
             def interrupted(signum, frame):
                 raise UpdateError('Interrumpido por señal '+str(signum)+'.')
             signal.signal(signal.SIGINT, interrupted); signal.signal(signal.SIGTERM, interrupted)
-            Updater(args[-1], recover=recover).execute()
+            if abort:
+                AbortUpdater().execute()
+            else:
+                Updater(args[-1], recover=recover).execute()
     except (Exception, KeyboardInterrupt):
         # Never print CalledProcessError, arguments/env or third-party traceback:
         # migrations/imports may contain secrets in their diagnostic messages.

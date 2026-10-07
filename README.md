@@ -538,6 +538,40 @@ estado sin ejecutar ningún DROP ni exigir un backup previo inexistente.
 
 ## Actualización de producción
 
+### Abandonar un update fallido antes de migrar
+
+```bash
+ticketyn-update --abort
+# Desde la fuente, también: ./update.sh --abort
+```
+
+Solo admite operaciones normales v2 con resultado `interrupted_or_failed` y
+fase `preparing`, `backup`, `prepared` o `stopping` (`SAFE_RETRY`). Verifica
+checkpoint independiente, release anterior/inode/snapshot, symlink `current`,
+configuración, unidad/Nginx y DB (OID, cluster, propietario/UTF-8 y revisión
+Alembic original, coincidente con HEAD anterior). Rechaza estados complete,
+v1, recovery, posteriores al límite de migración o cualquier incoherencia.
+Un checkpoint `pending` tras SIGKILL no se interpreta automáticamente como
+fallido: requiere diagnóstico administrativo; no existe `--force`.
+
+No hace backup, migración, restore, cambio de current, borrado de releases ni
+modificación de servicios/DB. Conserva backups y releases preparados; por eso
+una nueva actualización puede elegir otro tag, pero no sobrescribe el destino
+abandonado. Si el servicio ya estaba detenido, permanece detenido.
+
+Registra una intención durable `abort.reason=voluntarily_aborted`, preservando
+fase, resultado fallido, diagnóstico y checkpoint original. Luego mueve
+atómicamente todo `update-state` a `update-history/<operation>` y sincroniza
+ambos directorios. El historial no presenta la operación como exitosa.
+Una interrupción antes del movimiento conserva el bloqueo: repetir `--abort`
+revalida y completa el archivado; update/recovery rechazan un abort pendiente.
+Después del movimiento ya no existe `update-state`: otra llamada a `--abort`
+informa que no hay operación pendiente, sin tocar el historial. No se borra
+ningún estado ambiguo ni se hace rollback de esquema.
+
+Para instalaciones con bundle administrativo anterior, provisionar primero
+el updater aprobado mediante el procedimiento descrito a continuación.
+
 Las nuevas instalaciones publican `/usr/local/sbin/ticketyn-update`. Puede
 invocarse como root desde cualquier directorio, sin checkout externo:
 
