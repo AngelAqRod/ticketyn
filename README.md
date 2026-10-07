@@ -33,8 +33,9 @@ No hay usuarios/auth, adjuntos, auditoría, comentarios, SLA ni borrado físico.
 Existe un instalador de primera instalación, `install.sh`, para sistemas
 soportados con frontend precompilado. Existen `update.sh`, `backup.sh`,
 `restore.sh` y `restore.sh --finalize`; no existe rollback automático de updates.
-El instalador y backup/restore fueron validados en Debian; el actualizador todavía
-requiere aceptación end-to-end en un entorno descartable antes de actualizar datos reales.
+El instalador, backup/restore y el updater con forward recovery fueron validados
+end-to-end en Debian. La provisión del nuevo comando `ticketyn-update` debe
+validarse también en el laboratorio antes de desplegarla en producción.
 
 ## Stack y estructura
 
@@ -536,6 +537,40 @@ Un restore exitoso que no reemplazó una DB también puede finalizar: cierra su
 estado sin ejecutar ningún DROP ni exigir un backup previo inexistente.
 
 ## Actualización de producción
+
+Las nuevas instalaciones publican `/usr/local/sbin/ticketyn-update`. Puede
+invocarse como root desde cualquier directorio, sin checkout externo:
+
+```bash
+ticketyn-update v0.2.0
+ticketyn-update --recover v0.2.1
+```
+
+Utiliza copias completas y verificadas de `update.sh`, `backup.sh` y sus tres
+auxiliares Python bajo `/opt/ticketyn/admin/updater/<sha256>`. El lanzador y
+bundles son root-owned y no escribibles por el servicio. No dependen de
+`/opt/ticketyn/current`; cambiar la release activa no cambia el updater en uso.
+Se conservan bundles anteriores. No se actualiza automáticamente la herramienta
+administrativa desde una candidata: se publica mediante el instalador aprobado.
+
+Para incorporar o renovar el comando en una instalación anterior, desde una
+release/checkout de confianza que contenga estos archivos (solo este paso de
+provisión requiere la fuente), como root:
+
+```bash
+python3 -I -B deploy/install_updater.py /ruta/absoluta/a/la/fuente
+```
+
+Esto solo publica el comando y auxiliares; no ejecuta update, migraciones ni
+reinicia servicios. `install.sh` sigue siendo un instalador inicial y conserva
+su rechazo a reinstalar una instalación completada. Sus reruns parciales pueden
+repetir la provisión de forma segura. El provisionador verifica el bundle y la
+identidad del lanzador antes de renovarlos; rechaza comandos ajenos, enlaces,
+permisos inseguros o bundles modificados. La publicación es atómica y está
+serializada. No editar concurrentemente estos archivos como root.
+
+Se mantienen compatibles `./update.sh <tag>` y `./update.sh --recover <tag>`
+desde la fuente original, con exactamente las mismas garantías.
 
 Ejecutar como root, o mediante sudo, indicando **un tag explícito** del repositorio
 oficial `https://github.com/AngelAqRod/ticketyn.git`:

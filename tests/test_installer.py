@@ -826,3 +826,14 @@ printf 'VERIFIED\\n'
             'http://127.0.0.1:8080/', 'http://127.0.0.1:8080/assets/app-test.js',
             'http://127.0.0.1:8080/api/customers',
         ]
+
+
+def test_admin_updater_provisioning_uses_absolute_source_and_isolated_python(tmp_path):
+    result = shell(f'SOURCE="{tmp_path}"; python3() {{ printf "%s\\n" "$@"; }}; cd /; install_admin_updater')
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ['-I', '-B', str(tmp_path/'deploy/install_updater.py'), str(tmp_path)]
+
+
+def test_admin_updater_published_after_prepared_release_before_services():
+    text = INSTALLER.read_text().split('main() {', 1)[1]
+    assert text.index('    prepare_release\n') < text.index('    install_admin_updater\n') < text.index('    configure_services\n')

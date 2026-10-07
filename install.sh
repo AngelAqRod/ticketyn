@@ -47,6 +47,7 @@ require_absent() {
 check_project() {
     local file assets asset
     for file in frontend/dist/index.html requirements.lock pyproject.toml LICENSE alembic.ini \
+        update.sh backup.sh deploy/update_support.py deploy/restore_support.py deploy/release_identity.py deploy/install_updater.py \
         alembic/env.py alembic/versions/0001_initial_catalogs.py alembic/versions/0002_remove_services.py \
         alembic/versions/0003_ticket_domain.py alembic/versions/0004_nodes_responsibles.py src/ticketyn/main.py deploy/systemd/ticketyn.service deploy/nginx/ticketyn.conf; do
         [[ -s $SOURCE/$file ]] || fail "Falta $file. Utiliza una release con frontend precompilado; no se instala Node/npm."
@@ -596,6 +597,9 @@ install_dependencies() {
         OWN_POLICY=0
     fi
 }
+install_admin_updater() {
+    python3 -I -B "$SOURCE/deploy/install_updater.py" "$SOURCE"
+}
 main() {
     require_root
     STATE_ACTIVE=0; OWN_POLICY=0; WORK=''; PHASE=preflight
@@ -674,6 +678,8 @@ main() {
     phase release
     info 'Preparando release, Python y migraciones...'
     prepare_release
+    info 'Instalando comando administrativo ticketyn-update...'
+    install_admin_updater
     phase servicios
     info 'Configurando systemd y Nginx...'
     configure_services
