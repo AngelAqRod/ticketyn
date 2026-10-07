@@ -31,6 +31,15 @@ describe('cliente API', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ detail: 'error' }, 503)))
     await expect(listTickets()).rejects.toMatchObject({ status: 503, message: 'error' })
   })
+  it('conserva campos de validación para accesibilidad sin alterar el mensaje', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ detail: [
+      { loc: ['body', 'customer_id'], msg: 'Field required' },
+      { loc: ['query', 'limit'], msg: 'Invalid' },
+    ] }, 422)))
+    await expect(getJson('/api/tickets')).rejects.toMatchObject({
+      status: 422, fields: ['customer_id'], message: 'Cliente: Campo obligatorio. query · limit: Invalid',
+    })
+  })
   it('expone fallos de conexión', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
     await expect(listTickets()).rejects.toThrow('No se pudo conectar')

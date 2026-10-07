@@ -7,6 +7,8 @@ export interface ReportSummary {
   activity?: { start_at: string; started: number; closed: number }[]
   hours?: ReportRanking[]
   weekdays?: ReportRanking[]
+  departments?: ReportRanking[]
+  department_durations?: { id: number; label: string; count: number; average_duration_seconds: number }[]
   sector_durations?: { id: number; label: string; count: number; average_duration_seconds: number }[]
   period: { from_at: string; to_exclusive: string; timezone: string; granularity: 'hour' | 'day' | 'week' | 'month' }
   generated_at: string

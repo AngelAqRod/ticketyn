@@ -4,7 +4,7 @@ import { formatDate, formatTableDate, formatDuration } from '../lib/format'
 import { StatusBadge } from './StatusBadge'
 
 export function TicketTable({ tickets }: { tickets: Ticket[] }) {
-  return <div className="panel overflow-hidden">
+  return <div className="panel table-surface overflow-hidden">
     <div className="overflow-x-auto">
       <table className="operation-table min-w-[1350px]">
         <caption className="sr-only">Listado de tickets</caption>

@@ -77,6 +77,9 @@ describe('configuración de numeración', () => {
     expect(screen.getByLabelText('Próxima referencia')).toHaveTextContent('—')
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
     expect(screen.getByRole('alert')).toHaveTextContent('entre 0 y 20')
+    expect(screen.getByLabelText('Longitud / Padding')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Longitud / Padding')).toHaveAccessibleDescription(screen.getByRole('alert').textContent!)
+    expect(screen.getByLabelText('Próximo número')).not.toHaveAttribute('aria-invalid')
     expect(mock.mock.calls.filter(([, opts]) => opts?.method === 'PATCH')).toHaveLength(0)
   })
   it('permite padding 20 sin recortar el número', async () => {

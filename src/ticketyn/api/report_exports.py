@@ -76,7 +76,7 @@ def export_xlsx(session, filters, summary, output):
           ticket_rows(), [22, 12, 22, 30, 25, 35, 24, 24, 25, 40, 65, 23, 23, 23, 22, 32, 32, 28, 28])
     sheet('Evolución', ['Inicio del bucket (local)', 'Incidencias', 'Inicio ISO (con offset)'],
           ([bucket.start_at.astimezone(zone).replace(tzinfo=None), bucket.count, bucket.start_at.isoformat()] for bucket in summary.trend), [28, 20, 32])
-    for key, title in [('sectors', 'Sectores'), ('customers', 'Clientes'), ('circuits', 'Circuitos'), ('incident_types', 'Tipos'), ('nodes', 'Nodos'), ('responsibles', 'Responsables')]:
+    for key, title in [('sectors', 'Sectores'), ('customers', 'Clientes'), ('circuits', 'Circuitos'), ('incident_types', 'Tipos'), ('nodes', 'Nodos'), ('responsibles', 'Responsables'), ('departments', 'Departamentos')]:
         if (key == 'sectors' and summary.sector) or (key == 'nodes' and summary.node) or (key == 'responsibles' and summary.responsible):
             continue
         rows = getattr(summary, key)
@@ -86,6 +86,7 @@ def export_xlsx(session, filters, summary, output):
     for key, name in [('hours', 'Horas'), ('weekdays', 'Días')]:
         sheet(name, ['Período', 'Incidencias'], ([row.label, row.count] for row in getattr(summary, key)), [25, 18])
     sheet('Duración por sector', ['Sector', 'Cierres', 'Promedio (segundos)'], ([row.label, row.count, row.average_duration_seconds] for row in summary.sector_durations), [35, 18, 28])
+    sheet('Duración por departamento', ['Departamento', 'Cierres', 'Promedio (segundos)'], ([row.label, row.count, row.average_duration_seconds] for row in summary.department_durations), [35, 18, 28])
     workbook.save(output)
 
 
@@ -110,7 +111,7 @@ def export_pdf(session, filters, summary, output):
         KeepTogether([section('Evolución de incidencias', 2), TrendGraphic(summary.trend, zone, width, summary.period.granularity)]), Spacer(1, 8)]
     story.append(KeepTogether([section('Iniciadas vs cerradas', 3), ActivityGraphic(summary.activity, zone, width, summary.period.granularity)]))
     number = 4
-    for key, name in [('sectors', 'Sectores'), ('customers', 'Clientes'), ('circuits', 'Circuitos'), ('incident_types', 'Tipos de incidencia'), ('nodes', 'Nodos'), ('responsibles', 'Responsables')]:
+    for key, name in [('sectors', 'Sectores'), ('customers', 'Clientes'), ('circuits', 'Circuitos'), ('incident_types', 'Tipos de incidencia'), ('nodes', 'Nodos'), ('responsibles', 'Responsables'), ('departments', 'Departamentos')]:
         if (key == 'sectors' and summary.sector) or (key == 'nodes' and summary.node) or (key == 'responsibles' and summary.responsible): continue
         ranking = getattr(summary, key)
         heading = section(f'{name} · ranking completo ({len(ranking)})', number)
@@ -124,6 +125,11 @@ def export_pdf(session, filters, summary, output):
                 ([index, row.label, row.count] for index, row in enumerate(ranking, 1)), [55, width - 140, 85])
         story.extend(analytical_block(heading, graphic, table, width))
         story.append(Spacer(1, 12))
+    story.extend(analytical_block(section('Tiempo de resolución por departamento', number),
+        BarsGraphic(summary.department_durations, width, value_field='average_duration_seconds'),
+        modern_table(['Departamento', 'Cierres', 'Duración promedio'],
+            ([row.label, row.count, duration_text(row.average_duration_seconds)] for row in summary.department_durations), [width - 210, 85, 125]), width))
+    number += 1
     for key, name in [('hours', 'Distribución por hora del día'), ('weekdays', 'Distribución por día de semana')]:
         values = getattr(summary, key)
         heading, graphic = section(name, number), BarsGraphic(values, width, limit=24)

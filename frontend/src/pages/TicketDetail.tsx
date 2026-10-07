@@ -1,3 +1,5 @@
+import { RequestState } from '../components/RequestState'
+import { FeedbackMessage } from '../components/FeedbackMessage'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { getTicket, getTicketCatalogs } from '../api'
@@ -30,10 +32,10 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
     void load()
     return () => controller.abort()
   }, [id, edit, retry, location.key])
-  if (error) return <div className="panel p-6"><p role="alert">{error}</p><button type="button" className="button-secondary mt-4" onClick={() => setRetry(retry + 1)}>Reintentar</button><Link className="ml-4 text-primary underline" to="/tickets">Volver a tickets</Link></div>
-  if (!ticket) return <p role="status">Cargando ticket...</p>
+  if (error) return <RequestState error={error} errorTitle="" onRetry={() => setRetry(retry + 1)}><Link className="ml-4 text-primary underline" to="/tickets">Volver a tickets</Link></RequestState>
+  if (!ticket) return <RequestState loading compact loadingText="Cargando ticket..." />
   if (edit) return <TicketForm key={ticket.id} ticket={ticket} />
-  if (!catalogs) return <p role="status">Cargando catálogos...</p>
+  if (!catalogs) return <RequestState loading compact loadingText="Cargando catálogos..." />
   const state: unknown = location.state
   const saved = state && typeof state === 'object' && 'saved' in state && state.saved === true
   const classification = [
@@ -52,10 +54,10 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
   ]
   return <>
     <div className="record-header">
-      <div><p className="module-eyebrow">Operación <span aria-hidden="true">/ 02</span></p><div className="flex flex-wrap items-center gap-3"><h1 className="font-mono text-3xl font-bold tracking-tight text-primary">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold text-slate-800">{ticket.title}</h2></div>
+      <div className="min-w-0 max-w-full [overflow-wrap:anywhere]"><p className="module-eyebrow">Operación <span aria-hidden="true">/ 02</span></p><div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 max-w-full font-mono text-3xl font-bold tracking-tight text-primary">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold text-slate-800">{ticket.title}</h2></div>
       <div className="flex gap-2"><Link to="/tickets" className="button-secondary">Volver a tickets</Link><Link to={`/tickets/${ticket.id}/edit`} className="button-primary">Editar ticket</Link></div>
     </div>
-    {saved && <p role="status" className="mb-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900">Cambios guardados correctamente.</p>}
+    {saved && <FeedbackMessage variant="success" className="mb-3">Cambios guardados correctamente.</FeedbackMessage>}
     <div className="panel overflow-hidden">
       <section aria-labelledby="description-heading" className="record-description m-4">
         <h3 id="description-heading" className="section-label mb-2">Descripción</h3>

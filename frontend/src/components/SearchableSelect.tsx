@@ -1,8 +1,9 @@
+import { X, ChevronDown } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { AriaAttributes, KeyboardEvent } from 'react'
 
 export interface SelectOption { value: string; label: string; disabled?: boolean }
-interface Props {
+interface Props extends Pick<AriaAttributes, 'aria-describedby' | 'aria-invalid'> {
   id: string
   value: string
   options: SelectOption[]
@@ -15,7 +16,7 @@ interface Props {
   noMatchMessage: string
 }
 
-export function SearchableSelect({ id, value, options, onChange, disabled = false, required = false, label, placeholder, emptyMessage, noMatchMessage }: Props) {
+export function SearchableSelect({ id, value, options, onChange, disabled = false, required = false, label, placeholder, emptyMessage, noMatchMessage, 'aria-describedby': describedBy, 'aria-invalid': invalid }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState<string | null>(null)
@@ -69,17 +70,18 @@ export function SearchableSelect({ id, value, options, onChange, disabled = fals
   return <div ref={root} className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) close() }}>
     <div className="flex items-center gap-1">
       <input ref={input} id={id} role="combobox" type="text" autoComplete="off" className="form-input min-w-0" disabled={disabled}
+        aria-describedby={describedBy} aria-invalid={invalid}
         aria-haspopup="listbox" aria-required={required} aria-expanded={expanded} aria-controls={expanded ? listId : undefined} aria-autocomplete="list"
         aria-activedescendant={expanded && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
         value={expanded ? query : selected?.label ?? ''} placeholder={selected?.label ?? placeholder}
         onFocus={show} onClick={() => { if (!expanded) show() }}
         onChange={(event) => { setOpen(true); setQuery(event.target.value); setActive(null) }} onKeyDown={keyboard} />
-      {value && <button type="button" className="rounded p-2 text-slate-500 hover:bg-slate-100" disabled={disabled} aria-label={`Limpiar ${label}`} onClick={() => { onChange(''); close() }}>×</button>}
-      <button type="button" className="rounded p-2 text-slate-500 hover:bg-slate-100" disabled={disabled} aria-label={`${expanded ? 'Cerrar' : 'Abrir'} ${label}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (expanded) close(); else { input.current?.focus(); show() } }}>⌄</button>
+      {value && <button type="button" className="combobox-action" disabled={disabled} aria-label={`Limpiar ${label}`} onClick={() => { onChange(''); close() }}><X size={14} aria-hidden="true" /></button>}
+      <button type="button" className="combobox-action" disabled={disabled} aria-label={`${expanded ? 'Cerrar' : 'Abrir'} ${label}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (expanded) close(); else { input.current?.focus(); show() } }}><ChevronDown size={14} aria-hidden="true" /></button>
     </div>
     {expanded && <div className="combobox-menu">
       {query && <button type="button" className="px-3 py-2 text-xs text-primary underline" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(''); setActive(null); input.current?.focus() }}>Limpiar búsqueda</button>}
-      <ul id={listId} role="listbox" aria-label={label} className="max-h-60 overflow-y-auto py-1">
+      <ul id={listId} role="listbox" aria-label={label} className="overflow-y-auto py-1">
         {matches.map((option, index) => <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={value === option.value} aria-disabled={option.disabled || undefined}
           className={`px-3 py-2 text-sm ${option.disabled ? 'cursor-not-allowed text-slate-400' : `cursor-pointer hover:bg-primary-soft ${active === option.value ? 'bg-primary-soft text-ink' : 'text-slate-800'}`}`}
           onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => { if (!option.disabled) setActive(option.value) }} onClick={() => select(option)}>

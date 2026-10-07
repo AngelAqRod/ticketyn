@@ -60,6 +60,17 @@ function writes(mock: ReturnType<typeof mockApi>) { return mock.mock.calls.filte
 afterEach(() => vi.restoreAllMocks())
 
 describe('administración de catálogos', () => {
+  it('asocia la validación existente solo a los campos obligatorios vacíos', async () => {
+    const mock = mockApi(); open('/customers')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo cliente' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' }))
+    fireEvent.change(field('Nombre'), { target: { value: 'Nombre válido' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(field('Código de cliente')).toHaveAttribute('aria-invalid', 'true')
+    expect(field('Código de cliente')).toHaveAccessibleDescription('Completa los campos obligatorios antes de guardar.')
+    expect(field('Nombre')).not.toHaveAttribute('aria-invalid')
+    expect(writes(mock)).toHaveLength(0)
+  })
   it.each(settings)('%s lista activos/inactivos, crea, edita, desactiva y activa', async (resource, path, singular, title, identifier) => {
     const mock = mockApi(); open(path); await selectCatalog(title)
     expect(screen.getByRole('heading', { name: title, level: 1 })).toBeInTheDocument()

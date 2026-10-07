@@ -1,6 +1,9 @@
+import { RequestState } from '../components/RequestState'
+import { FeedbackMessage } from '../components/FeedbackMessage'
+import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Hash, Save, CheckCircle2 } from 'lucide-react'
+import { Hash, Save } from 'lucide-react'
 import { PageHeading } from '../components/PageHeading'
 import { FormField } from '../components/FormField'
 import { getTicketNumberConfig, updateTicketNumberConfig } from '../api/settings'
@@ -15,6 +18,7 @@ export function Settings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [apiInvalidFields, setApiInvalidFields] = useState<string[]>([])
   const [success, setSuccess] = useState(false)
   const [retry, setRetry] = useState(0)
   const sending = useRef(false)
@@ -26,7 +30,7 @@ export function Settings() {
   }
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setApiInvalidFields([])
     getTicketNumberConfig(controller.signal).then((data) => {
       if (!controller.signal.aborted) { populate(data); setLoading(false) }
     }).catch((failure: unknown) => {
@@ -41,7 +45,7 @@ export function Settings() {
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!config || sending.current) return
-    setSuccess(false); setError(null)
+    setSuccess(false); setError(null); setApiInvalidFields([])
     if (!validNumber || !validPadding) { setError('Introduce un próximo número entero positivo (máximo 2147483647) y un padding entero entre 0 y 20.'); return }
     const values = { prefix, separator, next_number: number, padding: width }
     const changes: TicketNumberChanges = {}
@@ -53,23 +57,23 @@ export function Settings() {
       const saved = await updateTicketNumberConfig(changes)
       if (alive.current) { populate(saved); setSuccess(true) }
     } catch (failure) {
-      if (alive.current) setError(failure instanceof Error ? failure.message : 'No se pudo guardar la configuración.')
+      if (alive.current) { setError(failure instanceof Error ? failure.message : 'No se pudo guardar la configuración.'); setApiInvalidFields(failure instanceof ApiError ? failure.fields : []) }
     } finally { sending.current = false; if (alive.current) setSaving(false) }
   }
   return <>
     <PageHeading title="Configuración" description="Personaliza la numeración de tickets de esta instalación." />
-    {loading ? <p role="status" className="panel p-5">Cargando configuración...</p> : !config ? <div className="panel p-5"><p role="alert">{error}</p><button type="button" className="button-secondary mt-3" onClick={() => setRetry(retry + 1)}>Reintentar</button></div> : <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-      <form className="form-surface" aria-label="Numeración de tickets" onSubmit={submit} noValidate aria-busy={saving}>
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold"><Hash size={20} aria-hidden="true" />Numeración de tickets</h2>
+    {loading ? <RequestState loading loadingText="Cargando configuración..." /> : !config ? <RequestState error={error} errorTitle="" onRetry={() => setRetry(retry + 1)} /> : <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <form className="form-surface" aria-label="Numeración de tickets" onSubmit={submit} noValidate aria-busy={saving} aria-describedby={error ? "number-settings-error" : undefined}>
+        <h2 className="mb-4 flex items-center gap-3 text-lg font-bold"><span className="icon-surface" aria-hidden="true"><Hash size={16} /></span>Numeración de tickets</h2>
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2"><legend className="sr-only">Formato de referencia</legend>
-          <FormField id="number-prefix" label="Prefijo"><input id="number-prefix" className="form-input" value={prefix} onChange={(event) => { setPrefix(event.target.value); setSuccess(false) }} /></FormField>
-          <FormField id="number-separator" label="Separador"><input id="number-separator" className="form-input" value={separator} onChange={(event) => { setSeparator(event.target.value); setSuccess(false) }} /></FormField>
-          <FormField id="number-next" label="Próximo número"><input id="number-next" type="number" min="1" max="2147483647" step="1" className="form-input" value={nextNumber} onChange={(event) => { setNextNumber(event.target.value); setSuccess(false) }} /></FormField>
-          <FormField id="number-padding" label="Longitud / Padding"><input id="number-padding" type="number" min="0" max="20" step="1" className="form-input" value={padding} onChange={(event) => { setPadding(event.target.value); setSuccess(false) }} /></FormField>
+          <FormField describedBy={error ? "number-settings-error" : undefined} invalid={apiInvalidFields.includes("prefix")} id="number-prefix" label="Prefijo"><input id="number-prefix" className="form-input" value={prefix} onChange={(event) => { setPrefix(event.target.value); setSuccess(false) }} /></FormField>
+          <FormField describedBy={error ? "number-settings-error" : undefined} invalid={apiInvalidFields.includes("separator")} id="number-separator" label="Separador"><input id="number-separator" className="form-input" value={separator} onChange={(event) => { setSeparator(event.target.value); setSuccess(false) }} /></FormField>
+          <FormField describedBy={error ? "number-settings-error" : undefined} invalid={(Boolean(error) && !validNumber) || apiInvalidFields.includes("next_number")} id="number-next" label="Próximo número"><input id="number-next" type="number" min="1" max="2147483647" step="1" className="form-input" value={nextNumber} onChange={(event) => { setNextNumber(event.target.value); setSuccess(false) }} /></FormField>
+          <FormField describedBy={error ? "number-settings-error" : undefined} invalid={(Boolean(error) && !validPadding) || apiInvalidFields.includes("padding")} id="number-padding" label="Longitud / Padding"><input id="number-padding" type="number" min="0" max="20" step="1" className="form-input" value={padding} onChange={(event) => { setPadding(event.target.value); setSuccess(false) }} /></FormField>
         </fieldset>
         <p className="mt-3 text-xs leading-5 text-muted">Prefijo y separador pueden estar vacíos. El separador admite varios caracteres. Padding agrega ceros a la izquierda sin recortar el número.</p>
-        {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-        {success && <p role="status" className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900"><CheckCircle2 size={16} aria-hidden="true" />Configuración guardada correctamente.</p>}
+        {error && <FeedbackMessage id="number-settings-error" variant="error" className="mt-4">{error}</FeedbackMessage>}
+        {success && <FeedbackMessage variant="success" className="mt-4">Configuración guardada correctamente.</FeedbackMessage>}
         <div className="mt-5 flex justify-end border-t border-slate-200 pt-4"><button type="submit" className="button-primary" disabled={saving}><Save size={15} aria-hidden="true" />{saving ? 'Guardando...' : 'Guardar cambios'}</button></div>
       </form>
       <aside className="rounded-xl bg-[var(--navy)] p-6 text-white" aria-label="Vista previa de referencia">

@@ -1,3 +1,4 @@
+import { FeedbackMessage } from '../components/FeedbackMessage'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { ArrowLeft, ArrowRight, RefreshCw, Plus, FileText, FileSpreadsheet } from 'lucide-react'
@@ -32,9 +33,9 @@ export function Tickets() {
   }
   return <>
     <PageHeading title="Tickets" description="Consulta las incidencias registradas, de la más reciente a la más antigua." action={<div className="flex flex-wrap gap-2"><button className="button-secondary" disabled={loading} onClick={() => setRefresh(refresh + 1)}><RefreshCw size={15} aria-hidden="true" />Actualizar</button><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('pdf')}><FileText size={15} aria-hidden="true" />Exportar PDF</button><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('xlsx')}><FileSpreadsheet size={15} aria-hidden="true" />Exportar Excel</button><Link className="button-primary" to="/tickets/new"><Plus size={15} aria-hidden="true" />Nuevo ticket</Link></div>} />
-    {createdReference && <p role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Ticket {createdReference} creado correctamente.</p>}
-    {exporting && <p role="status" className="mb-3 text-sm text-muted">Generando archivo...</p>}
-    {exportError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{exportError}</p>}
+    {createdReference && <FeedbackMessage variant="success" className="mb-3">Ticket {createdReference} creado correctamente.</FeedbackMessage>}
+    {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-3" />}
+    {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
     <TicketFilters params={params} change={change} clear={clear} />
     <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
       <span>{params.get('status') === 'OPEN' ? 'Abiertos' : params.get('status') === 'CLOSED' ? 'Cerrados' : 'Todos los estados'}</span><span>Fechas en tu zona horaria local</span>

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ticketyn.api.crud import get_or_404
 from ticketyn.api.ticket_data import RELATED_MODELS, ticket_statement, ticket_rows
-from ticketyn.models import Circuit, Customer, IncidentType, Sector, Ticket, Node, Responsible
+from ticketyn.models import Circuit, Customer, IncidentType, Sector, Ticket, Node, Responsible, Department
 from ticketyn.schemas.report import ReportFilters, ReportSummary
 
 
@@ -60,7 +60,7 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
     closed_stats = session.execute(select(func.count(), func.avg(duration), func.coalesce(func.sum(duration), 0)).select_from(closed)).one()
     started_count = session.scalar(select(func.count()).select_from(started))
     rankings = {}
-    for key, field, model in [('sectors', 'sector_id', Sector), ('customers', 'customer_id', Customer), ('circuits', 'circuit_id', Circuit), ('incident_types', 'incident_type_id', IncidentType), ('nodes', 'node_id', Node), ('responsibles', 'responsible_id', Responsible)]:
+    for key, field, model in [('departments', 'department_id', Department), ('sectors', 'sector_id', Sector), ('customers', 'customer_id', Customer), ('circuits', 'circuit_id', Circuit), ('incident_types', 'incident_type_id', IncidentType), ('nodes', 'node_id', Node), ('responsibles', 'responsible_id', Responsible)]:
         if (key == 'sectors' and selected_sector) or (key == 'nodes' and selected_node) or (key == 'responsibles' and selected_responsible):
             rankings[key] = []
             continue
@@ -89,16 +89,19 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
         counts = dict(session.execute(select(expression, func.count()).select_from(started).group_by(expression)).all())
         distributions[key] = [{'id': i, 'label': label, 'count': counts.get(i + (part == 'isodow'), 0)} for i, label in enumerate(labels)]
     average = func.avg(duration)
-    sector_durations = [dict(row._mapping) for row in session.execute(
-        select(Sector.id, Sector.name.label('label'), func.count().label('count'), average.label('average_duration_seconds'))
-        .select_from(closed).join(Sector, closed.c.sector_id == Sector.id)
-        .group_by(Sector.id, Sector.name).order_by(average.desc(), Sector.id))]
+    def durations_by(model, field):
+        return [dict(row._mapping) for row in session.execute(
+            select(model.id, model.name.label('label'), func.count().label('count'), average.label('average_duration_seconds'))
+            .select_from(closed).join(model, getattr(closed.c, field) == model.id)
+            .group_by(model.id, model.name).order_by(average.desc(), model.id))]
+    sector_durations = durations_by(Sector, 'sector_id')
+    department_durations = durations_by(Department, 'department_id')
     return ReportSummary(
         period={'from_at': filters.from_at, 'to_exclusive': filters.to_at, 'timezone': filters.timezone, 'granularity': grain},
         generated_at=datetime.now(timezone.utc),
         sector={'id': selected_sector.id, 'name': selected_sector.name} if selected_sector else None,
         kpis={'started': started_count, 'closed': closed_stats[0], 'average_duration_seconds': closed_stats[1], 'total_duration_seconds': closed_stats[2]},
-        trend=started_trend, activity=activity, sector_durations=sector_durations, **distributions, **rankings,
+        trend=started_trend, activity=activity, sector_durations=sector_durations, department_durations=department_durations, **distributions, **rankings,
         node={"id": selected_node.id, "name": selected_node.name} if selected_node else None,
         responsible={"id": selected_responsible.id, "name": selected_responsible.name} if selected_responsible else None,
     )

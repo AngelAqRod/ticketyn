@@ -1,5 +1,9 @@
+import { RequestState } from './RequestState'
+import { FeedbackMessage } from './FeedbackMessage'
+import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { Network, SlidersHorizontal, Users, Ticket, Pencil, Power } from 'lucide-react'
 import { QuickCatalogCreate } from './QuickCatalogCreate'
 import { SearchableSelect } from './SearchableSelect'
 import { useUrlFilters } from '../hooks/useUrlFilters'
@@ -77,6 +81,8 @@ function confirmDeactivation(): boolean {
 
 export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
   const info = labels[kind]
+  const refreshedModule = kind === 'customers' || kind === 'circuits'
+  const RecordIcon = kind === 'circuits' ? Network : Users
   const [items, setItems] = useState<CatalogItem[]>([])
   const [nodes, setNodes] = useState<NamedCatalog[]>([])
   const [quickNode, setQuickNode] = useState(false)
@@ -84,6 +90,7 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [apiInvalidFields, setApiInvalidFields] = useState<string[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
   const [localSearch, setLocalSearch] = useState('')
@@ -123,12 +130,12 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
   const ordered = [...visible].sort((a, b) => (code(a) || name(a)).localeCompare(code(b) || name(b)) || a.id - b.id)
 
   function edit(item?: CatalogItem) {
-    setError(null); setNotice(null)
+    setError(null); setApiInvalidFields([]); setNotice(null)
     setDraft(item ? { id: item.id, code: code(item), name: name(item), nodeId: 'node_id' in item && item.node_id ? String(item.node_id) : '', customerId: 'customer_id' in item ? String(item.customer_id) : '', active: item.active } : blank())
   }
   async function persist(operation: () => Promise<CatalogItem>, success: string, closeForm = false) {
     if (sending.current) return
-    sending.current = true; setBusy(true); setError(null); setNotice(null)
+    sending.current = true; setBusy(true); setError(null); setApiInvalidFields([]); setNotice(null)
     try {
       const item = await operation()
       if (mounted.current) {
@@ -136,12 +143,13 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
         setNotice(success)
         if (closeForm) setDraft(null)
       }
-    } catch (failure) { if (mounted.current) setError(message(failure)) }
+    } catch (failure) { if (mounted.current) { setError(message(failure)); setApiInvalidFields(failure instanceof ApiError ? failure.fields : []) } }
     finally { sending.current = false; if (mounted.current) setBusy(false) }
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!draft || sending.current) return
+    setApiInvalidFields([])
     if (!draft.name.trim() || ((kind === 'customers' || kind === 'circuits') && !draft.code.trim()) || (kind === 'circuits' && !draft.customerId)) {
       setError('Completa los campos obligatorios antes de guardar.'); return
     }
@@ -155,21 +163,22 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
 
   return <>
     <PageHeading title={info.title} description={info.description} action={<button type="button" className="button-primary" disabled={busy || loading || Boolean(loadError)} onClick={() => edit()}>Nuevo {info.singular}</button>} />
-    {notice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
-    {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-    {draft && <form className="form-surface mb-4 border-b border-slate-200" aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate>
-      <h2 className="mb-3 text-sm font-semibold">{draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}</h2>
+    {notice && <FeedbackMessage variant="success" className="mb-4">{notice}</FeedbackMessage>}
+    {error && <FeedbackMessage id="catalog-form-error" variant="error" className="mb-4">{error}</FeedbackMessage>}
+    {draft && <form className={`form-surface mb-4${refreshedModule ? '' : ' border-b border-slate-200'}`} aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate aria-describedby={error ? "catalog-form-error" : undefined}>
+      <h2 className={refreshedModule ? 'toolbar-heading gap-3' : 'mb-3 text-sm font-semibold'}>{refreshedModule && <span className="icon-surface" aria-hidden="true"><RecordIcon size={15} /></span>}{draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}</h2>
       <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
-        {kind === 'circuits' && <FormField id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
-        {kind === 'circuits' && <FormField id="admin-node" label="Nodo de distribución"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="admin-node" label="Nodo de distribución" value={draft.nodeId} onChange={(value) => setDraft({ ...draft, nodeId: value })} options={nodes.filter((item) => item.active || String(item.id) === draft.nodeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></div></FormField>}
-        {(kind === 'customers' || kind === 'circuits') && <FormField id="admin-code" label={kind === 'customers' ? 'Código de cliente' : 'Código de circuito'} required><input id="admin-code" className="form-input" required value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></FormField>}
-        <FormField id="admin-name" label={kind === 'circuits' ? 'Descripción' : 'Nombre'} required><input id="admin-name" className="form-input" required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></FormField>
-        <div className="flex items-center gap-2 self-end pb-3"><input id="admin-active" type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /><label htmlFor="admin-active" className="text-sm">Activo</label></div>
+        {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.customerId.trim()) || apiInvalidFields.includes("customer_id")} id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
+        {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("node_id")} id="admin-node" label="Nodo de distribución"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="admin-node" label="Nodo de distribución" value={draft.nodeId} onChange={(value) => setDraft({ ...draft, nodeId: value })} options={nodes.filter((item) => item.active || String(item.id) === draft.nodeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></div></FormField>}
+        {(kind === 'customers' || kind === 'circuits') && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.code.trim()) || apiInvalidFields.includes(kind === "circuits" ? "circuit_code" : "customer_code")} id="admin-code" label={kind === 'customers' ? 'Código de cliente' : 'Código de circuito'} required><input id="admin-code" className="form-input" required value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></FormField>}
+        <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.name.trim()) || apiInvalidFields.includes(kind === "circuits" ? "description" : "name")} id="admin-name" label={kind === 'circuits' ? 'Descripción' : 'Nombre'} required><input id="admin-name" className="form-input" required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></FormField>
+        <div className="flex items-center gap-2 self-end pb-3"><input aria-describedby={error ? "catalog-form-error" : undefined} aria-invalid={apiInvalidFields.includes("active") || undefined} id="admin-active" type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /><label htmlFor="admin-active" className="text-sm">Activo</label></div>
       </fieldset>
       <p className="mt-3 text-xs text-slate-500">Desactivar conserva el registro y sus referencias históricas.</p>
-      <div className="mt-4 flex justify-end gap-3"><button type="button" className="button-secondary" disabled={busy} onClick={() => { setDraft(null); setError(null) }}>Cancelar</button><button type="submit" className="button-primary" disabled={busy}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button></div>
+      <div className="mt-4 flex justify-end gap-3"><button type="button" className="button-secondary" disabled={busy} onClick={() => { setDraft(null); setError(null); setApiInvalidFields([]) }}>Cancelar</button><button type="submit" className="button-primary" disabled={busy}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button></div>
     </form>}
     {kind === 'circuits' && <section aria-label="Filtros de circuitos" className="filter-toolbar grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <p className="toolbar-heading gap-3 sm:col-span-2 xl:col-span-4"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros de circuitos</p>
       <FormField id="circuit-search" label="Buscar circuitos"><input id="circuit-search" className="form-input" type="search" placeholder="Código o descripción" value={search} onChange={(event) => setSearch(event.target.value)} /></FormField>
       <FormField id="circuit-customer-filter" label="Filtrar por cliente"><SearchableSelect id="circuit-customer-filter" label="Cliente" value={params.get('customer_id') ?? ''} options={customers.map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}` }))} onChange={(value) => change({ customer_id: value })} disabled={loading && !customers.length} placeholder="Todos los clientes" emptyMessage="No hay clientes." noMatchMessage="No se encontraron clientes." /></FormField>
       <FormField id="circuit-node-filter" label="Filtrar por nodo"><SearchableSelect id="circuit-node-filter" label="Nodo" value={params.get('node_id') ?? ''} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ node_id: value })} placeholder="Todos los nodos" emptyMessage="No hay nodos." noMatchMessage="No se encontraron nodos." /></FormField>
@@ -182,18 +191,21 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
       ...(params.get('node_id') ? [{ label: 'Nodo', value: nodes.find((item) => String(item.id) === params.get('node_id'))?.name ?? `#${params.get('node_id')}` }] : []),
       ...(params.get('active') ? [{ label: 'Estado', value: params.get('active') === 'true' ? 'Activos' : params.get('active') === 'false' ? 'Inactivos' : params.get('active')! }] : []),
     ]} />}
-    {(kind === 'customers' || kind === 'nodes' || kind === 'responsibles') && <div className="mb-3 max-w-md"><label htmlFor="admin-search" className="mb-1 block text-xs font-medium">Buscar {info.empty}</label><input id="admin-search" type="search" className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}
-    {loading ? <p role="status">Cargando {info.empty}...</p> : loadError ? <div role="alert" className="panel p-5"><p>Error al cargar {info.empty}: {loadError}</p><button type="button" className="button-secondary mt-3" onClick={() => setRetry(retry + 1)}>Reintentar</button></div> : !ordered.length ? <p className="panel p-6">{items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`}</p> : <div className="panel overflow-x-auto"><table className="operation-table min-w-[650px]"><caption className="sr-only">{info.title}</caption>
+    {(kind === 'customers' || kind === 'nodes' || kind === 'responsibles') && <div className={kind === 'customers' ? 'filter-toolbar' : 'mb-3 max-w-md'}>
+      {kind === 'customers' && <p className="toolbar-heading gap-3"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros de clientes</p>}
+      <div className="max-w-md"><label htmlFor="admin-search" className={kind === 'customers' ? 'form-label' : 'mb-1 block text-xs font-medium'}>Buscar {info.empty}</label><input id="admin-search" type="search" className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+    </div>}
+    {loading || loadError || !ordered.length ? <RequestState loading={loading} loadingText={`Cargando ${info.empty}...`} error={loadError ? `Error al cargar ${info.empty}: ${loadError}` : null} errorTitle="" onRetry={() => setRetry(retry + 1)} empty={!ordered.length} emptyTitle={items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`} emptyDescription="" compact={!refreshedModule && loading} /> : <div className="panel table-surface overflow-x-auto"><table className="operation-table min-w-[650px]"><caption className="sr-only">{info.title}</caption>
       <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente', 'Nodo'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
       <tbody>{ordered.map((item) => <tr key={item.id}>
         {(kind === 'customers' || kind === 'circuits') && <th scope="row" className="record-code text-slate-900">{code(item)}</th>}
         {kind === 'circuits' && 'customer_id' in item && <td>{customerLabel(item.customer_id)}</td>}
         {kind === 'circuits' && 'circuit_code' in item && <td>{item.node?.name ?? 'Sin asignar'}</td>}
         <td>{name(item)}</td><td><span className={`status-badge ${item.active ? 'status-active' : 'status-neutral'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
-        <td className="whitespace-nowrap text-xs tabular-nums text-slate-600"><time dateTime={item.created_at} title={formatDate(item.created_at)}>{formatTableDate(item.created_at)}</time></td><td><div className="flex flex-wrap items-center gap-2">
-          {kind === 'customers' && <><Link className="text-xs text-primary underline" to={`/circuits?customer_id=${item.id}`} aria-label={`Ver circuitos de ${code(item)}`}>Circuitos</Link><Link className="text-xs text-primary underline" to={`/tickets?customer_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}>Tickets</Link></>}
-          {kind === 'circuits' && <Link className="text-xs text-primary underline" to={`/tickets?circuit_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}>Ver tickets</Link>}
-          <button type="button" className="button-secondary" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}>Editar</button><button type="button" className={item.active ? 'button-danger' : 'button-secondary'} disabled={busy || Boolean(draft)} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}>{item.active ? 'Desactivar' : 'Activar'}</button></div></td>
+        <td className="whitespace-nowrap text-xs tabular-nums text-slate-600"><time dateTime={item.created_at} title={formatDate(item.created_at)}>{formatTableDate(item.created_at)}</time></td><td><div className="table-actions">
+          {kind === 'customers' && <><Link className="button-ghost table-action" to={`/circuits?customer_id=${item.id}`} aria-label={`Ver circuitos de ${code(item)}`}><Network size={14} aria-hidden="true" />Circuitos</Link><Link className="button-ghost table-action" to={`/tickets?customer_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}><Ticket size={14} aria-hidden="true" />Tickets</Link></>}
+          {kind === 'circuits' && <Link className="button-ghost table-action" to={`/tickets?circuit_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}><Ticket size={14} aria-hidden="true" />Ver tickets</Link>}
+          <button type="button" className="button-secondary table-action" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}><Pencil size={14} aria-hidden="true" />Editar</button><button type="button" className={`${item.active ? 'button-danger' : 'button-secondary'} table-action`} disabled={busy || Boolean(draft)} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}><Power size={14} aria-hidden="true" />{item.active ? 'Desactivar' : 'Activar'}</button></div></td>
       </tr>)}</tbody></table></div>}
     {quickNode && draft && <QuickCatalogCreate kind="node" onCancel={() => setQuickNode(false)} onCreated={(node) => { setNodes((current) => [...current, node]); setDraft({ ...draft, nodeId: String(node.id) }); setQuickNode(false) }} />}
   </>

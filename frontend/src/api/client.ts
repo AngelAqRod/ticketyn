@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(message: string, public readonly status?: number) {
+  constructor(message: string, public readonly status?: number, public readonly fields: string[] = []) {
     super(message)
     this.name = 'ApiError'
   }
@@ -36,11 +36,19 @@ async function requestJson<T>(path: string, options: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     let message: string | null = null
+    let fields: string[] = []
     try {
       const body: unknown = await response.json()
-      if (body && typeof body === 'object' && 'detail' in body) message = detailMessage(body.detail)
+      if (body && typeof body === 'object' && 'detail' in body) {
+        message = detailMessage(body.detail)
+        if (Array.isArray(body.detail)) fields = body.detail.flatMap((entry: unknown) => {
+          if (!entry || typeof entry !== 'object' || !('loc' in entry) || !Array.isArray(entry.loc)) return []
+          const location = entry.loc
+          return location[0] === 'body' && typeof location[1] === 'string' ? [location[1]] : []
+        })
+      }
     } catch { /* Un error sin JSON conserva su código HTTP. */ }
-    throw new ApiError(message ?? `La API devolvió un error HTTP ${response.status}.`, response.status)
+    throw new ApiError(message ?? `La API devolvió un error HTTP ${response.status}.`, response.status, fields)
   }
   try {
     return await response.json() as T

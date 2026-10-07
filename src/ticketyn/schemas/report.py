@@ -91,6 +91,8 @@ class ReportSummary(BaseModel):
     activity: list[ActivityBucket] = Field(default_factory=list)
     hours: list[ReportRanking] = Field(default_factory=list)
     weekdays: list[ReportRanking] = Field(default_factory=list)
+    departments: list[ReportRanking] = Field(default_factory=list)
+    department_durations: list[SectorDuration] = Field(default_factory=list)
     sector_durations: list[SectorDuration] = Field(default_factory=list)
     period: ReportPeriod
     generated_at: datetime

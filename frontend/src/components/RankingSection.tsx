@@ -17,7 +17,7 @@ export function RankingSection({ title, rows, destination }: {
         {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
         {expanded ? `Ocultar ranking completo (${rows.length})` : `Ver ranking completo (${rows.length})`}
       </button>
-      <div id={tableId} hidden={!expanded} className="mt-3 max-h-80 overflow-auto rounded-lg border border-slate-200">
+      <div id={tableId} hidden={!expanded} className="table-surface mt-3 max-h-80 overflow-auto rounded-lg border border-slate-200">
         {expanded && <table className="operation-table"><caption className="sr-only">{title}</caption><thead><tr><th scope="col">Nombre / código</th><th scope="col" className="text-right">Incidencias</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}>
           <th scope="row" className="font-normal"><Link className="text-primary hover:underline underline-offset-4" to={destination(row)}>{row.label}</Link>{row.customer_code && <span className="block text-[11px] text-muted"><span className="font-mono">{row.customer_code}</span> — {row.customer_name}</span>}</th>
           <td className="text-right font-mono tabular-nums">{row.count}</td>

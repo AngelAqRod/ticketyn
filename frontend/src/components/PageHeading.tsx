@@ -9,7 +9,7 @@ export function PageHeading({ title, description, action }: {
   return <div className="page-heading" data-module={identity?.number}>
     <div className="flex min-w-0 items-center gap-4">
       {identity && <span aria-hidden="true" className="heading-emblem">{identity.number}</span>}
-      <div>
+      <div className="min-w-0 [overflow-wrap:anywhere]">
       {identity && <p className="module-eyebrow">{identity.group}<span aria-hidden="true">/ {identity.number}</span></p>}
       <h1 className="page-title">{title}</h1>
       <p className="page-description">{description}</p>

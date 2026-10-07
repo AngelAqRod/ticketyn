@@ -9,7 +9,7 @@ import { reportExportUrl } from '../api/reports'
 
 vi.mock('../components/ReportCharts', () => ({
   ActivityChart: () => <div role="img" aria-label="Gráfica iniciadas vs cerradas" />,
-  DistributionChart: ({ title }: { title: string }) => <div role="img" aria-label={`Gráfica ${title}`} />,
+  DistributionChart: ({ title, rows }: { title: string; rows: { label: string; count: number }[] }) => <div role="img" aria-label={`Gráfica ${title}`} data-values={JSON.stringify(rows)} />,
   TrendChart: ({ trend, granularity }: { trend: ReportSummary['trend']; granularity: string }) => <div role="img" aria-label="Gráfica de evolución de incidencias">{granularity}: {trend.length} buckets</div>,
   RankingChart: ({ title }: { title: string }) => <div role="img" aria-label={`Gráfica ${title}`} />,
 }))
@@ -21,6 +21,8 @@ const report: ReportSummary = {
   nodes: [{ id: 5, label: 'Nodo Central', count: 123, customer_id: null, customer_code: null, customer_name: null }],
   responsibles: [{ id: 6, label: 'Operador asignado', count: 123, customer_id: null, customer_code: null, customer_name: null }],
   activity: [{ start_at: '2026-10-01T00:00:00Z', started: 123, closed: 12 }],
+  departments: [{ id: 7, label: 'Departamento histórico', count: 123, customer_id: null, customer_code: null, customer_name: null }],
+  department_durations: [{ id: 7, label: 'Departamento histórico', count: 2, average_duration_seconds: 5400 }],
   hours: [], weekdays: [], sector_durations: [],
   sectors: [{ id: 1, label: 'Sector histórico', count: 123, customer_id: null, customer_code: null, customer_name: null }],
   customers: [{ id: 2, label: 'C-2 — Cliente', count: 123, customer_id: null, customer_code: null, customer_name: null }],
@@ -237,4 +239,13 @@ describe('reportes por Nodo y Responsable', () => {
     expect(screen.getByTestId('url')).toHaveTextContent('from=2026-10-01')
     expect(screen.getByRole('combobox', { name: label })).toBeInTheDocument()
   })
+})
+
+it('presenta departamentos con ranking completo, drill-down y resolución', async () => {
+  setup(); await loaded()
+  const ranking = within(screen.getByRole('region', { name: 'Tickets por departamento' }))
+  expect(ranking.getByRole('img', { name: 'Gráfica Tickets por departamento' })).toBeInTheDocument()
+  fireEvent.click(ranking.getByRole('button', { name: 'Ver ranking completo (1)' }))
+  expect(ranking.getByRole('link', { name: 'Departamento histórico' })).toHaveAttribute('href', '/tickets?department_id=7&from=2026-10-01&to=2026-10-02')
+  expect(screen.getByRole('img', { name: 'Gráfica Tiempo de resolución por departamento (minutos)' })).toHaveAttribute('data-values', JSON.stringify([{ label: 'Departamento histórico', count: 90 }]))
 })

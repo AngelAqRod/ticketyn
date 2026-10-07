@@ -135,6 +135,9 @@ describe('creación de tickets', () => {
     fireEvent.change(screen.getByLabelText('Fin'), { target: { value: '2026-10-02T15:20' } })
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Fin debe ser igual o posterior a Inicio')
+    expect(screen.getByLabelText('Fin')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Fin')).toHaveAccessibleDescription('Fin debe ser igual o posterior a Inicio.')
+    expect(screen.getByLabelText(/^Inicio\s*\*?$/)).not.toHaveAttribute('aria-invalid')
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
   it.each([
@@ -147,6 +150,11 @@ describe('creación de tickets', () => {
     await fillRequired()
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(String(message))
+    expect(screen.getByRole('form', { name: 'Crear ticket' })).toHaveAttribute('aria-describedby', screen.getByRole('alert').id)
+    if (status === 422) {
+      expect(screen.getByRole('combobox', { name: /^Cliente/ })).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.getByRole('combobox', { name: /^Cliente/ })).toHaveAccessibleDescription(String(message))
+    } else expect(screen.getByRole('combobox', { name: /^Cliente/ })).not.toHaveAttribute('aria-invalid')
     expect(screen.queryByText('[object Object]')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Guardar' })).toBeEnabled()
   })
@@ -213,6 +221,9 @@ describe('creación de tickets', () => {
     expect(circuitInput).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Completa los campos obligatorios')
+    expect(circuitInput).toHaveAttribute('aria-invalid', 'true')
+    expect(circuitInput).toHaveAccessibleDescription('Completa los campos obligatorios antes de guardar.')
+    expect(customer).not.toHaveAttribute('aria-invalid')
     expect(mock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
   it('volver a seleccionar el mismo cliente no borra su circuito', async () => {

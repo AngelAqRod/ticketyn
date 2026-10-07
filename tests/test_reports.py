@@ -145,6 +145,8 @@ def test_pdf_all_rows_respects_period_sector(api_client, ticket_payload, sector_
     assert excluded not in strings
     assert (other in strings) is not sector_view
     assert ('Reporte por Sector' if sector_view else 'Reporte General') in strings
+    assert any('Departamentos' in text for text in strings)
+    assert any('Tiempo de resolución por departamento' in text for text in strings)
 
 
 def test_report_query_count_is_constant(api_client, ticket_payload, db_session):
@@ -160,7 +162,7 @@ def test_report_query_count_is_constant(api_client, ticket_payload, db_session):
         assert summary(api_client)['kpis']['started'] == 5
     finally:
         event.remove(connection, 'before_cursor_execute', record)
-    assert len(statements) == 13  # Consultas agregadas constantes, independientes de la cantidad de tickets.
+    assert len(statements) == 15  # Consultas agregadas constantes, independientes de la cantidad de tickets.
 
 
 def test_snapshot_uses_repeatable_read_in_isolated_engine(postgres_engine):
@@ -223,3 +225,25 @@ def test_export_kpis_match_summary_with_different_start_and_end_universes(api_cl
     assert metadata['Duración acumulada (segundos)'] == report['kpis']['total_duration_seconds'] == 7200
     assert workbook['Tickets'].max_row == 2
     workbook.close()
+
+
+def test_department_started_and_resolution_universes(api_client, ticket_payload):
+    other = api_client.post('/api/departments', json={'name': 'Departamento alterno'}).json()['id']
+    create_ticket(api_client, {**ticket_payload, 'start_at': '2019-12-31T23:00:00Z', 'end_at': '2020-01-01T01:00:00Z', 'status': 'CLOSED'})
+    create_ticket(api_client, {**ticket_payload, 'start_at': BASE['from'], 'end_at': '2020-01-01T01:00:00Z', 'status': 'CLOSED'})
+    create_ticket(api_client, {**ticket_payload, 'status': 'CLOSED'})
+    create_ticket(api_client, {**ticket_payload, 'end_at': '2020-01-01T13:00:00Z', 'status': 'OPEN'})
+    create_ticket(api_client, {**ticket_payload, 'end_at': BASE['to'], 'status': 'CLOSED'})
+    create_ticket(api_client, {**ticket_payload, 'department_id': other, 'start_at': BASE['to']})
+    api_client.patch(f"/api/departments/{ticket_payload['department_id']}", json={'active': False})
+    report = summary(api_client)
+    assert [(row['id'], row['count']) for row in report['departments']] == [(ticket_payload['department_id'], 4)]
+    assert report['department_durations'] == [{'id': ticket_payload['department_id'], 'label': 'Departamento de prueba', 'count': 2, 'average_duration_seconds': 5400}]
+    assert report['department_durations'] == [{**report['sector_durations'][0], 'id': ticket_payload['department_id'], 'label': 'Departamento de prueba'}]
+    assert summary(api_client, sector_id=ticket_payload['sector_id'])['department_durations'] == report['department_durations']
+    assert summary(api_client, sector_id=api_client.post('/api/sectors', json={'name': 'Vacío'}).json()['id'])['departments'] == []
+    workbook = load_workbook(BytesIO(api_client.get('/api/reports/export/xlsx', params=BASE).content))
+    assert workbook['Departamentos']['C2'].value == 4
+    assert workbook['Duración por departamento']['C2'].value == 5400
+    pdf = api_client.get('/api/reports/export/pdf', params=BASE)
+    assert pdf.status_code == 200 and pdf.content.startswith(b'%PDF-')

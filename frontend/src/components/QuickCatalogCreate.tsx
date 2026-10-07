@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { RequestState } from './RequestState'
+import { FeedbackMessage } from './FeedbackMessage'
+import { ApiError } from '../api/client'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createCircuit, createCustomer, createNode, listNodes } from '../api'
 import type { Circuit, Customer, Node } from '../types/catalog'
@@ -12,9 +15,12 @@ type Props = {
 } | { kind: 'node'; onCreated: (node: Node) => void })
 
 export function QuickCatalogCreate(props: Props) {
+  const errorId = useId()
+  const nodeErrorId = useId()
   const [code, setCode] = useState('')
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [apiInvalidFields, setApiInvalidFields] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const sending = useRef(false)
   const dialog = useRef<HTMLDialogElement>(null)
@@ -52,7 +58,7 @@ export function QuickCatalogCreate(props: Props) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (sending.current) return
-    setError(null)
+    setError(null); setApiInvalidFields([])
     if ((!nodeMode && !code.trim()) || !text.trim()) { setError('Completa los campos obligatorios.'); return }
     sending.current = true
     setSaving(true)
@@ -70,7 +76,7 @@ export function QuickCatalogCreate(props: Props) {
         if (!request.signal.aborted) props.onCreated(circuit)
       }
     } catch (failure) {
-      if (!request.signal.aborted) setError(failure instanceof Error ? failure.message : 'No se pudo crear el registro.')
+      if (!request.signal.aborted) { setError(failure instanceof Error ? failure.message : 'No se pudo crear el registro.'); setApiInvalidFields(failure instanceof ApiError ? failure.fields : []) }
     } finally {
       sending.current = false
       if (!request.signal.aborted) setSaving(false)
@@ -83,13 +89,13 @@ export function QuickCatalogCreate(props: Props) {
     <div className="quick-dialog-header"><p className="module-eyebrow">Creación rápida</p><h2 id={`quick-create-title-${props.kind}`} className="text-xl font-semibold">{title}</h2>
     <p id={`quick-create-description-${props.kind}`} className="mb-4 mt-2 text-sm text-slate-500">Se creará un registro activo. El formulario principal se guarda por separado.</p></div>
     {props.kind === 'circuit' && <p className="mb-4 text-sm"><span className="font-medium">Cliente: </span>{props.customer.customer_code} — {props.customer.name}</p>}
-    <form aria-label={`Crear ${nodeMode ? 'nodo' : customerMode ? 'cliente' : 'circuito'} rápido`} onSubmit={submit} noValidate>
+    <form aria-label={`Crear ${nodeMode ? 'nodo' : customerMode ? 'cliente' : 'circuito'} rápido`} onSubmit={submit} noValidate aria-describedby={error ? errorId : undefined}>
       <fieldset disabled={saving} className="space-y-3"><legend className="sr-only">Datos del registro</legend>
-        {!nodeMode && <FormField id="quick-code" label={customerMode ? 'Código de cliente' : 'Código de circuito'} required><input ref={codeInput} id="quick-code" className="form-input" required value={code} onChange={(event) => setCode(event.target.value)} /></FormField>}
-        <FormField id={`quick-text-${props.kind}`} label={customerMode || nodeMode ? 'Nombre' : 'Descripción'} required><input ref={nodeMode ? codeInput : undefined} id={`quick-text-${props.kind}`} className="form-input" required value={text} onChange={(event) => setText(event.target.value)} /></FormField>
-        {props.kind === 'circuit' && <FormField id="quick-node" label="Nodo de distribución"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="quick-node" label="Nodo de distribución" value={nodeId} onChange={setNodeId} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} disabled={nodeLoading || Boolean(nodeError)} placeholder="Sin asignar" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></div>{nodeError && <p role="alert">{nodeError} <button type="button" onClick={() => setNodeRetry(nodeRetry + 1)}>Reintentar nodos</button></p>}</FormField>}
+        {!nodeMode && <FormField describedBy={error ? errorId : undefined} invalid={(error === "Completa los campos obligatorios." && !code.trim()) || apiInvalidFields.includes(customerMode ? "customer_code" : "circuit_code")} id="quick-code" label={customerMode ? 'Código de cliente' : 'Código de circuito'} required><input ref={codeInput} id="quick-code" className="form-input" required value={code} onChange={(event) => setCode(event.target.value)} /></FormField>}
+        <FormField describedBy={error ? errorId : undefined} invalid={(error === "Completa los campos obligatorios." && !text.trim()) || apiInvalidFields.includes(props.kind === "circuit" ? "description" : "name")} id={`quick-text-${props.kind}`} label={customerMode || nodeMode ? 'Nombre' : 'Descripción'} required><input ref={nodeMode ? codeInput : undefined} id={`quick-text-${props.kind}`} className="form-input" required value={text} onChange={(event) => setText(event.target.value)} /></FormField>
+        {props.kind === 'circuit' && <FormField describedBy={[nodeError ? nodeErrorId : "", error ? errorId : ""].filter(Boolean).join(" ") || undefined} invalid={apiInvalidFields.includes("node_id")} id="quick-node" label="Nodo de distribución"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="quick-node" label="Nodo de distribución" value={nodeId} onChange={setNodeId} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} disabled={nodeLoading || Boolean(nodeError)} placeholder="Sin asignar" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></div>{nodeError && <RequestState id={nodeErrorId} compact error={nodeError} errorTitle="" retryText="Reintentar nodos" onRetry={() => setNodeRetry(nodeRetry + 1)} />}</FormField>}
       </fieldset>
-      {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {error && <FeedbackMessage id={errorId} variant="error" className="mt-4">{error}</FeedbackMessage>}
       <div className="mt-5 flex justify-end gap-3"><button type="button" className="button-secondary" disabled={saving} onClick={props.onCancel}>Cancelar</button><button type="submit" className="button-primary" disabled={saving}>{saving ? 'Creando...' : 'Guardar'}</button></div>
     </form>
   </dialog>{quickNode && <QuickCatalogCreate kind="node" onCancel={() => setQuickNode(false)} onCreated={(node) => { setNodes((current) => [...current.filter((item) => item.id !== node.id), node]); setNodeId(String(node.id)); setQuickNode(false) }} />}</>

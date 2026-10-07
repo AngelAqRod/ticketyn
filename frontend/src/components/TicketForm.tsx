@@ -1,3 +1,6 @@
+import { RequestState } from './RequestState'
+import { FeedbackMessage } from './FeedbackMessage'
+import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router'
@@ -38,6 +41,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   const [circuitError, setCircuitError] = useState<string | null>(null)
   const [circuitRetry, setCircuitRetry] = useState(0)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [apiInvalidFields, setApiInvalidFields] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [historical, setHistorical] = useState<Awaited<ReturnType<typeof getTicketCatalogs>> | null>(null)
   const [quickCreate, setQuickCreate] = useState<'customer' | 'circuit' | null>(null)
@@ -112,7 +116,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (sending.current) return
-    setSubmitError(null)
+    setSubmitError(null); setApiInvalidFields([])
     if (catalogLoading || catalogError || circuitLoading || circuitError) {
       setSubmitError('Espera a que se carguen los catálogos o reintenta su carga.')
       return
@@ -140,7 +144,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
       const created = ticket ? await updateTicket(ticket.id, payload, controller.signal) : await createTicket(payload, controller.signal)
       if (!controller.signal.aborted) navigate(ticket ? `/tickets/${ticket.id}` : '/tickets', { state: ticket ? { saved: true } : { createdReference: created.reference } })
     } catch (error) {
-      if (!submitController.current?.signal.aborted) setSubmitError(errorMessage(error))
+      if (!submitController.current?.signal.aborted) { setSubmitError(errorMessage(error)); setApiInvalidFields(error instanceof ApiError ? error.fields : []) }
     } finally {
       sending.current = false
       if (!submitController.current?.signal.aborted) setSubmitting(false)
@@ -149,48 +153,48 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
 
   return <>
     <PageHeading title={ticket ? `Editar ${ticket.reference}` : "Nuevo ticket"} description={ticket ? "Actualiza los datos operativos del ticket." : "Registra una incidencia. La referencia se asignará automáticamente al guardar."} />
-    {quickNotice && <p role="status" className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900">{quickNotice}</p>}
-    {catalogLoading && <p role="status" className="mb-3 text-sm text-slate-500">Cargando catálogos...</p>}
-    {catalogError && <div role="alert" className="panel mb-3 p-4"><p className="font-medium">Error al cargar catálogos</p><p className="mt-1 text-sm">{catalogError}</p><button type="button" className="button-secondary mt-3" onClick={() => setCatalogRetry(catalogRetry + 1)}>Reintentar catálogos</button></div>}
-    <form onSubmit={submit} noValidate className="form-surface" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting}>
+    {quickNotice && <FeedbackMessage variant="success" className="mb-4">{quickNotice}</FeedbackMessage>}
+    {catalogLoading && <RequestState loading compact loadingText="Cargando catálogos..." className="mb-3" />}
+    {catalogError && <RequestState compact error={catalogError} errorTitle="Error al cargar catálogos" retryText="Reintentar catálogos" onRetry={() => setCatalogRetry(catalogRetry + 1)} className="mb-3" />}
+    <form onSubmit={submit} noValidate className="form-surface" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting} aria-describedby={submitError ? "ticket-submit-error" : undefined}>
       <fieldset disabled={submitting} className="min-w-0 space-y-5">
         <legend className="sr-only">Datos del ticket</legend>
         <section aria-labelledby="incident-heading" className="space-y-3">
           <h2 id="incident-heading" className="font-semibold text-slate-900">Incidencia</h2>
-          <FormField id="title" label="Título" required><input id="title" className="form-input" required value={title} onChange={(e) => setTitle(e.target.value)} /></FormField>
-          <FormField id="description" label="Descripción" required><textarea id="description" className="form-input resize-y" rows={3} required value={description} onChange={(e) => setDescription(e.target.value)} /></FormField>
+          <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !title.trim()) || apiInvalidFields.includes("title")} id="title" label="Título" required><input id="title" className="form-input" required value={title} onChange={(e) => setTitle(e.target.value)} /></FormField>
+          <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !description.trim()) || apiInvalidFields.includes("description")} id="description" label="Descripción" required><textarea id="description" className="form-input resize-y" rows={3} required value={description} onChange={(e) => setDescription(e.target.value)} /></FormField>
         </section>
-        <section aria-labelledby="relations-heading" className="border-t border-slate-200 pt-4">
+        <section aria-labelledby="relations-heading">
           <h2 id="relations-heading" className="mb-3 text-sm font-semibold text-slate-900">Cliente y clasificación</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField id="customer" label="Cliente" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="customer" label="Cliente" required disabled={submitting || catalogLoading || Boolean(catalogError)} value={customerId} onChange={changeCustomer}
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !customerId.trim()) || apiInvalidFields.includes("customer_id")} id="customer" label="Cliente" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="customer" label="Cliente" required disabled={submitting || catalogLoading || Boolean(catalogError)} value={customerId} onChange={changeCustomer}
               options={(catalogs?.customers ?? []).map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}`, disabled: !item.active }))}
               placeholder="Selecciona un cliente" emptyMessage="No se encontraron clientes." noMatchMessage="No se encontraron clientes." /></div><button type="button" className="button-secondary shrink-0" aria-label="Nuevo cliente" title="Nuevo cliente" disabled={submitting || catalogLoading || Boolean(catalogError)} onClick={() => setQuickCreate('customer')}>+</button></div></FormField>
-            <FormField id="circuit" label="Circuito" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="circuit" label="Circuito" required disabled={submitting || !customerId || circuitLoading || Boolean(circuitError)} value={circuitId} onChange={setCircuitId}
+            <FormField describedBy={[submitError ? "ticket-submit-error" : "", circuitError ? "ticket-circuit-error" : ""].filter(Boolean).join(" ") || undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !circuitId.trim()) || apiInvalidFields.includes("circuit_id")} id="circuit" label="Circuito" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="circuit" label="Circuito" required disabled={submitting || !customerId || circuitLoading || Boolean(circuitError)} value={circuitId} onChange={setCircuitId}
               options={circuits.map((item) => ({ value: String(item.id), label: `${item.circuit_code} — ${item.description}`, disabled: !item.active }))}
               placeholder={!customerId ? 'Selecciona primero un cliente.' : circuitLoading ? 'Cargando circuitos...' : 'Selecciona un circuito'} emptyMessage="Este cliente no tiene circuitos activos." noMatchMessage="No se encontraron circuitos." /></div><button type="button" className="button-secondary shrink-0" aria-label="Nuevo circuito" title="Nuevo circuito" disabled={submitting || !selectedCustomer || catalogLoading || Boolean(catalogError) || circuitLoading || Boolean(circuitError)} onClick={() => setQuickCreate('circuit')}>+</button></div>
               {customerId && !circuitLoading && !circuitError && !circuits.some((item) => item.active) && !circuitId && <p className="mt-2 text-xs text-slate-600">Este cliente no tiene circuitos activos.</p>}
-              {circuitError && <div role="alert" className="mt-2 text-sm text-red-700"><p>Error al cargar circuitos: {circuitError}</p><button type="button" className="button-secondary mt-2" onClick={() => setCircuitRetry(circuitRetry + 1)}>Reintentar circuitos</button></div>}
+              {circuitError && <RequestState id="ticket-circuit-error" compact error={`Error al cargar circuitos: ${circuitError}`} errorTitle="" retryText="Reintentar circuitos" onRetry={() => setCircuitRetry(circuitRetry + 1)} className="mt-2" />}
             </FormField>
             <div className="text-sm text-muted"><span className="block text-xs font-semibold">Nodo de distribución</span>{circuits.find((item) => String(item.id) === circuitId)?.node?.name ?? 'Sin asignar'}</div>
-            <FormField id="responsible" label="Responsable"><SearchableSelect id="responsible" label="Responsable" value={responsibleId} onChange={setResponsibleId} disabled={catalogLoading || Boolean(catalogError)} options={(catalogs?.responsibles ?? []).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="No se encontraron responsables." /></FormField>
-            <FormField id="sector" label="Sector" required><select id="sector" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={sectorId} onChange={(e) => setSectorId(e.target.value)}><option value="">Selecciona un sector</option>{catalogs?.sectors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
-            <FormField id="department" label="Departamento" required><select id="department" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="">Selecciona un departamento</option>{catalogs?.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
-            <FormField id="incident-type" label="Tipo de incidencia" required><select id="incident-type" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={incidentTypeId} onChange={(e) => setIncidentTypeId(e.target.value)}><option value="">Selecciona un tipo de incidencia</option>{catalogs?.incidentTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
-            <FormField id="status" label="Estado" required><select id="status" className="form-input" value={status} onChange={(e) => setStatus(e.target.value === 'CLOSED' ? 'CLOSED' : 'OPEN')}><option value="OPEN">Abierto</option><option value="CLOSED">Cerrado</option></select></FormField>
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={apiInvalidFields.includes("responsible_id")} id="responsible" label="Responsable"><SearchableSelect id="responsible" label="Responsable" value={responsibleId} onChange={setResponsibleId} disabled={catalogLoading || Boolean(catalogError)} options={(catalogs?.responsibles ?? []).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="No se encontraron responsables." /></FormField>
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !sectorId.trim()) || apiInvalidFields.includes("sector_id")} id="sector" label="Sector" required><select id="sector" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={sectorId} onChange={(e) => setSectorId(e.target.value)}><option value="">Selecciona un sector</option>{catalogs?.sectors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !departmentId.trim()) || apiInvalidFields.includes("department_id")} id="department" label="Departamento" required><select id="department" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="">Selecciona un departamento</option>{catalogs?.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !incidentTypeId.trim()) || apiInvalidFields.includes("incident_type_id")} id="incident-type" label="Tipo de incidencia" required><select id="incident-type" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={incidentTypeId} onChange={(e) => setIncidentTypeId(e.target.value)}><option value="">Selecciona un tipo de incidencia</option>{catalogs?.incidentTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={apiInvalidFields.includes("status")} id="status" label="Estado" required><select id="status" className="form-input" value={status} onChange={(e) => setStatus(e.target.value === 'CLOSED' ? 'CLOSED' : 'OPEN')}><option value="OPEN">Abierto</option><option value="CLOSED">Cerrado</option></select></FormField>
           </div>
         </section>
-        <section aria-labelledby="dates-heading" className="border-t border-slate-200 pt-4">
+        <section aria-labelledby="dates-heading">
           {ticket && <button type="button" className="button-secondary mb-4" onClick={() => { setEndAt(localDateTimeValue()); setStatus('CLOSED') }}>Finalizar ahora</button>}
           <h2 id="dates-heading" className="mb-1 text-sm font-semibold text-slate-900">Tiempos operativos</h2>
           <p className="mb-3 text-xs text-slate-500">Fechas y horas de tu navegador. Puedes registrar una incidencia anterior; “Ahora” es solo un atajo.</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField id="start-at" label="Inicio" required><div className="flex items-center gap-2"><input id="start-at" type="datetime-local" step="60" className="form-input min-w-0" required value={startAt} onChange={(e) => setStartAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Inicio" onClick={() => setStartAt(localDateTimeValue())}>Ahora</button></div></FormField>
-            <FormField id="end-at" label="Fin"><div className="flex items-center gap-2"><input id="end-at" type="datetime-local" step="60" className="form-input min-w-0" value={endAt} onChange={(e) => setEndAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Fin" onClick={() => setEndAt(localDateTimeValue())}>Ahora</button></div></FormField>
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !startAt.trim()) || apiInvalidFields.includes("start_at")} id="start-at" label="Inicio" required><div className="flex items-center gap-2"><input id="start-at" type="datetime-local" step="60" className="form-input min-w-0" required value={startAt} onChange={(e) => setStartAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Inicio" onClick={() => setStartAt(localDateTimeValue())}>Ahora</button></div></FormField>
+            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={submitError === "Fin debe ser igual o posterior a Inicio." || apiInvalidFields.includes("end_at")} id="end-at" label="Fin"><div className="flex items-center gap-2"><input id="end-at" type="datetime-local" step="60" className="form-input min-w-0" value={endAt} onChange={(e) => setEndAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Fin" onClick={() => setEndAt(localDateTimeValue())}>Ahora</button></div></FormField>
           </div>
         </section>
       </fieldset>
-      {submitError && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-800">{submitError}</p>}
+      {submitError && <FeedbackMessage id="ticket-submit-error" variant="error" className="mt-5">{submitError}</FeedbackMessage>}
       <div className="mt-5 flex justify-end gap-3 border-t border-slate-200 pt-4">
         <button type="button" className="button-secondary" disabled={submitting} onClick={() => navigate(ticket ? `/tickets/${ticket.id}` : '/tickets')}>Cancelar</button>
         <button type="submit" className="button-primary" disabled={submitting || catalogLoading || Boolean(catalogError) || circuitLoading || Boolean(circuitError)}>{submitting ? (ticket ? 'Guardando...' : 'Creando...') : (ticket ? 'Guardar cambios' : 'Guardar')}</button>

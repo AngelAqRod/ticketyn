@@ -100,3 +100,13 @@ describe('SearchableSelect', () => {
     expect(screen.getByTestId('selected')).toBeEmptyDOMElement()
   })
 })
+
+it('usa iconos decorativos conservando labels y tipo de las acciones', () => {
+  render(<Example initial="1" />)
+  for (const name of ['Limpiar Cliente', 'Abrir Cliente']) {
+    const button = screen.getByRole('button', { name })
+    expect(button).toHaveAttribute('type', 'button')
+    expect(button.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    expect(button).toHaveClass('combobox-action')
+  }
+})

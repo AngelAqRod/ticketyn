@@ -1,3 +1,4 @@
+import { RequestState } from './RequestState'
 import { useEffect, useState } from 'react'
 import { listCircuits, listCustomers, listDepartments, listIncidentTypes, listSectors, listNodes, listResponsibles } from '../api'
 import type { Circuit, Customer, NamedCatalog } from '../types/catalog'
@@ -5,6 +6,7 @@ import { SearchableSelect } from './SearchableSelect'
 import { FormField } from './FormField'
 import { FilterChips } from './FilterChips'
 import { SlidersHorizontal } from 'lucide-react'
+import { reportPeriod } from '../lib/reportPeriod'
 
 interface Props { params: URLSearchParams; change: (values: Record<string, string>) => void; clear: () => void }
 interface Catalogs { customers: Customer[]; sectors: NamedCatalog[]; departments: NamedCatalog[]; types: NamedCatalog[]; nodes: NamedCatalog[]; responsibles: NamedCatalog[] }
@@ -16,6 +18,22 @@ export function TicketFilters({ params, change, clear }: Props) {
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [circuitError, setCircuitError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
+  const [quickPeriod, setQuickPeriod] = useState({ value: 'all', from: '', to: '' })
+  const from = params.get('from') ?? ''
+  const to = params.get('to') ?? ''
+  const selectedPeriod = quickPeriod.from === from && quickPeriod.to === to
+    ? quickPeriod.value : from || to ? 'custom' : 'all'
+  function choosePeriod(value: string) {
+    const range = value === 'all' ? { from: '', to: '' }
+      : value === 'custom' ? { from, to }
+      : reportPeriod(new URLSearchParams({ period: value }))
+    setQuickPeriod({ value, from: range.from, to: range.to })
+    if (value !== 'custom') change({ from: range.from, to: range.to })
+  }
+  function changeDate(key: 'from' | 'to', value: string) {
+    setQuickPeriod({ value: 'custom', from: key === 'from' ? value : from, to: key === 'to' ? value : to })
+    change({ [key]: value })
+  }
   const customerId = params.get('customer_id') ?? ''
   const circuitId = params.get('circuit_id') ?? ''
   useEffect(() => {
@@ -45,7 +63,10 @@ export function TicketFilters({ params, change, clear }: Props) {
   const named = [['sector_id', 'Sector', catalogs?.sectors], ['department_id', 'Departamento', catalogs?.departments], ['incident_type_id', 'Tipo de incidencia', catalogs?.types]] as const
   const assignments = [['node_id', 'Nodo', catalogs?.nodes], ['responsible_id', 'Responsable', catalogs?.responsibles]] as const
   return <section aria-label="Filtros de tickets" className="filter-toolbar">
-    <p className="toolbar-heading"><SlidersHorizontal size={15} aria-hidden="true" />Filtros de tickets</p>
+    <p className="toolbar-heading gap-3"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros de tickets</p>
+    <div className="segmented-control mb-3 max-w-full" role="group" aria-label="Período de tickets">
+      {['all', '1', '7', '15', '30', 'custom'].map((value) => <button key={value} type="button" className="segment-button" aria-pressed={selectedPeriod === value} onClick={() => choosePeriod(value)}>{value === 'all' ? 'Todos' : value === 'custom' ? 'Personalizado' : `${value}D`}</button>)}
+    </div>
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
       <FormField id="filter-search" label="Buscar tickets"><input id="filter-search" className="form-input" type="search" placeholder="Referencia, número, título o descripción" value={params.get('search') ?? ''} onChange={(event) => change({ search: event.target.value })} /></FormField>
       <FormField id="filter-status" label="Estado"><select id="filter-status" className="form-input" value={params.get('status') ?? ''} onChange={(event) => change({ status: event.target.value })}><option value="">Todos</option><option value="OPEN">Abierto</option><option value="CLOSED">Cerrado</option></select></FormField>
@@ -53,9 +74,9 @@ export function TicketFilters({ params, change, clear }: Props) {
       <FormField id="filter-circuit" label="Circuito"><SearchableSelect id="filter-circuit" label="Circuito" value={circuitId} options={circuits.map((item) => ({ value: String(item.id), label: `${item.circuit_code} — ${item.description}` }))} onChange={chooseCircuit} disabled={circuitLoading || Boolean(circuitError)} placeholder={circuitLoading ? 'Cargando circuitos...' : 'Todos los circuitos'} emptyMessage="No hay circuitos." noMatchMessage="No se encontraron circuitos." /></FormField>
       {named.map(([key, label, items]) => <FormField key={key} id={`filter-${key}`} label={label}><select id={`filter-${key}`} className="form-input" disabled={loading || Boolean(catalogError)} value={params.get(key) ?? ''} onChange={(event) => change({ [key]: event.target.value })}><option value="">Todos</option>{items?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>)}
       {assignments.map(([key, label, items]) => <FormField key={key} id={`filter-${key}`} label={label}><SearchableSelect id={`filter-${key}`} label={label} value={params.get(key) ?? ''} options={(items ?? []).map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ [key]: value })} disabled={loading || Boolean(catalogError)} placeholder="Todos" emptyMessage="No hay registros." noMatchMessage="No hay coincidencias." /></FormField>)}
-      <FormField id="filter-from" label="Desde"><input id="filter-from" type="date" className="form-input" value={params.get('from') ?? ''} onChange={(event) => change({ from: event.target.value })} /></FormField>
-      <FormField id="filter-to" label="Hasta"><input id="filter-to" type="date" className="form-input" value={params.get('to') ?? ''} onChange={(event) => change({ to: event.target.value })} /></FormField>
-      <div className="flex items-end"><button type="button" className="button-secondary w-full" onClick={clear}>Limpiar filtros</button></div>
+      <FormField id="filter-from" label="Desde"><input id="filter-from" type="date" className="form-input" value={from} onChange={(event) => changeDate('from', event.target.value)} /></FormField>
+      <FormField id="filter-to" label="Hasta"><input id="filter-to" type="date" className="form-input" value={to} onChange={(event) => changeDate('to', event.target.value)} /></FormField>
+      <div className="flex items-end"><button type="button" className="button-secondary w-full" onClick={() => { setQuickPeriod({ value: 'all', from: '', to: '' }); clear() }}>Limpiar filtros</button></div>
     </div>
     <FilterChips items={[
       ...(params.get('search') ? [{ label: 'Búsqueda', value: params.get('search')! }] : []),
@@ -65,7 +86,7 @@ export function TicketFilters({ params, change, clear }: Props) {
       ...[...named, ...assignments].flatMap(([key, label, items]) => params.get(key) ? [{ label, value: items?.find((item) => String(item.id) === params.get(key))?.name ?? `#${params.get(key)}` }] : []),
       ...(['from', 'to'] as const).flatMap((key) => params.get(key) ? [{ label: key === 'from' ? 'Desde' : 'Hasta', value: params.get(key)! }] : []),
     ]} />
-    {(catalogError || circuitError) && <div role="alert" className="mt-2 text-sm text-red-800">{catalogError || circuitError}<button type="button" className="ml-2 underline" onClick={() => setRetry(retry + 1)}>Reintentar filtros</button></div>}
+    {(catalogError || circuitError) && <RequestState compact error={catalogError || circuitError} errorTitle="" retryText="Reintentar filtros" onRetry={() => setRetry(retry + 1)} className="mt-2" />}
     <p className="mt-2 text-[11px] text-slate-500">Rango sobre Inicio, con días completos en tu zona horaria. Incluye catálogos históricos inactivos.</p>
   </section>
 }

@@ -195,12 +195,31 @@ describe('creación contextual de catálogos en TicketForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' })); const modal = fillQuick('cliente')
     fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
     expect(await modal.findByRole('alert')).toHaveTextContent(String(expected))
+    expect(modal.getByRole('form')).toHaveAttribute('aria-describedby', modal.getByRole('alert').id)
+    if (status === 422) {
+      expect(modal.getByLabelText(/^Código de cliente/)).toHaveAttribute('aria-invalid', 'true')
+      expect(modal.getByLabelText(/^Código de cliente/)).toHaveAccessibleDescription(String(expected))
+    }
     expect(screen.getByRole('dialog')).toBeInTheDocument(); expect(screen.queryByText('[object Object]')).not.toBeInTheDocument()
   })
 })
 
 
 describe('Nodo y Responsable en el flujo contextual', () => {
+  it('asocia errores del Nodo anidado sin marcar inválido el Circuito', async () => {
+    const mock = mockApi(); open(); await ready(); await selectExisting()
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
+    const parent = within(screen.getByRole('dialog', { name: 'Nuevo circuito' }))
+    fireEvent.click(parent.getByRole('button', { name: 'Nuevo nodo' }))
+    const child = within(screen.getByRole('dialog', { name: 'Nuevo nodo' }))
+    fireEvent.click(child.getByRole('button', { name: 'Guardar' }))
+    const error = child.getByRole('alert')
+    expect(child.getByLabelText(/^Nombre/)).toHaveAttribute('aria-invalid', 'true')
+    expect(child.getByLabelText(/^Nombre/)).toHaveAttribute('aria-describedby', error.id)
+    expect(parent.getByLabelText(/^Código de circuito/)).not.toHaveAttribute('aria-invalid')
+    expect(parent.getByRole('form')).not.toHaveAttribute('aria-describedby')
+    expect(writes(mock)).toHaveLength(0)
+  })
   it.each([false, true])('crea Nodo y Circuito anidados preservando todo el ticket (edición=%s)', async (edit) => {
     const node = { ...named, id: 20, name: 'Nodo nuevo' }
     const mock = mockApi(async (path, init) => {
