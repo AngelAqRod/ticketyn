@@ -790,6 +790,17 @@ La unidad debe conservar las directivas del template de ese commit, sin
 `drop-ins`, y Nginx debe usar sus directivas; se permite cambiar el puerto HTTP
 y omitir la escucha IPv6. No se aceptan otras personalizaciones automáticamente.
 `/var/backups/ticketyn` debe existir con propietario root y permisos 0700.
+Nginx debe tener exactamente uno de estos pares completos: `sites-available/ticketyn`
+con `sites-enabled/ticketyn` (administrado), o `sites-available/ticketyn.conf`
+con `sites-enabled/ticketyn.conf` (legacy), bajo `/etc/nginx`. El enlace enabled
+debe apuntar directamente al site seleccionado. Se rechazan pares incompletos,
+la presencia de ambos layouts y una configuración efectiva `nginx -T` distinta.
+La adopción no renombra ni repara archivos. La evidencia `ticketyn-adoption-v2`
+registra layout y ambas rutas; update, recovery, abort y restore/finalize respetan
+esa selección. Los recibos anteriores v1 conservan el contrato sin `.conf`.
+Las instalaciones nuevas con `install.sh` siguen usando el layout sin `.conf`.
+El formato de backups no cambia: no depende de los nombres del site Nginx.
+
 Una configuración distinta debe revisarse, no eludirse mediante metadatos manuales.
 No deben modificarse Git, Nginx, systemd ni la configuración concurrentemente.
 

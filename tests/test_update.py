@@ -88,7 +88,7 @@ def updater(tmp_path):
     for p in (base/'releases',config,backs): p.mkdir(parents=True,mode=0o700)
     old=source(base/'releases/0.1.0','0.1.0'); current=base/'current'; current.symlink_to(old)
     env=config/'ticketyn.env';env.write_text('DATABASE_URL=postgresql+psycopg://ticketyn:synthetic-secret@127.0.0.1:5432/ticketyn\n');env.chmod(0o600)
-    obj=u.Updater('v0.2.0',base,config,backs,tmp_path/'lock')
+    obj=u.Updater('v0.2.0',base,config,backs,tmp_path/'lock',nginx_root=config/'nginx')
     obj.old=old;obj.source_version='0.1.0';obj.target=base/'releases/0.2.0';obj.revision='old';obj.env_hash=u.digest(env);obj.db_oid='123';obj.cluster='456';obj.port='8080'
     obj.work=tmp_path/'work';obj.work.mkdir(mode=0o700)
     obj.run=lambda args,**kwargs:''
@@ -385,8 +385,9 @@ def configured_preflight(updater):
     for name,value in [('format','1'),('status','complete')]:
         p=installed/name;p.write_text(value);p.chmod(0o600)
     updater.unit=updater.config/'unit';updater.unit.write_text((ROOT/'deploy/systemd/ticketyn.service').read_text());updater.unit.chmod(0o600)
-    updater.site=updater.config/'site';updater.site.write_text('server {\n listen 8080;\n root /opt/ticketyn/current/frontend/dist;\n}\n');updater.site.chmod(0o600)
-    updater.link=updater.config/'enabled';updater.link.symlink_to(updater.site)
+    updater.site.parent.mkdir(parents=True, exist_ok=True); updater.link.parent.mkdir(parents=True, exist_ok=True)
+    updater.site.write_text('server {\n listen 8080;\n root /opt/ticketyn/current/frontend/dist;\n}\n');updater.site.chmod(0o600)
+    updater.link.symlink_to(updater.site)
     updater.db_revision=lambda:'old';updater.head=lambda _:'old';updater.healthy=lambda _:None
     def pg(sql,database='postgres'):
         if 'pg_get_userbyid' in sql:return 'ticketyn:UTF8'

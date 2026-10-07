@@ -46,6 +46,59 @@ def read_regular(path):
         return data
 
 
+NGINX_LAYOUTS = {'managed': 'ticketyn', 'legacy-conf': 'ticketyn.conf'}
+
+
+def nginx_paths(root, layout):
+    if layout not in NGINX_LAYOUTS:
+        raise ValueError('Layout Nginx desconocido.')
+    root = Path(root)
+    return root/'sites-available'/NGINX_LAYOUTS[layout], root/'sites-enabled'/NGINX_LAYOUTS[layout]
+
+
+def nginx_layout(root='/etc/nginx', expected=None):
+    """Exactly one complete pair, never repair/rename or accept dangling aliases."""
+    root = Path(root)
+    if not root.is_absolute(): raise ValueError('Raíz Nginx no absoluta.')
+    for directory in (root, root/'sites-available', root/'sites-enabled'):
+        secure_ancestors(directory)
+        info = directory.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or (info.st_uid, info.st_gid) != (os.geteuid(), os.getegid())
+                or info.st_mode & 0o022):
+            raise ValueError('Directorio Nginx inseguro: '+str(directory))
+    present = []
+    for layout in NGINX_LAYOUTS:
+        site, link = nginx_paths(root, layout)
+        exists = [path.exists() or path.is_symlink() for path in (site, link)]
+        if any(exists): present.append((layout, site, link, all(exists)))
+    if len(present) != 1 or not present[0][3]:
+        raise ValueError('Layout Nginx ausente, incompleto o ambiguo; debe existir exactamente un par Ticketyn.')
+    layout, site, link, _ = present[0]
+    if expected is not None and layout != expected:
+        raise ValueError('Layout Nginx distinto de la evidencia administrada.')
+    info = site.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+            or (info.st_uid, info.st_gid) != (os.geteuid(), os.getegid()) or info.st_mode & 0o022):
+        raise ValueError('Site Nginx inseguro: '+str(site))
+    info = link.lstat()
+    if (not stat.S_ISLNK(info.st_mode) or (info.st_uid, info.st_gid) != (os.geteuid(), os.getegid())):
+        raise ValueError('Enlace Nginx inseguro: '+str(link))
+    target = Path(os.readlink(link))
+    target = target if target.is_absolute() else link.parent/target
+    if Path(os.path.normpath(target)) != site or link.resolve(strict=True) != site:
+        raise ValueError('Enlace enabled no corresponde directamente al site seleccionado.')
+    return {'layout': layout, 'site': site, 'link': link}
+
+
+def nginx_loaded(text, root, selection):
+    """Effective on-disk nginx -T dump, not a claim about worker memory."""
+    markers = re.findall(r'^# configuration file (.+):$', text, re.M)
+    selected = {str(selection['site']), str(selection['link'])}
+    alternatives = {str(path) for layout in NGINX_LAYOUTS for path in nginx_paths(root, layout)}-selected
+    if sum(markers.count(path) for path in selected) != 1 or any(path in markers for path in alternatives):
+        raise ValueError('Nginx no carga inequívocamente el layout Ticketyn seleccionado.')
+
+
 def semver(value):
     match = re.fullmatch(PATTERN, value)
     if not match:

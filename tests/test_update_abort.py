@@ -14,8 +14,8 @@ def aborter(updater):
     updater.record('preparing', result='interrupted_or_failed', diagnostic='Fallo descargando candidata',
                    unit_hash=u.digest(updater.unit), site_hash=u.digest(updater.site),
                    source_snapshot=u.release_snapshot(updater.old))
-    obj = u.AbortUpdater(base=updater.base, config=updater.config, backups=updater.backups, lock=updater.lock_path)
-    obj.unit, obj.site, obj.link = updater.unit, updater.site, updater.link
+    obj = u.AbortUpdater(base=updater.base, config=updater.config, backups=updater.backups, lock=updater.lock_path, nginx_root=updater.nginx_root)
+    obj.unit = updater.unit
     obj.pg, obj.db_revision, obj.head = updater.pg, updater.db_revision, updater.head
     def forbidden(*args, **kwargs):
         pytest.fail('Abort invoked mutating/service/backup/activation operation')
@@ -134,8 +134,8 @@ def test_interruption_after_atomic_archive_and_second_abort(aborter, updater, mo
 
 def test_new_update_different_tag_after_abort(aborter, updater):
     aborter.execute()
-    next_update = u.Updater('v0.3.0', updater.base, updater.config, updater.backups, updater.lock_path)
-    next_update.unit, next_update.site, next_update.link = updater.unit, updater.site, updater.link
+    next_update = u.Updater('v0.3.0', updater.base, updater.config, updater.backups, updater.lock_path, nginx_root=updater.nginx_root)
+    next_update.unit = updater.unit
     next_update.pg, next_update.db_revision, next_update.head, next_update.run, next_update.healthy = updater.pg, updater.db_revision, updater.head, updater.run, updater.healthy
     next_update.preflight()
     assert next_update.data is None and next_update.target == updater.releases/'0.3.0'

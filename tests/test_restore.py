@@ -76,9 +76,12 @@ def environment(installation):
     i['archive'] = package(i)
     i['unit'] = i['root']/'ticketyn.service'
     i['unit'].write_text((ROOT/'deploy/systemd/ticketyn.service').read_text())
-    i['nginx'] = i['root']/'nginx-ticketyn'
+    i['nginx_root'] = i['root']/'etc/nginx'
+    i['nginx'] = i['nginx_root']/'sites-available/ticketyn'
+    i['nginx'].parent.mkdir(parents=True)
+    (i['nginx_root']/'sites-enabled').mkdir()
     i['nginx'].write_text('server {\n listen 8080;\n}\n')
-    i['link'] = i['root']/'enabled-ticketyn'
+    i['link'] = i['nginx_root']/'sites-enabled/ticketyn'
     i['link'].symlink_to(i['nginx'])
     binary = i['release']/'.venv/bin/python'
     binary.parent.mkdir(parents=True)
@@ -120,7 +123,7 @@ def configure(i):
 trap - EXIT
 WORK={shlex.quote(str(i['work']))}; WORK_ID=$(backup_identity "$WORK"); CONTENT=$WORK/components
 SUPPORT={shlex.quote(str(SUPPORT))}; BACKUP_SCRIPT={shlex.quote(str(i['root']/'backup-helper'))}
-UNIT_FILE={shlex.quote(str(i['unit']))}; NGINX_SITE={shlex.quote(str(i['nginx']))}; NGINX_LINK={shlex.quote(str(i['link']))}
+UNIT_FILE={shlex.quote(str(i['unit']))}; NGINX_ROOT={shlex.quote(str(i['nginx_root']))}
 STATE={shlex.quote(str(i['config']/'restore-state'))}; SAFETY_DIR={shlex.quote(str(i['backups']))}
 ARCHIVE={shlex.quote(str(i['archive']))}; REPLACE=0
 MUTATING=0; CUTOVER_ATTEMPTED=0; BLOCK_ATTEMPTED=0; WAS_ACTIVE=0; PHASE=validacion; SAFETY_BACKUP=''; STAGE_OID=''
@@ -651,3 +654,19 @@ restore_run
 ''')
     assert result.returncode != 0 and '/health' in result.stderr
     assert i['active'].read_text().strip() == '0'
+
+
+@pytest.mark.parametrize('layout', ['managed', 'legacy-conf'])
+def test_restore_uses_real_nginx_layout_without_renaming(environment, layout):
+    i = environment
+    if layout == 'legacy-conf':
+        site = i['nginx'].with_name('ticketyn.conf')
+        link = i['link'].with_name('ticketyn.conf')
+        i['link'].unlink(); i['nginx'].rename(site); link.symlink_to(site)
+    else:
+        site, link = i['nginx'], i['link']
+    i['db'].write_text('{}')
+    result = shell(configure(i) + 'restore_validate\nrestore_confirm\nrestore_begin\nrestore_run')
+    assert result.returncode == 0, result.stderr
+    assert site.exists() and link.readlink() == site
+    assert SECRET not in result.stdout + result.stderr

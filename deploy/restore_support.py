@@ -189,6 +189,28 @@ def http_valid(path, kind):
         fail('Respuesta HTTP inesperada.')
 
 
+def nginx_layout(root, config_dir, base):
+    # Reuse the updater's receipt validation and shared filesystem resolver.
+    # No DB/service calls and no dependency on current or the caller's CWD.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('nginx_update_support', Path(__file__).with_name('update_support.py'))
+    u = importlib.util.module_from_spec(spec); spec.loader.exec_module(u)
+    installed = Path(config_dir)/'install-state'
+    adoption = None
+    if installed.exists() or installed.is_symlink():
+        try:
+            u.secure(installed, directory=True, private=True)
+            for name, value in [('format', '1'), ('status', 'complete')]:
+                u.secure(installed/name, private=True)
+                if (installed/name).read_text().strip() != value:
+                    fail('Instalación administrada no completada.')
+            adoption = u.validate_adoption(installed, Path(base), Path(root))
+        except u.UpdateError as error:
+            fail(str(error))
+    selection = u.ri.nginx_layout(root, expected=adoption.get('nginx_layout', 'managed') if adoption else None)
+    print(selection['layout']); print(selection['site']); print(selection['link'])
+
+
 def port(path):
     text = Path(path).read_text()
     ports = []
@@ -448,7 +470,7 @@ def finalize_archive(state, snapshot_file, history):
 if __name__ == '__main__':
     try:
         operations = {'validate': validate, 'compatibility': compatibility, 'head': head,
-                      'password': password, 'http-valid': http_valid, 'port': port,
+                      'password': password, 'http-valid': http_valid, 'port': port, 'nginx-layout': nginx_layout,
                       'completion': completion, 'finalize-snapshot': finalize_snapshot,
                       'finalize-intent': finalize_intent, 'finalize-archive': finalize_archive,
                       'finalize-history-validate': finalize_history_validate}

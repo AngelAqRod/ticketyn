@@ -18,7 +18,7 @@ def lab(tmp_path, monkeypatch):
     (old/'.git').mkdir()
     cfg = tmp_path/'etc'; cfg.mkdir(mode=0o700)
     backups = tmp_path/'backups'; backups.mkdir(mode=0o700)
-    obj = a.Adopter(base=base, config=cfg, backups=backups, lock=tmp_path/'lock', command=tmp_path/'bin/ticketyn-update')
+    obj = a.Adopter(base=base, config=cfg, backups=backups, lock=tmp_path/'lock', command=tmp_path/'bin/ticketyn-update', nginx_root=cfg/'nginx')
     obj.command.parent.mkdir()
     (base/'current').symlink_to(old)
     # Literal baseline blobs, not arbitrary fixtures accepted by the validator.
@@ -43,8 +43,9 @@ def lab(tmp_path, monkeypatch):
         metadata = site_packages/(name.replace('-', '_')+'-'+version+'.dist-info')
         metadata.mkdir(); (metadata/'METADATA').write_text('Metadata-Version: 2.1\nName: '+name+'\nVersion: '+version+'\n')
     obj.unit = tmp_path/'ticketyn.service'; obj.unit.write_bytes(blobs['deploy/systemd/ticketyn.service'])
-    obj.site = tmp_path/'ticketyn.conf'; obj.site.write_bytes(blobs['deploy/nginx/ticketyn.conf'])
-    obj.link = tmp_path/'enabled'; obj.link.symlink_to(obj.site)
+    obj.site.parent.mkdir(parents=True); obj.link.parent.mkdir(parents=True)
+    obj.site.write_bytes(blobs['deploy/nginx/ticketyn.conf'])
+    obj.link.symlink_to(obj.site)
     obj.env.write_text('DATABASE_URL=postgresql+psycopg://ticketyn:TEST_SECRET@127.0.0.1:5432/ticketyn\n'); obj.env.chmod(0o600)
     def git(*args, binary=False):
         if args[0] == 'config': return b''
@@ -115,9 +116,9 @@ def test_success_evidence_and_updater_contract(lab):
     with pytest.raises(u.UpdateError, match='install-state'): lab.execute()
     assert lab.current.readlink() == before
     # The real normal updater accepts format, deployment and identities.
-    updater = u.Updater('v0.1.1', base=lab.base, config=lab.config, backups=lab.config/'backups')
+    updater = u.Updater('v0.1.1', base=lab.base, config=lab.config, backups=lab.config/'backups', nginx_root=lab.nginx_root)
     updater.backups.mkdir(mode=0o700)
-    updater.unit, updater.site, updater.link = lab.unit, lab.site, lab.link
+    updater.unit = lab.unit
     updater.run = lab.run; updater.head = lab.head; updater.db_revision = lab.db_revision
     updater.pg = lab.pg; updater.healthy = lab.healthy
     updater.preflight()
@@ -444,7 +445,7 @@ def test_updater_rejects_adoption_tampering(lab, change):
         data = u.read_json(path); data['commit'] = '0'*40; u.write_json(path,data)
         (lab.installed/'adoption.sha256').write_text(u.digest(path))
     with pytest.raises((u.UpdateError, ValueError, OSError)):
-        updater = u.Updater('v0.1.1',base=lab.base,config=lab.config,backups=lab.backups)
+        updater = u.Updater('v0.1.1',base=lab.base,config=lab.config,backups=lab.backups,nginx_root=lab.nginx_root)
         updater.preflight()
 
 
@@ -457,9 +458,9 @@ def test_adoption_receipt_survives_legitimate_new_generation(lab):
     (new/'pyproject.toml').write_text('[project]\nversion="0.2.0"\n')
     lab.current.unlink(); lab.current.symlink_to(new)
     lab.env.write_text('DATABASE_URL=postgresql+psycopg://ticketyn:RESTORED@127.0.0.1:5432/ticketyn\n')
-    u.validate_adoption(lab.installed,lab.base)
-    updater = u.Updater('v0.2.1',base=lab.base,config=lab.config,backups=lab.backups)
-    updater.unit, updater.site, updater.link = lab.unit, lab.site, lab.link
+    u.validate_adoption(lab.installed,lab.base,lab.nginx_root)
+    updater = u.Updater('v0.2.1',base=lab.base,config=lab.config,backups=lab.backups,nginx_root=lab.nginx_root)
+    updater.unit = lab.unit
     updater.run, updater.head, updater.db_revision = lab.run, lab.head, lab.db_revision
     original_pg = lab.pg
     updater.pg = lambda sql,database='postgres': '99999' if 'SELECT oid' in sql else original_pg(sql,database)
@@ -592,3 +593,96 @@ def test_manipulated_index_rejected_before_status(lab, monkeypatch):
     monkeypatch.setattr(lab,'git',git)
     with pytest.raises(u.UpdateError,match='Índice'): lab.verify_git()
     assert 'status' not in calls
+
+
+def move_nginx_pair(lab, layout):
+    """Move real directory entries; never override the resolver's site/link."""
+    site, link = u.ri.nginx_paths(lab.nginx_root, layout)
+    if site != lab.site:
+        lab.link.unlink()
+        lab.site.rename(site)
+        link.symlink_to(site)
+    return site, link
+
+
+@pytest.mark.parametrize('layout', ['managed', 'legacy-conf'])
+def test_real_nginx_layout_adopted_and_accepted_by_admin_tools(lab, layout):
+    site, link = move_nginx_pair(lab, layout)
+    lab.execute()
+    receipt = u.validate_adoption(lab.installed, lab.base, lab.nginx_root)
+    assert receipt['format'] == 'ticketyn-adoption-v2'
+    assert (receipt['nginx_layout'], receipt['nginx_site'], receipt['nginx_link']) == (layout, str(site), str(link))
+    updater = u.Updater('v0.1.1', base=lab.base, config=lab.config, backups=lab.backups, nginx_root=lab.nginx_root)
+    updater.unit = lab.unit
+    updater.run, updater.head, updater.db_revision = lab.run, lab.head, lab.db_revision
+    updater.pg, updater.healthy = lab.pg, lab.healthy
+    updater.preflight()
+    assert (updater.site, updater.link) == (site, link)
+    # Restore/finalize use this exact shared CLI; no configuration repair.
+    result = subprocess.run(['python3', '-I', str(ROOT/'deploy/restore_support.py'), 'nginx-layout',
+                             str(lab.nginx_root), str(lab.config), str(lab.base)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [layout, str(site), str(link)]
+    assert link.readlink() == site
+    # Recovery uses the same preflight selection before checking its durable state.
+    updater.recover = True
+    updater.completed_recovery = lambda: None
+    updater.preflight()
+    assert updater.site == site
+    updater.recover = False
+    updater.begin()
+    updater.record('preparing', result='interrupted_or_failed', diagnostic='isolated test')
+    abort = u.AbortUpdater(base=lab.base, config=lab.config, backups=lab.backups, lock=lab.config/'abort.lock', nginx_root=lab.nginx_root)
+    abort.unit = lab.unit
+    abort.pg, abort.head, abort.db_revision = lab.pg, lab.head, lab.db_revision
+    abort.execute()
+    assert abort.site == site and not updater.state.exists()
+    assert link.readlink() == site
+
+
+@pytest.mark.parametrize('layout', ['managed', 'legacy-conf'])
+@pytest.mark.parametrize('problem', ['both', 'partial-other', 'wrong-link', 'wrong-loaded', 'other-loaded'])
+def test_real_nginx_layout_rejects_ambiguity_and_loaded_mismatch(lab, monkeypatch, layout, problem):
+    site, link = move_nginx_pair(lab, layout)
+    other_site, other_link = u.ri.nginx_paths(lab.nginx_root, 'legacy-conf' if layout == 'managed' else 'managed')
+    if problem in ('both', 'partial-other'):
+        other_site.write_bytes(site.read_bytes())
+        if problem == 'both': other_link.symlink_to(other_site)
+    elif problem == 'wrong-link':
+        link.unlink(); link.symlink_to(lab.unit)
+    else:
+        original = lab.run
+        def run(args, **kwargs):
+            if args[:2] == ['nginx', '-T']:
+                marker = other_link if problem == 'wrong-loaded' else link
+                text = '# configuration file '+str(marker)+':\n'+site.read_text()
+                if problem == 'other-loaded': text += '\n# configuration file '+str(other_site)+':\nlisten 9090;\n'
+                return text
+            return original(args, **kwargs)
+        monkeypatch.setattr(lab, 'run', run)
+    with pytest.raises((u.UpdateError, ValueError, OSError)):
+        lab.execute()
+    assert not lab.installed.exists()
+    assert lab.current.resolve() == lab.old
+
+
+def test_adoption_layout_cannot_be_switched_after_publication(lab):
+    lab.execute()
+    move_nginx_pair(lab, 'legacy-conf')
+    updater = u.Updater('v0.1.1', base=lab.base, config=lab.config, backups=lab.backups, nginx_root=lab.nginx_root)
+    with pytest.raises(u.UpdateError, match='Layout Nginx distinto'):
+        updater.preflight()
+
+
+def test_previous_v1_receipt_retains_managed_layout_contract(lab):
+    lab.execute()
+    data = u.read_json(lab.installed/'adoption.json')
+    data['format'] = 'ticketyn-adoption-v1'
+    for key in ('nginx_layout', 'nginx_site', 'nginx_link'): del data[key]
+    u.write_json(lab.installed/'adoption.json', data)
+    (lab.installed/'adoption.sha256').write_text(u.digest(lab.installed/'adoption.json'))
+    receipt = u.validate_adoption(lab.installed, lab.base, lab.nginx_root)
+    updater = u.Updater('v0.1.1', nginx_root=lab.nginx_root)
+    assert updater.select_nginx(receipt)['layout'] == 'managed'
+    move_nginx_pair(lab, 'legacy-conf')
+    with pytest.raises(u.UpdateError): updater.select_nginx(receipt)

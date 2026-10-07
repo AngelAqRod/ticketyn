@@ -113,8 +113,8 @@ class Lab:
 
     def recovery(self, tag='v0.2.1'):
         previous = self.obj
-        obj = u.Updater(tag, previous.base, previous.config, previous.backups, previous.lock_path, recover=True)
-        obj.unit, obj.site, obj.link = previous.unit, previous.site, previous.link
+        obj = u.Updater(tag, previous.base, previous.config, previous.backups, previous.lock_path, recover=True, nginx_root=previous.nginx_root)
+        obj.unit = previous.unit
         self.bind(obj)
         obj.work = Path(tempfile.mkdtemp(prefix='work-'+obj.version+'-', dir=previous.base.parent))
         return obj

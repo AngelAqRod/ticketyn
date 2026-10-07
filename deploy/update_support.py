@@ -245,7 +245,7 @@ def read_json(path):
     return value
 
 
-def validate_adoption(installed, base):
+def validate_adoption(installed, base, nginx_root='/etc/nginx'):
     """Immutable historical provenance; active DB/current are checked separately.
 
     Updates/restores legitimately change those identities. Never reinterpret the
@@ -268,9 +268,11 @@ def validate_adoption(installed, base):
               'owner', 'encoding', 'current_inode', 'release_inode', 'release_snapshot', 'tracked_files',
               'env_sha256', 'unit_sha256', 'nginx_sha256', 'env_inode', 'unit_inode', 'nginx_inode',
               'nginx_link_inode', 'port', 'operation', 'created_at', 'updater_bundle'}
+    if data.get('format') == 'ticketyn-adoption-v2':
+        fields |= {'nginx_layout', 'nginx_site', 'nginx_link'}
     if set(data) != fields:
         fail('Estructura de evidencia de adopción inesperada.')
-    if (data.get('format') != 'ticketyn-adoption-v1' or data.get('origin') != 'adopted'
+    if (data.get('format') not in ('ticketyn-adoption-v1', 'ticketyn-adoption-v2') or data.get('origin') != 'adopted'
             or data.get('version') != '0.1.0'
             or data.get('commit') != '5d478abc97ffa18bb5293b96dfedc8649e89a013'
             or data.get('revision') != '0004_nodes_responsibles'
@@ -302,19 +304,37 @@ def validate_adoption(installed, base):
     except (KeyError, ValueError, TypeError):
         fail('Evidencia de adopción incompleta/inconsistente.')
 
+    if data['format'] == 'ticketyn-adoption-v2':
+        try:
+            site, link = ri.nginx_paths(nginx_root, data['nginx_layout'])
+            if data['nginx_site'] != str(site) or data['nginx_link'] != str(link):
+                raise ValueError('Rutas Nginx incoherentes en evidencia de adopción.')
+        except (KeyError, ValueError, TypeError) as error:
+            fail(str(error))
+    return data
+
 
 class Updater:
-    def __init__(self, tag, base='/opt/ticketyn', config='/etc/ticketyn', backups='/var/backups/ticketyn', lock='/run/ticketyn-install.lock', recover=False):
+    def __init__(self, tag, base='/opt/ticketyn', config='/etc/ticketyn', backups='/var/backups/ticketyn', lock='/run/ticketyn-install.lock', recover=False, nginx_root='/etc/nginx'):
         self.tag, self.version = tag, tag_version(tag)
         self.base, self.config, self.backups, self.lock_path = map(Path, (base, config, backups, lock))
         self.current = self.base/'current'; self.releases = self.base/'releases'
         self.env = self.config/'ticketyn.env'; self.state = self.config/'update-state'
         self.unit = Path('/etc/systemd/system/ticketyn.service')
-        self.site = Path('/etc/nginx/sites-available/ticketyn')
-        self.link = Path('/etc/nginx/sites-enabled/ticketyn')
+        self.nginx_root = Path(nginx_root)
+        self.site, self.link = ri.nginx_paths(self.nginx_root, 'managed')
         self.data = None; self.work = None; self.lock_fd = None; self.authorized = False
         self.scripts = Path(__file__).resolve().parent.parent
         self.recover = recover; self.parent = None
+
+    def select_nginx(self, adoption=None):
+        expected = adoption.get('nginx_layout', 'managed') if adoption else 'managed'
+        try:
+            selection = ri.nginx_layout(self.nginx_root, expected=expected)
+        except ValueError as error:
+            fail(str(error))
+        self.site, self.link = selection['site'], selection['link']
+        return selection
 
     def run(self, args, **kwargs):
         # No inherited Git/Pip credential/config/trace variables. No secrets in argv.
@@ -362,7 +382,8 @@ class Updater:
             secure(installed/name, private=True)
             if (installed/name).read_text().strip() != value:
                 fail('No existe una instalación administrada completada.')
-        validate_adoption(installed, self.base)
+        adoption = validate_adoption(installed, self.base, self.nginx_root)
+        self.select_nginx(adoption)
         if (self.config/'restore-state').exists() or (self.config/'restore-state').is_symlink():
             fail('restore-state pendiente: finalizar/revisar restore antes de actualizar.')
         if not self.current.is_symlink() or self.current.lstat().st_uid != os.geteuid():
@@ -1057,7 +1078,8 @@ class AbortUpdater(Updater):
             secure(installed/name, private=True)
             if (installed/name).read_text().strip() != expected:
                 fail('Abort requiere una instalación administrada completada.')
-        validate_adoption(installed, self.base)
+        adoption = validate_adoption(installed, self.base, self.nginx_root)
+        self.select_nginx(adoption)
         if (self.config/'restore-state').exists() or (self.config/'restore-state').is_symlink():
             fail('restore-state pendiente: no se puede abortar update.')
         self.data = None

@@ -71,6 +71,13 @@ restore_environment() {
     grep -qFx 'User=ticketyn' "$UNIT_FILE" && grep -qFx 'Group=ticketyn' "$UNIT_FILE" && \
         grep -qFx 'EnvironmentFile=/etc/ticketyn/ticketyn.env' "$UNIT_FILE" && \
         grep -q -- '--host 127.0.0.1 --port 8000' "$UNIT_FILE" || restore_fail 'Unidad Ticketyn incompatible.'
+    local nginx_selection
+    nginx_selection=$(python3 -I "$SUPPORT" nginx-layout "${NGINX_ROOT:-/etc/nginx}" "$CONFIG_DIR" "$APP_ROOT") \
+        || restore_fail 'Layout Nginx inválido o distinto de la evidencia de adopción.'
+    local -a nginx_values
+    mapfile -t nginx_values <<< "$nginx_selection"
+    [[ ${#nginx_values[@]} == 3 ]] || restore_fail 'Selección Nginx incompleta.'
+    NGINX_SITE=${nginx_values[1]}; NGINX_LINK=${nginx_values[2]}
     backup_secure_file "$NGINX_SITE"
     [[ -L $NGINX_LINK && $(readlink -e "$NGINX_LINK") == "$NGINX_SITE" ]] || restore_fail 'Sitio Nginx Ticketyn no habilitado de forma esperada.'
     systemctl is-active --quiet nginx || restore_fail 'Nginx debe estar activo antes de restaurar.'
@@ -384,7 +391,7 @@ restore_main() {
     CONFIG_DIR=/etc/ticketyn; CONFIG_FILE=$CONFIG_DIR/ticketyn.env
     APP_ROOT=/opt/ticketyn; RELEASES_DIR=$APP_ROOT/releases; CURRENT_FILE=$APP_ROOT/current
     UNIT_FILE=/etc/systemd/system/ticketyn.service
-    NGINX_SITE=/etc/nginx/sites-available/ticketyn; NGINX_LINK=/etc/nginx/sites-enabled/ticketyn
+    NGINX_ROOT=/etc/nginx
     SAFETY_DIR=/var/backups/ticketyn
     STATE=$CONFIG_DIR/restore-state
     WORK=$(mktemp -d /tmp/ticketyn-restore.XXXXXXXX); chown root:root "$WORK"

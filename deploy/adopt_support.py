@@ -354,6 +354,11 @@ class Adopter(u.Updater):
         tracked = self.verify_git()
         self.validate_runtime(tracked)
         u.secure(self.env, private=True); u.rs.config(self.env)
+        try:
+            nginx = u.ri.nginx_layout(self.nginx_root)
+        except ValueError as error:
+            u.fail(str(error))
+        self.site, self.link = nginx['site'], nginx['link']
         for path in (self.unit.parent, self.site.parent):
             u.secure(path, directory=True)
         u.secure(self.unit); u.secure(self.site)
@@ -384,8 +389,10 @@ class Adopter(u.Updater):
         # No reload or claim of byte-for-byte in-memory equivalence. An extra server
         # on this port is ambiguous and could intercept health/API requests.
         loaded = self.run(['nginx', '-T'])
-        if loaded.count('# configuration file '+str(self.site)+':') + loaded.count('# configuration file '+str(self.link)+':') != 1:
-            u.fail('Nginx no carga inequívocamente el sitio validado.')
+        try:
+            u.ri.nginx_loaded(loaded, self.nginx_root, nginx)
+        except ValueError as error:
+            u.fail(str(error))
         listens = re.findall(r'^\s*listen\s+([^;]+);', loaded, re.M)
         for value in listens:
             if not re.fullmatch(r'(?:[0-9.]+:|\[[0-9A-Fa-f:]+\]:)?[0-9]+(?:\s+[A-Za-z0-9_=]+)*', value.strip()):
@@ -414,7 +421,7 @@ class Adopter(u.Updater):
         self.healthy(self.old)
         if u.release_snapshot(self.old) != snapshot:
             u.fail('La release cambió durante la validación.')
-        return {'format': 'ticketyn-adoption-v1', 'origin': 'adopted', 'version': VERSION,
+        return {'format': 'ticketyn-adoption-v2', 'origin': 'adopted', 'version': VERSION,
                 'release': str(self.old), 'commit': COMMIT, 'revision': revision,
                 'db_oid': oid, 'cluster': cluster, 'owner': 'ticketyn', 'encoding': 'UTF8',
                 'current_inode': u.stamp(self.current),
@@ -423,7 +430,8 @@ class Adopter(u.Updater):
                 'unit_sha256': u.digest(self.unit), 'nginx_sha256': u.digest(self.site),
                 'env_inode': u.stamp(self.env), 'unit_inode': u.stamp(self.unit),
                 'nginx_inode': u.stamp(self.site),
-                'nginx_link_inode': u.stamp(self.link), 'port': self.port}
+                'nginx_link_inode': u.stamp(self.link), 'port': self.port,
+                'nginx_layout': nginx['layout'], 'nginx_site': str(self.site), 'nginx_link': str(self.link)}
 
     def execute(self):
         staging = None
@@ -449,7 +457,7 @@ class Adopter(u.Updater):
             with open(staging/'adoption.sha256', 'x', opener=lambda path, flags: os.open(path, flags | os.O_NOFOLLOW, 0o600)) as stream:
                 stream.write(u.digest(staging/'adoption.json')+'\n')
                 stream.flush(); os.fsync(stream.fileno())
-            u.validate_adoption(staging, self.base)
+            u.validate_adoption(staging, self.base, self.nginx_root)
             u.rs.sync_directory(staging)
             # Full state appears atomically, never an incomplete install-state.
             u.rs.rename_exclusive(staging, self.installed)
