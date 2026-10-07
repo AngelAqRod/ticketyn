@@ -31,7 +31,7 @@ path=pathlib.Path(sys.argv[1]); trace=pathlib.Path(sys.argv[2]); props=json.load
 sql=sys.stdin.read() if '--file=-' in args else args[args.index('-c')+1]
 db=json.loads(path.read_text())
 if sql.startswith('SELECT oid FROM '): print(db.get(re.search("datname='([^']+)'",sql)[1],''))
-elif sql.startswith('SELECT oid||'):
+elif sql.startswith('SELECT oid::text||'):
     name=re.search("datname='([^']+)'",sql)[1]
     if name in db:
         extra=props.get(name, {})

@@ -308,7 +308,7 @@ restore_finalize_validate() {
     restore_check_http
 }
 restore_finalize_database_identity() {
-    [[ $(restore_query "SELECT oid||':'||pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding)||':'||datallowconn FROM pg_database WHERE datname='ticketyn'") == "$FINAL_ACTIVE_OID:ticketyn:UTF8:true" ]] \
+    [[ $(restore_query "SELECT oid::text||':'||pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding)||':'||datallowconn::text FROM pg_database WHERE datname='ticketyn'") == "$FINAL_ACTIVE_OID:ticketyn:UTF8:true" ]] \
         || restore_fail 'La DB activa no es exactamente la DB restaurada esperada.'
     [[ $(restore_oid "ticketyn_restore_$FINAL_TOKEN") == '' ]] || restore_fail 'El nombre staging sigue ocupado; estado ambiguo.'
     local oid
@@ -316,7 +316,7 @@ restore_finalize_database_identity() {
     FINAL_PREVIOUS_PRESENT=0
     if [[ -n $FINAL_ORIGINAL_OID && -n $oid ]]; then
         [[ $oid == "$FINAL_ORIGINAL_OID" && $oid != "$FINAL_ACTIVE_OID" ]] || restore_fail 'DB anterior con identidad inesperada; no se elimina.'
-        [[ $(restore_query "SELECT oid||':'||pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding)||':'||datallowconn FROM pg_database WHERE datname='$FINAL_PREVIOUS'") == "$FINAL_ORIGINAL_OID:ticketyn:UTF8:false" ]] \
+        [[ $(restore_query "SELECT oid::text||':'||pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding)||':'||datallowconn::text FROM pg_database WHERE datname='$FINAL_PREVIOUS'") == "$FINAL_ORIGINAL_OID:ticketyn:UTF8:false" ]] \
             || restore_fail 'DB anterior con propietario/encoding/conexiones inesperados.'
         [[ $(restore_query "SELECT count(*) FROM pg_stat_activity WHERE datid=$FINAL_ORIGINAL_OID") == 0 ]] \
             || restore_fail 'La DB anterior tiene sesiones; no se terminan automáticamente.'

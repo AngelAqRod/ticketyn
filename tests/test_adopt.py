@@ -289,7 +289,8 @@ def test_signal_handler_aborts_before_publication(monkeypatch, signum):
     with pytest.raises(InterruptedError): a.main()
 
 
-def test_adoption_reads_real_postgres_without_migrating(lab, postgres_engine, monkeypatch):
+@pytest.mark.parametrize('column_type', ['VARCHAR(32)', 'TEXT'])
+def test_adoption_reads_real_postgres_without_migrating(lab, postgres_engine, monkeypatch, column_type):
     """Fixture provisions a disposable baseline; adoption itself only SELECTs.
 
     Services/venv remain isolated doubles: no host production commands executed.
@@ -305,7 +306,7 @@ def test_adoption_reads_real_postgres_without_migrating(lab, postgres_engine, mo
     try:
         Base.metadata.create_all(engine)  # Fixture only; no Alembic execution.
         with engine.begin() as connection:
-            connection.execute(text('CREATE TABLE alembic_version (version_num VARCHAR(32) PRIMARY KEY)'))
+            connection.execute(text(f'CREATE TABLE alembic_version (version_num {column_type} PRIMARY KEY)'))
             connection.execute(text('INSERT INTO alembic_version VALUES (:revision)'), {'revision': a.REVISION})
             connection.execute(text("INSERT INTO customers(customer_code,name,active) VALUES ('ADOPT_TEST','Ficticio',true)"))
         def pg(sql, database='postgres'):
@@ -313,9 +314,12 @@ def test_adoption_reads_real_postgres_without_migrating(lab, postgres_engine, mo
             selected = engine if database == 'ticketyn' else postgres_engine
             with selected.connect() as connection:
                 connection.execute(text('SET TRANSACTION READ ONLY'))
+                connection.execute(text('SET LOCAL search_path=pg_catalog'))
+                assert connection.scalar(text("SELECT current_setting('transaction_read_only')")) == 'on'
                 return str(connection.execute(text(sql)).scalar_one())
         monkeypatch.setattr(lab, 'pg', pg)
-        monkeypatch.setattr(lab, 'db_revision', lambda: pg('SELECT version_num FROM alembic_version', 'ticketyn'))
+        # Execute the actual catalog query: mocking this method hid the char ambiguity.
+        monkeypatch.setattr(lab, 'db_revision', lambda: a.Adopter.db_revision(lab))
         original_run = lab.run
         def run(args, **kwargs):
             if '--database-identity' in args:
@@ -325,7 +329,7 @@ def test_adoption_reads_real_postgres_without_migrating(lab, postgres_engine, mo
         monkeypatch.setattr(lab, 'authenticate', lambda: 'ticketyn:ticketyn:'+pg("SELECT oid FROM pg_database WHERE datname='ticketyn'"))
         before = pg("SELECT oid FROM pg_database WHERE datname='ticketyn'")
         lab.execute()
-        assert pg('SELECT customer_code FROM customers', 'ticketyn') == 'ADOPT_TEST'
+        assert pg('SELECT customer_code FROM public.customers', 'ticketyn') == 'ADOPT_TEST'
         assert pg("SELECT oid FROM pg_database WHERE datname='ticketyn'") == before
         assert lab.db_revision() == a.REVISION
         receipt = u.read_json(lab.installed/'adoption.json')
@@ -686,3 +690,15 @@ def test_previous_v1_receipt_retains_managed_layout_contract(lab):
     assert updater.select_nginx(receipt)['layout'] == 'managed'
     move_nginx_pair(lab, 'legacy-conf')
     with pytest.raises(u.UpdateError): updater.select_nginx(receipt)
+
+
+@pytest.mark.parametrize('shape', ['r:ticketyn:1043:false', 'r:ticketyn:25:false'])
+def test_catalog_relkind_cast_preserves_exact_shape_validation(lab, monkeypatch, shape):
+    queries = []
+    def pg(sql, database='postgres'):
+        queries.append(sql)
+        return shape if 'pg_catalog.pg_class' in sql else a.REVISION
+    monkeypatch.setattr(lab, 'pg', pg)
+    assert a.Adopter.db_revision(lab) == a.REVISION
+    assert "c.relkind::text||':'" in queries[0]
+    assert len(queries) == 2

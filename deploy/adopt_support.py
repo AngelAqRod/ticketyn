@@ -275,7 +275,7 @@ class Adopter(u.Updater):
 
     def db_revision(self):
         # Catalog-only check before ever evaluating public.alembic_version.
-        shape = self.pg("SELECT c.relkind||':'||pg_catalog.pg_get_userbyid(c.relowner)||':'||a.atttypid::text||':'||c.relrowsecurity::text FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid WHERE n.nspname='public' AND c.relname='alembic_version' AND a.attname='version_num' AND a.attnum>0 AND NOT a.attisdropped", 'ticketyn')
+        shape = self.pg("SELECT c.relkind::text||':'||pg_catalog.pg_get_userbyid(c.relowner)||':'||a.atttypid::text||':'||c.relrowsecurity::text FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid WHERE n.nspname='public' AND c.relname='alembic_version' AND a.attname='version_num' AND a.attnum>0 AND NOT a.attisdropped", 'ticketyn')
         if shape not in ('r:ticketyn:1043:false', 'r:ticketyn:25:false'):
             u.fail('Objeto Alembic no es tabla ordinaria esperada, sin RLS.')
         return super().db_revision()
