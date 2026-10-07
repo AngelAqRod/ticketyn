@@ -159,9 +159,9 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     assert updater.migration_plan(previous, candidate, HEAD) == HEAD
     assert not list((ROOT/'alembic/versions').glob('0008*'))
     assert not list((candidate/'alembic/versions').glob('0008*'))
-    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.1.5'
+    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.1.6'
     lock = json.loads((ROOT/'frontend/package-lock.json').read_text())
-    assert lock['version'] == lock['packages']['']['version'] == '0.1.5'
+    assert lock['version'] == lock['packages']['']['version'] == '0.1.6'
     assert (candidate/'frontend/dist/index.html').is_file()
 
     assert (candidate/'update.sh').read_bytes() == (ROOT/'update.sh').read_bytes()
