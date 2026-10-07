@@ -192,14 +192,19 @@ def http_valid(path, kind):
 def port(path):
     text = Path(path).read_text()
     ports = []
+    ipv6 = []
     for line in text.splitlines():
         line = line.split('#', 1)[0].strip()
         if 'listen' in line:
             match = re.fullmatch(r'listen (\d+);', line)
+            other = re.fullmatch(r'listen \[::\]:(\d+);', line)
+            if other and 1 <= int(other[1]) <= 65535:
+                ipv6.append(other[1])
+                continue
             if not match or not 1 <= int(match[1]) <= 65535:
                 fail('No se puede determinar con seguridad el puerto HTTP de Ticketyn.')
             ports.append(match[1])
-    if len(ports) != 1:
+    if len(ports) != 1 or (ipv6 and ipv6 != ports):
         fail('Se requiere un único listen IPv4 del sitio Ticketyn instalado.')
     print(ports[0])
 

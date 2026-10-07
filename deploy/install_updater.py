@@ -2,6 +2,7 @@
 
 No application/DB/service mutations. CLI is root-only; tests use isolated paths.
 """
+import importlib.util
 import ctypes
 import fcntl
 import hashlib
@@ -14,6 +15,10 @@ import stat
 import sys
 import tempfile
 
+_spec = importlib.util.spec_from_file_location('updater_release_identity', Path(__file__).with_name('release_identity.py'))
+ri = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ri)
+
 FILES = ('update.sh', 'backup.sh', 'deploy/update_support.py',
          'deploy/restore_support.py', 'deploy/release_identity.py')
 FORMAT = 'ticketyn-admin-updater-v1'
@@ -21,9 +26,7 @@ FORMAT = 'ticketyn-admin-updater-v1'
 
 def secure(path, directory=False):
     path = Path(path)
-    for parent in path.parents:
-        if parent.is_symlink():
-            raise ValueError('Symlink inesperado: '+str(parent))
+    ri.secure_ancestors(path)
     info = path.lstat()
     if (not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))
             or info.st_uid != os.geteuid() or info.st_gid != os.getegid()
@@ -37,6 +40,8 @@ def mkdir(path):
     if not path.exists() and not path.is_symlink():
         secure(path.parent, directory=True)
         path.mkdir(mode=0o755)
+        sync_directory(path)
+        sync_directory(path.parent)
     secure(path, directory=True)
 
 
@@ -86,8 +91,12 @@ def launcher(bundle):
 
 
 def sync_directory(path):
+    before = secure(path, directory=True)
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
+        actual = os.fstat(fd)
+        if (actual.st_dev, actual.st_ino) != (before.st_dev, before.st_ino):
+            raise ValueError('Directorio sustituido durante fsync.')
         os.fsync(fd)
     finally:
         os.close(fd)
@@ -104,8 +113,8 @@ def write(path, data, mode):
     with open(path, 'xb') as stream:
         stream.write(data)
         stream.flush()
+        os.fchmod(stream.fileno(), mode)
         os.fsync(stream.fileno())
-    path.chmod(mode)
 
 
 def install(source, base=Path('/opt/ticketyn'), command=Path('/usr/local/sbin/ticketyn-update')):
@@ -148,6 +157,7 @@ def publish(source, bundles, command):
             write(staging/'manifest.json', json.dumps(manifest, sort_keys=True).encode()+b'\n', 0o644)
             sync_directory(staging/'deploy'); sync_directory(staging)
             staging.chmod(0o755)
+            sync_directory(staging)
             rename_exclusive(staging, bundle)
             sync_directory(bundles)
         finally:
@@ -156,13 +166,14 @@ def publish(source, bundles, command):
         validate_bundle(bundle)
     expected = launcher(bundle)
     if previous is not None and command.read_bytes() == expected:
+        validate_publication(base=bundles.parent.parent, command=command, bundle=bundle)
         return bundle
     fd, name = tempfile.mkstemp(prefix='.ticketyn-update-', dir=command.parent)
     temporary = Path(name)
     try:
         with os.fdopen(fd, 'wb') as stream:
-            stream.write(expected); stream.flush(); os.fsync(stream.fileno())
-        temporary.chmod(0o755)
+            stream.write(expected); stream.flush()
+            os.fchmod(stream.fileno(), 0o755); os.fsync(stream.fileno())
         if previous is None:
             rename_exclusive(temporary, command)
         else:
@@ -173,12 +184,34 @@ def publish(source, bundles, command):
         sync_directory(command.parent)
     finally:
         temporary.unlink(missing_ok=True)
+    validate_publication(base=bundles.parent.parent, command=command, bundle=bundle)
     return bundle
+
+
+def validate_publication(base, command, bundle):
+    validate_bundle(bundle)
+    secure(command)
+    if ri.read_regular(command) != launcher(bundle) or stat.S_IMODE(command.stat().st_mode) != 0o755:
+        raise ValueError('Lanzador administrativo inválido.')
+    for path in [command, bundle/'manifest.json', *(bundle/name for name in FILES)]:
+        info = secure(path)
+        expected = 0o755 if path == command or path.suffix == '.sh' else 0o644
+        if stat.S_IMODE(info.st_mode) != expected:
+            raise ValueError('Permisos del bundle inesperados.')
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            if (os.fstat(fd).st_dev, os.fstat(fd).st_ino) != (info.st_dev, info.st_ino):
+                raise ValueError('Bundle sustituido durante verificación.')
+            os.fsync(fd)
+        finally: os.close(fd)
+    for path in (bundle/'deploy', bundle, bundle.parent, base/'admin', base, command.parent):
+        secure(path, directory=True)
+        sync_directory(path)
 
 
 if __name__ == '__main__':
     try:
-        if os.geteuid() != 0 or len(sys.argv) != 2:
+        if os.geteuid() != 0 or os.getegid() != 0 or len(sys.argv) != 2:
             raise ValueError('Ejecuta como root: python3 -I deploy/install_updater.py /ruta/release')
         bundle = install(Path(sys.argv[1]))
         print('✓ ticketyn-update instalado con bundle verificado: '+str(bundle))

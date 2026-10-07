@@ -161,3 +161,40 @@ def test_cli_requires_root():
         pytest.skip('requires non-root test process')
     result = subprocess.run([sys.executable, '-I', ROOT/'deploy/install_updater.py', ROOT], capture_output=True, text=True)
     assert result.returncode and 'root' in result.stderr
+
+
+def test_publication_fsyncs_parents_modes_and_launcher(layout, monkeypatch):
+    source, base, command = layout
+    events = []
+    original = p.sync_directory
+    def sync(path):
+        events.append((Path(path), Path(path).stat().st_mode & 0o777))
+        original(path)
+    monkeypatch.setattr(p,'sync_directory',sync)
+    bundle = p.install(source,base,command)
+    assert (base, base.stat().st_mode & 0o777) in events
+    assert (base/'admin', 0o755) in events
+    assert (base/'admin/updater', 0o755) in events
+    assert (bundle,0o755) in events
+    assert (command.parent, command.parent.stat().st_mode & 0o777) == events[-1]
+    p.validate_publication(base,command,bundle)
+    command.chmod(0o644)
+    with pytest.raises(ValueError): p.validate_publication(base,command,bundle)
+
+
+def test_file_fsync_occurs_after_final_permissions(layout, monkeypatch):
+    source, base, command = layout
+    events = []
+    original = p.os.fsync
+    def fsync(fd):
+        info = os.fstat(fd)
+        try: path = Path(os.readlink('/proc/self/fd/'+str(fd)))
+        except OSError: path = Path('/')
+        events.append((path, info.st_mode & 0o777))
+        original(fd)
+    monkeypatch.setattr(p.os,'fsync',fsync)
+    p.install(source,base,command)
+    assert any(path.name.startswith('.ticketyn-update-') and mode == 0o755 for path, mode in events)
+    assert any(path.name == 'update.sh' and mode == 0o755 for path, mode in events)
+    assert any(path.name == 'update_support.py' and mode == 0o644 for path, mode in events)
+    assert any(path.name == 'manifest.json' and mode == 0o644 for path, mode in events)

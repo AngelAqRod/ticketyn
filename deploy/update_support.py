@@ -43,13 +43,15 @@ def fail(message):
 
 
 def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return hashlib.sha256(ri.read_regular(path)).hexdigest()
 
 
 def secure(path, directory=False, private=False):
     path = Path(path)
-    if any(parent.is_symlink() for parent in path.parents):
-        fail('Symlink inesperado en ruta: '+str(path))
+    try:
+        ri.secure_ancestors(path)
+    except ValueError as error:
+        fail(str(error))
     info = path.lstat()
     if (not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))
             or info.st_uid != os.geteuid() or info.st_gid != os.getegid()
@@ -243,6 +245,64 @@ def read_json(path):
     return value
 
 
+def validate_adoption(installed, base):
+    """Immutable historical provenance; active DB/current are checked separately.
+
+    Updates/restores legitimately change those identities. Never reinterpret the
+    original receipt as a description of the new generation.
+    """
+    origin = installed/'origin'
+    if not origin.exists() and not origin.is_symlink():
+        if (installed/'adoption.json').exists() or (installed/'adoption.sha256').exists():
+            fail('Evidencia de adopción sin origin.')
+        return
+    secure(origin, private=True)
+    if origin.read_text().strip() != 'adopted':
+        fail('Origen administrado desconocido.')
+    receipt = installed/'adoption.json'; seal = installed/'adoption.sha256'
+    secure(seal, private=True)
+    data = read_json(receipt)
+    if seal.read_text().strip() != digest(receipt):
+        fail('Evidencia de adopción modificada.')
+    fields = {'format', 'origin', 'version', 'release', 'commit', 'revision', 'db_oid', 'cluster',
+              'owner', 'encoding', 'current_inode', 'release_inode', 'release_snapshot', 'tracked_files',
+              'env_sha256', 'unit_sha256', 'nginx_sha256', 'env_inode', 'unit_inode', 'nginx_inode',
+              'nginx_link_inode', 'port', 'operation', 'created_at', 'updater_bundle'}
+    if set(data) != fields:
+        fail('Estructura de evidencia de adopción inesperada.')
+    if (data.get('format') != 'ticketyn-adoption-v1' or data.get('origin') != 'adopted'
+            or data.get('version') != '0.1.0'
+            or data.get('commit') != '5d478abc97ffa18bb5293b96dfedc8649e89a013'
+            or data.get('revision') != '0004_nodes_responsibles'
+            or data.get('release') != str(base/'releases/0.1.0')
+            or data.get('owner') != 'ticketyn' or data.get('encoding') != 'UTF8'
+            or not re.fullmatch(r'adopt-[0-9a-f]{32}', str(data.get('operation', '')))
+            or not re.fullmatch(r'[1-9][0-9]*', str(data.get('db_oid', '')))
+            or not re.fullmatch(r'[1-9][0-9]*', str(data.get('cluster', '')))):
+        fail('Identidad de adopción inválida.')
+    try:
+        if datetime.fromisoformat(data['created_at']).tzinfo is None: raise ValueError()
+        for key in ('current_inode', 'release_inode', 'env_inode', 'unit_inode', 'nginx_inode', 'nginx_link_inode'):
+            if len(data[key]) != 2 or any(type(n) is not int or n < 0 for n in data[key]):
+                raise ValueError()
+        for key in ('env_sha256', 'unit_sha256', 'nginx_sha256'):
+            if not re.fullmatch('[0-9a-f]{64}', data[key]): raise ValueError()
+        tracked, snapshot = data['tracked_files'], data['release_snapshot']
+        if not isinstance(tracked, dict) or not isinstance(snapshot, dict): raise ValueError()
+        for name, value in tracked.items():
+            if (not isinstance(name, str) or name.startswith('/') or '..' in name.split('/')
+                    or not re.fullmatch('[0-9a-f]{64}', value) or snapshot.get(name) != value):
+                raise ValueError()
+        for name in FILES + ('src/ticketyn/main.py', 'frontend/dist/index.html'):
+            if not re.fullmatch('[0-9a-f]{64}', tracked[name]) or snapshot[name] != tracked[name]:
+                raise ValueError()
+        if not 1 <= int(data['port']) <= 65535: raise ValueError()
+        bundle = Path(data['updater_bundle'])
+        if bundle.parent != base/'admin/updater' or not re.fullmatch('[0-9a-f]{64}', bundle.name): raise ValueError()
+    except (KeyError, ValueError, TypeError):
+        fail('Evidencia de adopción incompleta/inconsistente.')
+
+
 class Updater:
     def __init__(self, tag, base='/opt/ticketyn', config='/etc/ticketyn', backups='/var/backups/ticketyn', lock='/run/ticketyn-install.lock', recover=False):
         self.tag, self.version = tag, tag_version(tag)
@@ -302,6 +362,7 @@ class Updater:
             secure(installed/name, private=True)
             if (installed/name).read_text().strip() != value:
                 fail('No existe una instalación administrada completada.')
+        validate_adoption(installed, self.base)
         if (self.config/'restore-state').exists() or (self.config/'restore-state').is_symlink():
             fail('restore-state pendiente: finalizar/revisar restore antes de actualizar.')
         if not self.current.is_symlink() or self.current.lstat().st_uid != os.geteuid():
@@ -996,6 +1057,7 @@ class AbortUpdater(Updater):
             secure(installed/name, private=True)
             if (installed/name).read_text().strip() != expected:
                 fail('Abort requiere una instalación administrada completada.')
+        validate_adoption(installed, self.base)
         if (self.config/'restore-state').exists() or (self.config/'restore-state').is_symlink():
             fail('restore-state pendiente: no se puede abortar update.')
         self.data = None

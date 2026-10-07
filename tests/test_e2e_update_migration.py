@@ -142,7 +142,7 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     updater = importlib.util.module_from_spec(spec); spec.loader.exec_module(updater)
     assert updater.tag_version('v0.1.5-test.1') == '0.1.5-test.1'
     updater.forward('0.1.4-test.1', '0.1.5-test.1')
-    assert updater.ri.project_version(ROOT) == '0.1.5'
+    assert updater.ri.project_version(ROOT) == '0.1.6'
     previous = tmp_path/'previous'; previous.mkdir()
     shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', previous/'alembic.ini')
@@ -155,7 +155,7 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
                 output.add(ROOT/name, arcname=name, recursive=False)
     candidate = tmp_path/'candidate'
     updater.extract_release(archive, candidate)
-    assert updater.ri.project_version(candidate) == '0.1.5'
+    assert updater.ri.project_version(candidate) == '0.1.6'
     assert updater.migration_plan(previous, candidate, HEAD) == HEAD
     assert not list((ROOT/'alembic/versions').glob('0008*'))
     assert not list((candidate/'alembic/versions').glob('0008*'))

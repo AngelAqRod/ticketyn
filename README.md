@@ -763,3 +763,79 @@ preservación de datos/exports/configuración, HEAD, current, releases, backup e
 historial; reiniciar y repetir pruebas funcionales. Comprobar rechazo de misma
 versión/downgrade. Usar un segundo entorno descartable para probar un tag con
 migración y fallos/interrupciones; nunca retargetear un tag publicado para reintentar.
+
+## Adoptar una instalación manual existente
+
+`./adopt.sh` (como root, o `sudo ./adopt.sh`) permite adoptar una instalación
+manual **sin reinstalar, actualizar ni migrar Ticketyn**. Ejecuta el script desde
+una copia local y confiable de estas herramientas administrativas; no requiere
+red y no modifica el checkout de la aplicación activa. No es un mecanismo de
+reparación, no tiene `--force` y no permite omitir verificaciones.
+
+La primera versión acepta exclusivamente el baseline **0.1.0**, commit
+`5d478abc97ffa18bb5293b96dfedc8649e89a013`, con un checkout Git limpio dentro de
+`/opt/ticketyn/releases/0.1.0`, `current` apuntando a él y Alembic en
+`0004_nodes_responsibles`. Compara literalmente los archivos versionados con
+los blobs del commit, incluso si Git oculta cambios mediante `assume-unchanged`
+o `skip-worktree`. Verifica los hashes internos de commit/tree/blobs y ejecuta
+`git fsck --full --strict`; rechaza alternates, replace objects, grafts y shallow clones.
+Este baseline requiere `.git` como directorio seguro dentro de la release;
+no admite worktrees con metadatos externos ni `.git` como archivo/enlace.
+También comprueba permisos, propietario root, entorno privado, dependencias e
+código instalado mediante lectura estática (sin ejecutar Python/pip/imports de
+la release como root), DB local con propietario `ticketyn` y UTF8, OID/cluster,
+servicio activo/habilitado, backend loopback, frontend/assets, health y API.
+
+La unidad debe conservar las directivas del template de ese commit, sin
+`drop-ins`, y Nginx debe usar sus directivas; se permite cambiar el puerto HTTP
+y omitir la escucha IPv6. No se aceptan otras personalizaciones automáticamente.
+`/var/backups/ticketyn` debe existir con propietario root y permisos 0700.
+Una configuración distinta debe revisarse, no eludirse mediante metadatos manuales.
+No deben modificarse Git, Nginx, systemd ni la configuración concurrentemente.
+
+Solo después de validar se provisiona el updater mediante el mismo mecanismo
+que `install.sh`: bundle root-owned en `/opt/ticketyn/admin/updater` y comando
+`/usr/local/sbin/ticketyn-update`, independiente de `current` y del CWD. Después
+se revalidan las identidades y la integridad/permisos/durabilidad del updater
+(incluyendo fsync de archivos y directorios padre), y se publica atómicamente `install-state` completo.
+El formato común sigue siendo `format=1`, `status=complete`; `origin=adopted`
+y `adoption.json` junto con `adoption.sha256` registran honestamente la operación, fecha, commit, release,
+inodes, snapshot, hashes de configuración, revisión Alembic, OID y cluster,
+sin contraseñas. El updater y `--abort` validan esta evidencia histórica; los
+updates/restores no la reinterpretan como identidad de la DB/release actual.
+No contiene campos ficticios de recuperación de `install.sh`.
+
+La adopción no crea backups, no modifica PostgreSQL, la release ni `current`,
+y no detiene/reinicia/recarga servicios. Después deben ejecutarse **por separado**
+`backup.sh` y, cuando corresponda, `ticketyn-update <tag>`.
+
+Un fallo previo a publicar el estado permite reintentar: puede quedar un bundle
+administrativo válido, que el provisioner reconoce y reutiliza. SIGINT/SIGTERM
+limpian el staging privado; SIGKILL puede dejar un directorio `.adoption-*` privado
+sin publicar, que no se interpreta como instalación completa ni se borra mediante
+wildcards. Si el rename final ya ocurrió, el estado aparece completo y durable;
+una segunda adopción se rechaza sin cambios. Un `install-state`, `update-state`
+o `restore-state` preexistente también se rechaza: requiere diagnóstico, no adopción.
+La evidencia prueba coherencia ante cambios accidentales, no protege frente a un
+administrador root malicioso ni certifica todos los binarios de terceros del venv.
+
+Durante adopción todas las conexiones PostgreSQL propias fuerzan
+`default_transaction_read_only=on` y `search_path=pg_catalog`. Antes de consultar
+Alembic verifica que sea una tabla ordinaria del propietario esperado, sin RLS
+y con el tipo de columna esperado. La autenticación local utiliza `psql` y un
+archivo anónimo en memoria (memfd), sin contraseñas en argumentos, entorno, disco
+ni salida. Las peticiones HTTP usan los GET existentes de la aplicación.
+
+Se verifican las propiedades **cargadas** de systemd (usuario, grupo, ejecutable,
+entorno, directorio y protecciones), no solo su archivo en disco; una unidad
+antigua en memoria se rechaza sin daemon-reload. Para Nginx se verifica la
+configuración en disco y el comportamiento HTTP observable, sin pretender
+equivalencia byte-a-byte de los workers en memoria ni recargarlos.
+
+La validación estática admite únicamente enlaces internos del venv e intérpretes
+Python del sistema seguros; `pyvenv.cfg` debe apuntar a `/usr/bin` y excluir
+site-packages globales. Comprueba también permisos de cachés y bytecode de
+Ticketyn contra su fuente verificada. Cachés de otra versión de Python o
+personalizaciones `.pth` (salvo el shim estándar de setuptools) se rechazan;
+requieren revisión administrativa, no una opción force. El hash del recibo
+detecta alteración/inconsistencia, no constituye una firma contra root malicioso.

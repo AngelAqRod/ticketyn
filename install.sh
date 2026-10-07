@@ -154,6 +154,10 @@ load_state() {
     [[ -e $INSTALL_STATE || -L $INSTALL_STATE ]] || return 0
     protected_path "$INSTALL_STATE" 700
     [[ $(state_get format) == 1 ]] || fail 'Formato de recuperación desconocido.'
+    if [[ -e $INSTALL_STATE/origin || -L $INSTALL_STATE/origin ]]; then
+        [[ $(state_get origin) == adopted && $(state_get status) == complete ]] || fail 'Estado de adopción incompatible.'
+        fail 'Ticketyn ya fue adoptado. install.sh no repara ni actualiza instalaciones completas.'
+    fi
     [[ $(state_get version) == "$VERSION" ]] || fail 'La instalación parcial pertenece a otra versión; no se actualiza.'
     [[ $(state_get source) == "$SOURCE_HASH" ]] || fail 'El contenido fuente cambió desde la instalación parcial; requiere revisión manual.'
     INSTALL_TOKEN=$(state_get token)

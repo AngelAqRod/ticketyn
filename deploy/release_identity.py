@@ -11,6 +11,41 @@ from pathlib import Path
 PATTERN = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?'
 
 
+def secure_ancestors(path):
+    """Root/user-controlled chain; only the system sticky /tmp boundary is allowed.
+
+    Tests may use private directories below /tmp. A non-sticky writable parent,
+    including one below /tmp, is never trusted.
+    """
+    root = Path('/').stat()  # also supports mapped-root test namespaces
+    for parent in Path(path).absolute().parents:
+        info = parent.lstat()
+        sticky_tmp = (parent == Path('/tmp') and info.st_uid == root.st_uid
+                      and stat.S_ISDIR(info.st_mode) and info.st_mode & stat.S_ISVTX)
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid not in (root.st_uid, os.geteuid())
+                or info.st_gid not in (root.st_gid, os.getegid())
+                or (info.st_mode & 0o022 and not sticky_tmp)):
+            raise ValueError('Ancestro inseguro: '+str(parent))
+
+
+def read_regular(path):
+    """No-follow descriptor read with identity checks on both sides."""
+    secure_ancestors(path)
+    before = Path(path).lstat()
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, 'rb') as stream:
+        actual = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(actual.st_mode) or actual.st_nlink != 1
+                or (actual.st_dev, actual.st_ino) != (before.st_dev, before.st_ino)):
+            raise ValueError('Archivo sustituido/inseguro: '+str(path))
+        data = stream.read()
+        after = Path(path).lstat()
+        if (actual.st_dev, actual.st_ino, actual.st_size, actual.st_mtime_ns) != (
+                after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns):
+            raise ValueError('Archivo cambió durante lectura: '+str(path))
+        return data
+
+
 def semver(value):
     match = re.fullmatch(PATTERN, value)
     if not match:
