@@ -14,6 +14,8 @@ class Ticket(Base):
         CheckConstraint("ticket_number > 0", name="positive_ticket_number"),
         CheckConstraint("status IN ('OPEN', 'CLOSED')", name="status_values"),
         CheckConstraint("end_at IS NULL OR end_at >= start_at", name="valid_dates"),
+        *(CheckConstraint(f"{field} IS NULL OR (length(btrim({field})) > 0 AND length({field}) <= 10000)", name=f"{field}_content")
+          for field in ("resolution", "customer_description", "customer_resolution")),
     )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
@@ -21,6 +23,9 @@ class Ticket(Base):
     reference: Mapped[str] = mapped_column(String, unique=True)
     title: Mapped[str] = mapped_column(String)
     description: Mapped[str] = mapped_column(Text)
+    resolution: Mapped[str | None] = mapped_column(Text)
+    customer_description: Mapped[str | None] = mapped_column(Text)
+    customer_resolution: Mapped[str | None] = mapped_column(Text)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     circuit_id: Mapped[int] = mapped_column(ForeignKey("circuits.id"), index=True)
     sector_id: Mapped[int] = mapped_column(ForeignKey("sectors.id"), index=True)
@@ -36,6 +41,8 @@ class Ticket(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.clock_timestamp()
     )
+
+    updates: Mapped[list["TicketUpdate"]] = relationship(back_populates="ticket", lazy="raise", passive_deletes="all")
 
     @property
     def node(self):

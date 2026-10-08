@@ -1,8 +1,8 @@
 from typing import Annotated, TypeVar
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import delete, or_, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from ticketyn.db.base import Base
@@ -87,3 +87,30 @@ def update_item(session: Session, item: Model, values: dict) -> Model:
     for field, value in values.items():
         setattr(item, field, value)
     return save_item(session, item)
+
+
+def delete_unreferenced(session: Session, model: type[Model], id: int, *, dependent_columns: tuple, conflict_detail: str) -> None:
+    """Lock the parent, check references, and let FK constraints arbitrate races.
+
+    A SQL DELETE deliberately avoids ORM relationship nullification or cascades.
+    PostgreSQL FK writers take a conflicting parent lock: committed references
+    are checked after acquiring ours, and late inserts cannot become orphans.
+    """
+    try:
+        if session.scalar(select(model.id).where(model.id == id).with_for_update()) is None:
+            raise HTTPException(404, f"{model.__name__} con id {id} no encontrado")
+        if any(session.scalar(select(select(column).where(column == id).exists())) for column in dependent_columns):
+            raise HTTPException(409, conflict_detail)
+        session.execute(delete(model).where(model.id == id).execution_options(synchronize_session=False))
+        session.commit()
+    except HTTPException:
+        session.rollback()
+        raise
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(409, conflict_detail) from None
+    except OperationalError as error:
+        session.rollback()
+        if getattr(error.orig, 'sqlstate', None) in {'40001', '40P01', '55P03'}:
+            raise HTTPException(409, 'Conflicto concurrente. Vuelve a intentar la eliminación.') from None
+        raise

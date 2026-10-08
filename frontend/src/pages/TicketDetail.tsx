@@ -8,6 +8,8 @@ import { ApiError } from '../api/client'
 import { formatDate, formatDuration } from '../lib/format'
 import { StatusBadge } from '../components/StatusBadge'
 import { TicketForm } from '../components/TicketForm'
+import { TicketReportDownload } from '../components/TicketReportDownload'
+import { TicketFollowUp } from '../components/TicketFollowUp'
 
 export function TicketDetail({ edit = false }: { edit?: boolean }) {
   const { id } = useParams()
@@ -55,13 +57,17 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
   return <>
     <div className="record-header">
       <div className="min-w-0 max-w-full [overflow-wrap:anywhere]"><p className="module-eyebrow">Operación <span aria-hidden="true">/ 02</span></p><div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 max-w-full font-mono text-3xl font-bold tracking-tight text-primary">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold text-slate-800">{ticket.title}</h2></div>
-      <div className="flex gap-2"><Link to="/tickets" className="button-secondary">Volver a tickets</Link><Link to={`/tickets/${ticket.id}/edit`} className="button-primary">Editar ticket</Link></div>
+      <div className="flex flex-wrap gap-2"><TicketReportDownload ticketId={ticket.id} /><Link to="/tickets" className="button-secondary">Volver a tickets</Link><Link to={`/tickets/${ticket.id}/edit`} className="button-primary">Editar ticket</Link></div>
     </div>
     {saved && <FeedbackMessage variant="success" className="mb-3">Cambios guardados correctamente.</FeedbackMessage>}
     <div className="panel overflow-hidden">
       <section aria-labelledby="description-heading" className="record-description m-4">
         <h3 id="description-heading" className="section-label mb-2">Descripción</h3>
         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{ticket.description}</p>
+      </section>
+      <section aria-labelledby="ticket-resolution-heading" className="m-4">
+        <h3 id="ticket-resolution-heading" className="section-label mb-2">Resolución documentada</h3>
+        <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm leading-6 text-slate-700">{ticket.resolution || 'Sin resolución documentada.'}</p>
       </section>
       <div className="grid lg:grid-cols-3">
         <section aria-labelledby="classification-heading" className="border-b border-slate-200 p-4 lg:col-span-2 lg:border-r lg:border-b-0">
@@ -78,5 +84,6 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
         <dl className="flex flex-wrap gap-x-8 gap-y-2">{metadata.map(([label, value]) => <div key={label} className="flex flex-wrap items-baseline gap-2"><dt className="text-xs text-slate-500">{label}</dt><dd className="text-xs tabular-nums text-slate-600">{value}</dd></div>)}</dl>
       </section>
     </div>
+    <TicketFollowUp key={ticket.id} ticketId={ticket.id} />
   </>
 }

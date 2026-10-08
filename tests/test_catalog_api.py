@@ -254,8 +254,10 @@ def test_docs_and_openapi(api_client):
     assert not any(path.startswith("/api/services") for path in paths)
     for name, _, _ in RESOURCES:
         assert set(paths[f"/api/{name}"]) == {"get", "post"}
-        assert set(paths[f"/api/{name}/{{id}}"]) == {"get", "patch"}
-        assert "delete" not in paths[f"/api/{name}/{{id}}"]
+        expected = {"get", "patch"} | ({"delete"} if name in {"customers", "circuits"} else set())
+        assert set(paths[f"/api/{name}/{{id}}"]) == expected
+        if name in {"customers", "circuits"}:
+            assert "content" not in paths[f"/api/{name}/{{id}}"]['delete']['responses']['204']
 
 
 @pytest.mark.parametrize("method, path", [

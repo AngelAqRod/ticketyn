@@ -1,4 +1,4 @@
-import { getJson, postJson, patchJson, ApiError } from './client'
+import { getJson, postJson, patchJson, deleteResource, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
 import type { Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
 
@@ -79,3 +79,6 @@ export const createNode = (payload: NamedCatalogInput, signal?: AbortSignal) => 
 export const updateNode = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Node>(`/api/nodes/${id}`, payload, signal)
 export const createResponsible = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Responsible>("/api/responsibles", payload, signal)
 export const updateResponsible = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Responsible>(`/api/responsibles/${id}`, payload, signal)
+
+export const deleteCustomer = (id: number, signal?: AbortSignal) => deleteResource(`/api/customers/${id}`, signal)
+export const deleteCircuit = (id: number, signal?: AbortSignal) => deleteResource(`/api/circuits/${id}`, signal)

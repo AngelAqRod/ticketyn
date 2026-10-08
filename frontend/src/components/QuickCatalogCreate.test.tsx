@@ -53,7 +53,7 @@ async function selectExisting() {
 }
 function setTicketValues() {
   fireEvent.change(screen.getByLabelText(/^Título/), { target: { value: 'Título escrito' } })
-  fireEvent.change(screen.getByLabelText(/^Descripción/), { target: { value: 'Descripción escrita' } })
+  fireEvent.change(screen.getByLabelText(/^Descripción\s*\*?$/), { target: { value: 'Descripción escrita' } })
   for (const label of ['Sector', 'Departamento', 'Tipo de incidencia']) fireEvent.change(combo(label), { target: { value: '1' } })
   fireEvent.change(screen.getByLabelText(/^Inicio\s*\*?$/), { target: { value: '2026-01-01T10:00' } })
   fireEvent.change(screen.getByLabelText('Fin'), { target: { value: '2026-01-01T11:00' } })
@@ -62,7 +62,7 @@ function setTicketValues() {
 function expectPreserved() {
   const form = within(screen.getByRole('form', { name: /^(Crear|Editar) ticket$/ }))
   expect(form.getByLabelText(/^Título/)).toHaveValue('Título escrito')
-  expect(form.getByLabelText(/^Descripción/)).toHaveValue('Descripción escrita')
+  expect(form.getByLabelText(/^Descripción\s*\*?$/)).toHaveValue('Descripción escrita')
   for (const label of ['Sector', 'Departamento', 'Tipo de incidencia']) expect(combo(label)).toHaveValue('1')
   expect(form.getByLabelText(/^Inicio\s*\*?$/)).toHaveValue('2026-01-01T10:00')
   expect(form.getByLabelText('Fin')).toHaveValue('2026-01-01T11:00')
@@ -242,7 +242,7 @@ describe('Nodo y Responsable en el flujo contextual', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nuevo nodo' })).not.toBeInTheDocument())
     expect(circuitDialog).toBeInTheDocument()
     expect(circuitForm.getByLabelText(/^Código de circuito/)).toHaveValue('MANUAL.02')
-    expect(circuitForm.getByLabelText(/^Descripción/)).toHaveValue('Nuevo enlace')
+    expect(circuitForm.getByLabelText(/^Descripción\s*\*?$/)).toHaveValue('Nuevo enlace')
     expect(circuitForm.getByRole('combobox', { name: 'Nodo de distribución' })).toHaveValue('Nodo nuevo')
     expectPreserved(); expect(combo('Responsable')).toHaveValue(named.name)
     expect(writes(mock)).toHaveLength(1)

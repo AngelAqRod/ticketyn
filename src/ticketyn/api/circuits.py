@@ -1,12 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, HTTPException, Path, Query, Response
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ticketyn.api.crud import DBSession, get_or_404, list_items, save_item, update_item
-from ticketyn.models import Circuit, Customer, Node
+from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_items, save_item, update_item
+from ticketyn.models import Circuit, Customer, Node, Ticket
 from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate
 
 router = APIRouter(prefix="/api/circuits", tags=["circuits"])
@@ -61,3 +61,10 @@ def validate_node(session: Session, node_id: int | None) -> None:
         raise HTTPException(404, "El nodo indicado no existe")
     if not node.active:
         raise HTTPException(422, "El nodo indicado está inactivo")
+
+
+@router.delete("/{id}", status_code=204, response_class=Response)
+def delete_circuit(id: Annotated[int, Path(gt=0)], session: DBSession):
+    delete_unreferenced(session, Circuit, id, dependent_columns=(Ticket.circuit_id,),
+        conflict_detail="No se puede eliminar el circuito porque tiene tickets asociados. Puedes desactivarlo en lugar de eliminarlo.")
+    return Response(status_code=204)

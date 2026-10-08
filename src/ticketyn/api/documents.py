@@ -29,9 +29,9 @@ def fonts():
     pdfmetrics.registerFontFamily(FONT, normal=FONT, bold=BOLD, italic=FONT, boldItalic=BOLD)
 
 
-def paragraph(value, *, size=8, color=NAVY, bold=False, keep=False):
+def paragraph(value, *, size=8, color=NAVY, bold=False, keep=False, space_after=5):
     style = ParagraphStyle('ticketyn', fontName=BOLD if bold else FONT, fontSize=size,
-        leading=size * 1.4, textColor=color, spaceAfter=5, keepWithNext=keep,
+        leading=size * 1.4, textColor=color, spaceAfter=space_after, keepWithNext=keep,
         splitLongWords=True, wordWrap='CJK')
     return Paragraph(escape(str(value if value is not None else '—')).replace('\n', '<br/>'), style)
 
@@ -58,10 +58,11 @@ def analytical_block(heading, graphic, table, width):
 
 
 class NumberedCanvas(Canvas):
-    def __init__(self, *args, document_title, zone, **kwargs):
+    def __init__(self, *args, document_title, zone, issued_at=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.states = []
         self.document_title, self.zone = document_title, zone
+        self.issued_at = issued_at
         self.setTitle(f'Ticketyn — {document_title}')
         self.setAuthor('Ticketyn')
 
@@ -97,23 +98,23 @@ class NumberedCanvas(Canvas):
         self.line(30, 31, width - 30, 31)
         self.setFillColor(MUTED)
         self.setFont(FONT, 7)
-        self.drawString(30, 19, f'Ticketyn · {self.document_title}')
+        self.drawString(30, 19, f'Emitido: {self.issued_at}' if self.issued_at else f'Ticketyn · {self.document_title}')
         self.drawRightString(width - 30, 19, f'Página {self._pageNumber} / {total}')
         self.restoreState()
 
 
-def build_pdf(output, title, zone, story):
+def build_pdf(output, title, zone, story, *, issued_at=None):
     fonts()
     document = SimpleDocTemplate(output, pagesize=landscape(A4), rightMargin=30,
         leftMargin=30, topMargin=90, bottomMargin=43, pageCompression=1)
-    document.build(story, canvasmaker=partial(NumberedCanvas, document_title=title, zone=zone))
+    document.build(story, canvasmaker=partial(NumberedCanvas, document_title=title, zone=zone, issued_at=issued_at))
 
 
-def modern_table(headers, rows, widths, *, reference=False):
-    data = [[paragraph(value, color=colors.white, bold=True, size=7) for value in headers]]
+def modern_table(headers, rows, widths, *, reference=False, compact=False):
+    data = [[paragraph(value, color=colors.white, bold=True, size=7, space_after=0 if compact else 5) for value in headers]]
     for row in rows:
         data.append([paragraph(value, size=7, bold=reference and index == 0,
-                               color=BLUE if reference and index == 0 else NAVY)
+                               color=BLUE if reference and index == 0 else NAVY, space_after=0 if compact else 5)
                      for index, value in enumerate(row)])
     if len(data) == 1:
         data.append([paragraph('Sin resultados.' if index == 0 else '') for index in range(len(headers))])
@@ -121,8 +122,8 @@ def modern_table(headers, rows, widths, *, reference=False):
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), NAVY), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, SOFT]),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 7),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 7), ('TOPPADDING', (0, 0), (-1, -1), 7),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6), ('LINEBELOW', (0, 0), (-1, 0), .5, BLUE),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 7), ('TOPPADDING', (0, 0), (-1, -1), 3 if compact else 7),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3 if compact else 6), ('LINEBELOW', (0, 0), (-1, 0), .5, BLUE),
         ('LINEBELOW', (0, 1), (-1, -1), .25, BORDER),
     ]))
     return table

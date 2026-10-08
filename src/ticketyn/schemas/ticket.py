@@ -7,13 +7,16 @@ from ticketyn.core.enums import TicketStatus
 from ticketyn.schemas.common import NonEmptyString, PositiveId, AssignmentSummary
 
 
+OptionalTicketText = Annotated[str, Field(min_length=1, max_length=10000)]
+
+
 class TicketInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("*", mode="before")
     @classmethod
     def validate_supplied_values(cls, value, info):
-        if value is None and info.field_name not in {"end_at", "responsible_id"}:
+        if value is None and info.field_name not in {"end_at", "responsible_id", "resolution", "customer_description", "customer_resolution"}:
             raise ValueError("El campo no admite null")
         if isinstance(value, str) and not value.strip():
             raise ValueError("El campo no puede estar vacío")
@@ -21,6 +24,9 @@ class TicketInput(BaseModel):
 
 
 class TicketCreate(TicketInput):
+    resolution: OptionalTicketText | None = None
+    customer_description: OptionalTicketText | None = None
+    customer_resolution: OptionalTicketText | None = None
     responsible_id: PositiveId | None = None
     title: NonEmptyString
     description: NonEmptyString
@@ -35,6 +41,9 @@ class TicketCreate(TicketInput):
 
 
 class TicketUpdate(TicketInput):
+    resolution: OptionalTicketText | None = None
+    customer_description: OptionalTicketText | None = None
+    customer_resolution: OptionalTicketText | None = None
     responsible_id: PositiveId | None = None
     title: NonEmptyString | None = None
     description: NonEmptyString | None = None
@@ -49,6 +58,9 @@ class TicketUpdate(TicketInput):
 
 
 class TicketResponse(BaseModel):
+    resolution: str | None
+    customer_description: str | None
+    customer_resolution: str | None
     responsible_id: int | None
     responsible: AssignmentSummary | None
     node: AssignmentSummary | None

@@ -521,15 +521,17 @@ def test_inherited_lock_held_by_child(tmp_path):
 
 def test_real_release_tree_does_not_match_its_own_key_detector(tmp_path):
     archive = tmp_path/'candidate.tar'
-    names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().strip('\0').split('\0')
+    # Draft release: include new assets/files and omit tracked files removed by a build.
+    names = set(subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT).decode().strip('\0').split('\0'))
     with tarfile.open(archive, 'w') as output:
         for name in names:
-            if u.selected(name):
+            if u.selected(name) and ((ROOT/name).exists() or (ROOT/name).is_symlink()):
                 output.add(ROOT/name, arcname=name, recursive=False)
     candidate = tmp_path/'candidate'
     u.extract_release(archive, candidate)
     assert (candidate/'deploy/update_support.py').is_file()
     assert (candidate/'frontend/dist/index.html').is_file()
+    assert u.assets(candidate)  # All assets referenced by the new index must be present.
 
 
 def test_key_detector_still_rejects_private_key_content(tmp_path):

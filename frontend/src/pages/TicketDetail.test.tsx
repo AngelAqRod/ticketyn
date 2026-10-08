@@ -20,6 +20,7 @@ function mockApi(initial: Ticket = ticket, patch?: (options: RequestInit) => Pro
       return Promise.resolve(jsonResponse(current))
     }
     if (path === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
+    if (path.startsWith('/api/tickets/1/updates')) return Promise.resolve(jsonResponse({ items: [], next_cursor: null }))
     if (path === '/api/tickets/1') return Promise.resolve(jsonResponse(current))
     if (path.startsWith('/api/tickets?')) return Promise.resolve(jsonResponse([current]))
     if (path.startsWith('/api/responsibles') || path.startsWith('/api/nodes')) return Promise.resolve(jsonResponse([]))
@@ -51,6 +52,12 @@ describe('detalle de tickets', () => {
     expect(screen.getByText('Fecha de creación')).toBeInTheDocument()
     expect(screen.getByText('Última actualización')).toBeInTheDocument()
     expect(mock).toHaveBeenCalledWith('/api/customers/1', expect.any(Object))
+  })
+  it('mantiene disponible el seguimiento en tickets cerrados', async () => {
+    mockApi({ ...ticket, status: 'CLOSED', end_at: '2026-01-01T13:00:00Z' }); open()
+    expect(await screen.findByRole('heading', { name: 'Seguimiento' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Nueva intervención' })).toBeEnabled())
+    expect(await screen.findByText('Sin actualizaciones')).toBeInTheDocument()
   })
   it('formatea duración final en días, horas y minutos', async () => {
     mockApi({ ...ticket, end_at: '2026-01-03T16:15:00Z', duration_seconds: 188100 }); open()
@@ -215,5 +222,51 @@ describe('edición de tickets', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo guardar')
     expect(field('Título')).toHaveValue(ticket.title)
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled()
+  })
+})
+
+describe('resolución y textos autorizados', () => {
+  it('muestra resolución interna separada de descripción y ofrece ambos PDF', async () => {
+    mockApi({ ...ticket, resolution: 'Solución interna documentada' }); open()
+    expect(await screen.findByText('Solución interna documentada')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Resolución documentada' })).toBeInTheDocument()
+    expect(screen.getByText(ticket.description)).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Exportar PDF'))
+    expect(screen.getByRole('button', { name: 'Reporte técnico interno' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reporte para cliente' })).toBeInTheDocument()
+  })
+
+  it('edita la resolución de un cerrado sin cambiar sus fechas y autoriza textos explícitos', async () => {
+    const closed = { ...ticket, status: 'CLOSED' as const, end_at: '2026-01-01T13:00:00Z', resolution: 'Resolución anterior' }
+    const mock = mockApi(closed); open('/tickets/1/edit')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled())
+    expect(screen.getByLabelText('Resolución interna')).toHaveValue('Resolución anterior')
+    expect(screen.getByLabelText('Descripción del incidente')).toHaveValue('')
+    expect(screen.getByLabelText('Resolución del incidente')).toHaveValue('')
+    expect(screen.getByText(/Nunca se copia automáticamente/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Resolución interna'), { target: { value: 'Resolución corregida' } })
+    fireEvent.change(screen.getByLabelText('Descripción del incidente'), { target: { value: 'Incidente compartible' } })
+    fireEvent.change(screen.getByLabelText('Resolución del incidente'), { target: { value: 'Solución compartible' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await screen.findByText('Cambios guardados correctamente.')
+    const body = JSON.parse(String(mock.mock.calls.find(([, options]) => options?.method === 'PATCH')![1]?.body))
+    expect(body).toMatchObject({ resolution: 'Resolución corregida', customer_description: 'Incidente compartible', customer_resolution: 'Solución compartible', start_at: closed.start_at, end_at: closed.end_at, status: 'CLOSED' })
+  })
+
+  it('puede retirar el contenido autorizado con null y asocia los errores de resolución', async () => {
+    const mock = mockApi({ ...ticket, customer_description: 'Antes', customer_resolution: 'Antes' }, async () => jsonResponse({ detail: [{ loc: ['body', 'resolution'], msg: 'Contenido inválido' }] }, 422))
+    open('/tickets/1/edit')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Descripción del incidente'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Resolución del incidente'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Resolución interna'), { target: { value: 'Borrador preservado' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Resolución documentada: Contenido inválido')
+    expect(screen.getByLabelText('Resolución interna')).toHaveValue('Borrador preservado')
+    expect(screen.getByLabelText('Resolución interna')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Resolución interna')).toHaveAttribute('aria-describedby', 'ticket-submit-error')
+    const body = JSON.parse(String(mock.mock.calls.find(([, options]) => options?.method === 'PATCH')![1]?.body))
+    expect(body.customer_description).toBeNull()
+    expect(body.customer_resolution).toBeNull()
   })
 })

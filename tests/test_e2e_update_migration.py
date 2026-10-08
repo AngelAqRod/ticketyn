@@ -34,7 +34,7 @@ def cli(url, action, revision):
 def snapshot(connection, column):
     # Every existing domain row, including timestamps, numbering and historical catalogs.
     columns = [column] if isinstance(column, str) else list(column)
-    tables = sorted(Base.metadata.tables)
+    tables = sorted(set(inspect(connection).get_table_names()) & set(Base.metadata.tables))
     rows = {name: connection.execute(text(
         f'SELECT to_jsonb(t) - CAST(:columns AS text[]) FROM "{name}" t ORDER BY id'), {'columns': columns}).scalars().all()
             for name in tables}
@@ -63,9 +63,42 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
     engine = create_engine(url)
     try:
         cli(url, 'upgrade', previous)
+        # Sembrar SQL del esquema histórico: el backend actual requiere 0009.
+        # No hacer que código nuevo funcione artificialmente contra una DB antigua.
+        with engine.begin() as connection:
+            connection.execute(text("INSERT INTO customers(customer_code,name) VALUES ('E2E','Cliente ficticio')"))
+            connection.execute(text("INSERT INTO nodes(name) VALUES ('Nodo ficticio')"))
+            connection.execute(text("INSERT INTO responsibles(name) VALUES ('Asignado ficticio')"))
+            connection.execute(text("INSERT INTO circuits(customer_id,circuit_code,description,node_id) VALUES (1,'E2E-C','Enlace ficticio',1)"))
+            for table in ('sectors', 'departments', 'incident_types'):
+                connection.execute(text(f"INSERT INTO {table}(name) VALUES ('Ficticio')"))
+            for number, status, end in [(1, 'OPEN', None), (2, 'CLOSED', '2026-10-01T11:00:00Z')]:
+                connection.execute(text("INSERT INTO tickets(ticket_number,reference,title,description,customer_id,circuit_id,sector_id,department_id,incident_type_id,responsible_id,start_at,end_at,status) VALUES (:number,:reference,'Histórico ñ','Datos conservados',1,1,1,1,1,1,'2026-10-01T10:00:00Z',:end,:status)"),
+                                   {'number': number, 'reference': f'E2E-{number}', 'end': end, 'status': status})
+            existing = {item['name'] for item in inspect(connection).get_columns('tickets')}
+            for prior in ('_ticketyn_e2e_update_probe', '_ticketyn_e2e_postmigration_probe'):
+                if prior in existing:
+                    connection.execute(text('UPDATE tickets SET '+prior+'=:value WHERE id=1'), {'value': 'Dato previo de '+prior})
+            before = snapshot(connection, column)
+        cli(url, 'upgrade', head)
+        with engine.connect() as connection:
+            assert connection.scalar(text('SELECT version_num FROM alembic_version')) == head
+            assert snapshot(connection, column) == before
+            columns = {c['name']: c for c in inspect(connection).get_columns('tickets')}
+            for added_column in added_columns:
+                assert isinstance(columns[added_column]['type'], Text)
+                assert columns[added_column]['nullable'] and columns[added_column]['default'] is None
+                assert added_column not in Base.metadata.tables['tickets'].c
+                assert connection.execute(text('SELECT '+added_column+' FROM tickets ORDER BY id')).scalars().all() == [None, None]
+            if head == HEAD:
+                assert {'_ticketyn_e2e_update_probe', '_ticketyn_e2e_postmigration_probe', '_ticketyn_e2e_recovery_probe'} <= set(columns)
+        cli(url, 'downgrade', previous)
+        with engine.connect() as connection:
+            assert connection.scalar(text('SELECT version_num FROM alembic_version')) == previous
+            assert snapshot(connection, column) == before
+        cli(url, 'upgrade', 'head')
         monkeypatch.setenv('DATABASE_URL', url.render_as_string(hide_password=False))
         get_settings.cache_clear()
-        # The app uses an explicit test Session; never the default/dev engine.
         from ticketyn.main import create_app
         app = create_app()
         def session():
@@ -73,63 +106,14 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
                 yield db
         app.dependency_overrides[get_session] = session
         with TestClient(app) as client:
-            def post(path, value):
-                response = client.post('/api/'+path, json=value)
-                assert response.status_code == 201, response.text
-                return response.json()
-            customer = post('customers', {'customer_code': 'E2E', 'name': 'Cliente ficticio'})
-            node = post('nodes', {'name': 'Nodo ficticio'})
-            responsible = post('responsibles', {'name': 'Asignado ficticio'})
-            circuit = post('circuits', {'customer_id': customer['id'], 'circuit_code': 'E2E-C', 'description': 'Circuito ficticio', 'node_id': node['id']})
-            ids = {field+'_id': post(path, {'name': 'Catálogo ficticio'})['id']
-                   for field, path in [('sector', 'sectors'), ('department', 'departments'), ('incident_type', 'incident-types')]}
-            payload = {**ids, 'customer_id': customer['id'], 'circuit_id': circuit['id'], 'responsible_id': responsible['id'],
-                       'title': 'Incidencia histórica ñ', 'description': 'Dato previo conservado', 'start_at': '2026-10-01T10:00:00+00:00'}
-            opened = post('tickets', payload)
-            closed = post('tickets', {**payload, 'status': 'CLOSED', 'end_at': '2026-10-01T11:00:00+00:00'})
-            # Preserve non-NULL data already stored in older internal probes too.
-            with engine.begin() as connection:
-                existing = {item['name'] for item in inspect(connection).get_columns('tickets')}
-                for prior in ('_ticketyn_e2e_update_probe', '_ticketyn_e2e_postmigration_probe'):
-                    if prior in existing:
-                        connection.execute(text('UPDATE tickets SET '+prior+'=:value WHERE id=:id'),
-                                           {'value': 'Dato previo de '+prior, 'id': opened['id']})
-                before = snapshot(connection, column)
-                assert connection.scalar(text('SELECT version_num FROM alembic_version')) == previous
-            cli(url, 'upgrade', head)
-            with engine.connect() as connection:
-                assert connection.scalar(text('SELECT version_num FROM alembic_version')) == head
-                assert snapshot(connection, column) == before
-                columns = {c['name']: c for c in inspect(connection).get_columns('tickets')}
-                for added_column in added_columns:
-                    assert isinstance(columns[added_column]['type'], Text)
-                    assert columns[added_column]['nullable'] is True and columns[added_column]['default'] is None
-                    assert added_column not in Base.metadata.tables['tickets'].c
-                    assert connection.execute(text('SELECT '+added_column+' FROM tickets ORDER BY id')).scalars().all() == [None, None]
-                if head == HEAD:
-                    assert {'_ticketyn_e2e_update_probe', '_ticketyn_e2e_postmigration_probe', '_ticketyn_e2e_recovery_probe'} <= set(columns)
-            for ticket in (opened, closed):
-                response = client.get('/api/tickets/'+str(ticket['id']))
-                assert response.status_code == 200 and response.json() == ticket
-                assert all(added_column not in response.json() for added_column in added_columns)
-            health = client.get('/health')
-            assert health.status_code == 200 and health.json() == {'status': 'ok'}
-            updated = client.patch('/api/tickets/'+str(opened['id']), json={'title': 'Editado tras migración'})
-            assert updated.status_code == 200
-            added = post('tickets', {**payload, 'title': 'Creado tras migración'})
-            with engine.begin() as connection:
-                for added_column in added_columns:
-                    assert connection.scalar(text('SELECT '+added_column+' FROM tickets WHERE id=:id'), {'id': added['id']}) is None
-                    connection.execute(text('UPDATE tickets SET '+added_column+'=NULL WHERE id=:id'), {'id': added['id']})
-                before_downgrade = snapshot(connection, column)
-            cli(url, 'downgrade', previous)
-            with engine.connect() as connection:
-                assert connection.scalar(text('SELECT version_num FROM alembic_version')) == previous
-                assert all(added_column not in {c['name'] for c in inspect(connection).get_columns('tickets')} for added_column in added_columns)
-                assert snapshot(connection, column) == before_downgrade
-            # Reapply the actual migration after the tested downgrade; no automatic updater rollback.
-            cli(url, 'upgrade', head)
-            assert client.get('/api/tickets/'+str(added['id'])).status_code == 200
+            for number in (1, 2):
+                response = client.get(f'/api/tickets/{number}')
+                assert response.status_code == 200
+                assert response.json()['description'] == 'Datos conservados'
+                assert response.json()['resolution'] is None
+                assert all(field not in response.json() for field in added_columns)
+            assert client.get('/health').json() == {'status': 'ok'}
+            assert client.patch('/api/tickets/1', json={'title': 'Editado tras migración'}).status_code == 200
     finally:
         get_settings.cache_clear()
         engine.dispose()
@@ -140,29 +124,40 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
 def test_candidate_release_and_real_migration_lineage(tmp_path):
     spec = importlib.util.spec_from_file_location('update_validator', ROOT/'deploy/update_support.py')
     updater = importlib.util.module_from_spec(spec); spec.loader.exec_module(updater)
-    assert updater.tag_version('v0.1.5-test.1') == '0.1.5-test.1'
-    updater.forward('0.1.4-test.1', '0.1.5-test.1')
-    assert updater.ri.project_version(ROOT) == '0.1.6'
+    assert updater.tag_version('v0.2.0') == '0.2.0'
+    updater.forward('0.1.6', '0.2.0')
+    # Applied migration bytes must still match the actual official source tag.
+    tracked = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'v0.1.6', 'alembic'], cwd=ROOT).decode().splitlines()
+    for name in tracked:
+        assert (ROOT/name).read_bytes() == subprocess.check_output(['git', 'show', f'v0.1.6:{name}'], cwd=ROOT)
+    assert updater.ri.project_version(ROOT) == '0.2.0'
     previous = tmp_path/'previous'; previous.mkdir()
     shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', previous/'alembic.ini')
+    # The source release predates the additive follow-up migration.
+    (previous/'alembic/versions/0008_ticket_updates.py').unlink()
+    (previous/'alembic/versions/0009_ticket_resolution.py').unlink()
     archive = tmp_path/'candidate.tar'
-    # Recovery keeps every applied revision byte-for-byte; no new migration.
-    names = set(subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().strip('\0').split('\0'))
+    # The candidate retains every applied revision and adds follow-up/resolution.
+    names = set(subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT).decode().strip('\0').split('\0'))
     with tarfile.open(archive, 'w') as output:
         for name in sorted(names):
-            if updater.selected(name):
+            if updater.selected(name) and ((ROOT/name).exists() or (ROOT/name).is_symlink()):
                 output.add(ROOT/name, arcname=name, recursive=False)
     candidate = tmp_path/'candidate'
     updater.extract_release(archive, candidate)
-    assert updater.ri.project_version(candidate) == '0.1.6'
-    assert updater.migration_plan(previous, candidate, HEAD) == HEAD
-    assert not list((ROOT/'alembic/versions').glob('0008*'))
-    assert not list((candidate/'alembic/versions').glob('0008*'))
-    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.1.6'
+    assert updater.ri.project_version(candidate) == '0.2.0'
+    assert updater.migration_plan(previous, candidate, HEAD) == '0009_ticket_resolution'
+    assert (candidate/'alembic/versions/0008_ticket_updates.py').is_file()
+    assert (candidate/'alembic/versions/0009_ticket_resolution.py').is_file()
+    assert not list((candidate/'alembic/versions').glob('0010*'))
+    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.2.0'
     lock = json.loads((ROOT/'frontend/package-lock.json').read_text())
-    assert lock['version'] == lock['packages']['']['version'] == '0.1.6'
+    assert lock['version'] == lock['packages']['']['version'] == '0.2.0'
     assert (candidate/'frontend/dist/index.html').is_file()
+    installation = subprocess.run(['bash', '-c', 'source "$1/install.sh"; SOURCE="$2"; check_project; validate_release_source "$SOURCE"; project_version "$SOURCE"', 'release-check', str(ROOT), str(candidate)], capture_output=True, text=True)
+    assert installation.returncode == 0, installation.stderr
+    assert installation.stdout.strip() == '0.2.0'
 
     assert (candidate/'update.sh').read_bytes() == (ROOT/'update.sh').read_bytes()
     assert (candidate/'deploy/update_support.py').read_bytes() == (ROOT/'deploy/update_support.py').read_bytes()

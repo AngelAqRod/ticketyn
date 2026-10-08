@@ -7,6 +7,9 @@ export interface TicketStats {
 }
 
 export interface TicketCreateInput {
+  resolution?: string | null
+  customer_description?: string | null
+  customer_resolution?: string | null
   responsible_id?: number | null
   title: string
   description: string
@@ -37,6 +40,9 @@ export interface TicketQuery {
 }
 
 export interface Ticket {
+  resolution?: string | null
+  customer_description?: string | null
+  customer_resolution?: string | null
   responsible_id?: number | null
   responsible?: { id: number; name: string; active: boolean } | null
   node?: { id: number; name: string; active: boolean } | null

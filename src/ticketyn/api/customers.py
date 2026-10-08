@@ -1,9 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Response
 
-from ticketyn.api.crud import DBSession, get_or_404, list_items, save_item, update_item
-from ticketyn.models import Customer
+from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_items, save_item, update_item
+from ticketyn.models import Circuit, Customer, Ticket
 from ticketyn.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
@@ -39,3 +39,10 @@ def patch_customer(id: Annotated[int, Path(gt=0)], payload: CustomerUpdate, sess
     item = get_or_404(session, Customer, id)
     values = payload.model_dump(exclude_unset=True)
     return update_item(session, item, values)
+
+
+@router.delete("/{id}", status_code=204, response_class=Response)
+def delete_customer(id: Annotated[int, Path(gt=0)], session: DBSession):
+    delete_unreferenced(session, Customer, id, dependent_columns=(Circuit.customer_id, Ticket.customer_id),
+        conflict_detail="No se puede eliminar el cliente porque tiene circuitos o tickets asociados. Puedes desactivarlo en lugar de eliminarlo.")
+    return Response(status_code=204)

@@ -3,7 +3,8 @@ import { FeedbackMessage } from './FeedbackMessage'
 import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { Network, SlidersHorizontal, Users, Ticket, Pencil, Power } from 'lucide-react'
+import { Network, SlidersHorizontal, Users, Ticket, Pencil, Power, Trash2 } from 'lucide-react'
+import { CatalogDeleteConfirmation } from './CatalogDeleteConfirmation'
 import { QuickCatalogCreate } from './QuickCatalogCreate'
 import { SearchableSelect } from './SearchableSelect'
 import { useUrlFilters } from '../hooks/useUrlFilters'
@@ -100,8 +101,10 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
   const setSearch = (value: string) => kind === 'circuits' ? change({ search: value }) : setLocalSearch(value)
   const customerCache = useRef<Customer[] | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [deleting, setDeleting] = useState<Customer | Circuit | null>(null)
   const [busy, setBusy] = useState(false)
   const sending = useRef(false)
+  const newRecordButton = useRef<HTMLButtonElement>(null)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   useEffect(() => {
@@ -162,7 +165,7 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
   }
 
   return <>
-    <PageHeading title={info.title} description={info.description} action={<button type="button" className="button-primary" disabled={busy || loading || Boolean(loadError)} onClick={() => edit()}>Nuevo {info.singular}</button>} />
+    <PageHeading title={info.title} description={info.description} action={<button ref={newRecordButton} type="button" className="button-primary" disabled={busy || loading || Boolean(loadError)} onClick={() => edit()}>Nuevo {info.singular}</button>} />
     {notice && <FeedbackMessage variant="success" className="mb-4">{notice}</FeedbackMessage>}
     {error && <FeedbackMessage id="catalog-form-error" variant="error" className="mb-4">{error}</FeedbackMessage>}
     {draft && <form className={`form-surface mb-4${refreshedModule ? '' : ' border-b border-slate-200'}`} aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate aria-describedby={error ? "catalog-form-error" : undefined}>
@@ -205,8 +208,15 @@ export function CatalogAdmin({ kind }: { kind: CatalogKind }) {
         <td className="whitespace-nowrap text-xs tabular-nums text-slate-600"><time dateTime={item.created_at} title={formatDate(item.created_at)}>{formatTableDate(item.created_at)}</time></td><td><div className="table-actions">
           {kind === 'customers' && <><Link className="button-ghost table-action" to={`/circuits?customer_id=${item.id}`} aria-label={`Ver circuitos de ${code(item)}`}><Network size={14} aria-hidden="true" />Circuitos</Link><Link className="button-ghost table-action" to={`/tickets?customer_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}><Ticket size={14} aria-hidden="true" />Tickets</Link></>}
           {kind === 'circuits' && <Link className="button-ghost table-action" to={`/tickets?circuit_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}><Ticket size={14} aria-hidden="true" />Ver tickets</Link>}
-          <button type="button" className="button-secondary table-action" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}><Pencil size={14} aria-hidden="true" />Editar</button><button type="button" className={`${item.active ? 'button-danger' : 'button-secondary'} table-action`} disabled={busy || Boolean(draft)} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}><Power size={14} aria-hidden="true" />{item.active ? 'Desactivar' : 'Activar'}</button></div></td>
+          <button type="button" className="button-secondary table-action" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}><Pencil size={14} aria-hidden="true" />Editar</button><button type="button" className={`${item.active ? 'button-danger' : 'button-secondary'} table-action`} disabled={busy || Boolean(draft)} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}><Power size={14} aria-hidden="true" />{item.active ? 'Desactivar' : 'Activar'}</button>
+          {('customer_code' in item || 'circuit_code' in item) && <button type="button" className="button-danger table-action" disabled={busy || Boolean(draft)} aria-label={`Eliminar ${code(item)}`} onClick={() => { setError(null); setNotice(null); setDeleting(item) }}><Trash2 size={14} aria-hidden="true" />Eliminar</button>}</div></td>
       </tr>)}</tbody></table></div>}
+    {deleting && <CatalogDeleteConfirmation item={deleting} fallbackFocus={newRecordButton} onCancel={() => setDeleting(null)} onBusyChange={setBusy} onDeleted={() => {
+      setItems((current) => current.filter((row) => row.id !== deleting.id))
+      setBusy(false)
+      setNotice('Registro eliminado correctamente.')
+      setDeleting(null)
+    }} />}
     {quickNode && draft && <QuickCatalogCreate kind="node" onCancel={() => setQuickNode(false)} onCreated={(node) => { setNodes((current) => [...current, node]); setDraft({ ...draft, nodeId: String(node.id) }); setQuickNode(false) }} />}
   </>
 }

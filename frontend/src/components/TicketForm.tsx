@@ -23,6 +23,9 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   const navigate = useNavigate()
   const [title, setTitle] = useState(ticket?.title ?? '')
   const [description, setDescription] = useState(ticket?.description ?? '')
+  const [resolution, setResolution] = useState(ticket?.resolution ?? '')
+  const [customerDescription, setCustomerDescription] = useState(ticket?.customer_description ?? '')
+  const [customerResolution, setCustomerResolution] = useState(ticket?.customer_resolution ?? '')
   const [customerId, setCustomerId] = useState(ticket ? String(ticket.customer_id) : '')
   const [circuitId, setCircuitId] = useState(ticket ? String(ticket.circuit_id) : '')
   const [responsibleId, setResponsibleId] = useState(ticket?.responsible_id ? String(ticket.responsible_id) : '')
@@ -136,7 +139,11 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
       setSubmitting(true)
       const controller = new AbortController()
       submitController.current = controller
+      const optionalTexts = { resolution: resolution.trim() ? resolution : null, customer_description: customerDescription.trim() ? customerDescription : null, customer_resolution: customerResolution.trim() ? customerResolution : null }
+      const changedTexts = Object.fromEntries(Object.entries(optionalTexts).filter(([field, value]) =>
+        ticket ? value !== (ticket[field as keyof typeof optionalTexts] ?? null) : value !== null))
       const payload = {
+        ...changedTexts,
         title: title.trim(), description: description.trim(), customer_id: Number(customerId),
         circuit_id: Number(circuitId), sector_id: Number(sectorId), department_id: Number(departmentId),
         responsible_id: responsibleId ? Number(responsibleId) : null, incident_type_id: Number(incidentTypeId), start_at: start, end_at: end, status,
@@ -192,6 +199,23 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !startAt.trim()) || apiInvalidFields.includes("start_at")} id="start-at" label="Inicio" required><div className="flex items-center gap-2"><input id="start-at" type="datetime-local" step="60" className="form-input min-w-0" required value={startAt} onChange={(e) => setStartAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Inicio" onClick={() => setStartAt(localDateTimeValue())}>Ahora</button></div></FormField>
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={submitError === "Fin debe ser igual o posterior a Inicio." || apiInvalidFields.includes("end_at")} id="end-at" label="Fin"><div className="flex items-center gap-2"><input id="end-at" type="datetime-local" step="60" className="form-input min-w-0" value={endAt} onChange={(e) => setEndAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Fin" onClick={() => setEndAt(localDateTimeValue())}>Ahora</button></div></FormField>
           </div>
+        </section>
+        <section aria-labelledby="resolution-heading" className="space-y-3">
+          <h2 id="resolution-heading" className="text-sm font-semibold text-slate-900">Resolución documentada</h2>
+          <p className="text-xs text-muted">Opcional. Explica cómo se resolvió el incidente; puedes completarla o corregirla después del cierre. Los cambios quedan registrados como seguimiento interno, sin identificar al editor.</p>
+          <FormField id="resolution" label="Resolución interna" describedBy={submitError ? 'ticket-submit-error' : undefined} invalid={apiInvalidFields.includes('resolution')}>
+            <textarea id="resolution" className="form-input resize-y" rows={3} maxLength={10000} value={resolution} onChange={(event) => setResolution(event.target.value)} />
+          </FormField>
+        </section>
+        <section aria-labelledby="customer-report-heading" className="space-y-3">
+          <h2 id="customer-report-heading" className="text-sm font-semibold text-slate-900">Contenido autorizado para cliente</h2>
+          <p id="customer-report-help" className="text-xs text-muted">Al guardar estos textos autorizas su inclusión en el PDF para cliente. Revisa que no contengan IP internas, comentarios privados ni información sensible. Nunca se copia automáticamente la descripción ni la resolución interna. Vaciar un campo retira ese texto del reporte.</p>
+          <FormField id="customer-description" label="Descripción del incidente" describedBy={['customer-report-help', submitError ? 'ticket-submit-error' : ''].filter(Boolean).join(' ')} invalid={apiInvalidFields.includes('customer_description')}>
+            <textarea id="customer-description" className="form-input resize-y" rows={3} maxLength={10000} value={customerDescription} onChange={(event) => setCustomerDescription(event.target.value)} />
+          </FormField>
+          <FormField id="customer-resolution" label="Resolución del incidente" describedBy={['customer-report-help', submitError ? 'ticket-submit-error' : ''].filter(Boolean).join(' ')} invalid={apiInvalidFields.includes('customer_resolution')}>
+            <textarea id="customer-resolution" className="form-input resize-y" rows={3} maxLength={10000} value={customerResolution} onChange={(event) => setCustomerResolution(event.target.value)} />
+          </FormField>
         </section>
       </fieldset>
       {submitError && <FeedbackMessage id="ticket-submit-error" variant="error" className="mt-5">{submitError}</FeedbackMessage>}

@@ -1,10 +1,12 @@
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, contains_eager
 
 from ticketyn.api.crud import save_item
 from ticketyn.api.ticket_numbers import format_reference, locked_number_config
-from ticketyn.models import Circuit, Customer, Department, IncidentType, Sector, Ticket, Node, Responsible
+from ticketyn.models import Circuit, Customer, Department, IncidentType, Sector, Ticket, Node, Responsible, TicketUpdate
 from ticketyn.schemas.ticket import TicketListResponse, TicketResponse
 
 RELATED_MODELS = {
@@ -63,6 +65,8 @@ def create_ticket(session: Session, values: dict) -> Ticket:
             **values, ticket_number=config.next_number,
             reference=format_reference(config.prefix, config.separator, config.next_number, config.padding),
         )
+        if ticket.resolution is not None:
+            record_resolution_change(session, ticket, None, ticket.resolution)
         config.next_number += 1
         # save_item confirma tanto el ticket como el contador en una transacción.
         return save_item(session, ticket)
@@ -83,6 +87,8 @@ def patch_ticket(session: Session, id: int, changes: dict) -> Ticket:
             field for field in (*RELATED_MODELS, "responsible_id") if field in changes and changes[field] != current[field]
         }
         validate_ticket_values(session, {**current, **changes}, changed_relations)
+        if "resolution" in changes and changes["resolution"] != ticket.resolution:
+            record_resolution_change(session, ticket, ticket.resolution, changes["resolution"])
         for field, value in changes.items():
             setattr(ticket, field, value)
         return save_item(session, ticket)
@@ -153,3 +159,11 @@ def get_ticket(session: Session, id: int) -> TicketListResponse:
     if row is None:
         raise HTTPException(404, f"Ticket con id {id} no encontrado")
     return ticket_response(row)
+
+
+def record_resolution_change(session: Session, ticket: Ticket, previous: str | None, current: str | None):
+    # Evidencia de cambios, no identidad del editor: todavía no hay usuarios/auth.
+    # Se confirma en la misma transacción que el ticket. Siempre INTERNAL.
+    session.add(TicketUpdate(ticket=ticket, visibility="INTERNAL", responsible_id=None,
+        occurred_at=datetime.now(timezone.utc),
+        content=f"Cambio de resolución documentada.\nAnterior: {previous if previous is not None else 'Sin resolución'}\nNueva: {current if current is not None else 'Sin resolución'}"))

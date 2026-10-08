@@ -9,6 +9,8 @@ const fieldLabels: Record<string, string> = {
   name: 'Nombre', customer_code: 'Código de cliente', circuit_code: 'Código de circuito',
   title: 'Título', description: 'Descripción', node_id: 'Nodo de distribución', responsible_id: 'Responsable', customer_id: 'Cliente', circuit_id: 'Circuito',
   sector_id: 'Sector', department_id: 'Departamento', incident_type_id: 'Tipo de incidencia',
+  content: 'Descripción de la intervención', occurred_at: 'Fecha/hora de intervención', visibility: 'Visibilidad',
+  resolution: 'Resolución documentada', customer_description: 'Descripción del incidente', customer_resolution: 'Resolución del incidente',
   start_at: 'Inicio', end_at: 'Fin', status: 'Estado',
 }
 
@@ -50,6 +52,7 @@ async function requestJson<T>(path: string, options: RequestInit): Promise<T> {
     } catch { /* Un error sin JSON conserva su código HTTP. */ }
     throw new ApiError(message ?? `La API devolvió un error HTTP ${response.status}.`, response.status, fields)
   }
+  if (response.status === 204 && options.method === 'DELETE') return undefined as T
   try {
     return await response.json() as T
   } catch (error) {
@@ -88,4 +91,8 @@ export async function downloadFile(path: string, filename: string): Promise<void
     const link = document.createElement('a'); link.href = url; link.download = filename
     document.body.append(link); link.click(); link.remove()
   } finally { URL.revokeObjectURL(url) }
+}
+
+export function deleteResource(path: string, signal?: AbortSignal): Promise<void> {
+  return requestJson<void>(path, { method: 'DELETE', signal, headers: { Accept: 'application/json' } })
 }

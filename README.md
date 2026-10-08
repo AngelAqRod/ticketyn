@@ -4,13 +4,8 @@ Ticketyn es un producto web de gestión de incidencias: tickets, clientes,
 circuitos/servicios contratados, catálogos, filtros operativos y reportería.
 Licencia **GNU AGPL v3, AGPL-3.0-only**; texto completo en [LICENSE](LICENSE).
 
-> **Candidata temporal saludable `v0.1.5-test.1`: exclusivamente para validar
-> recovery hacia delante desde el fallo de v0.1.4-test.1 en laboratorio.
-> `/health` vuelve a HTTP 200; HEAD permanece en `0007_e2e_recovery_probe`.
-> No añade migraciones. No constituye una release normal de producción.
-> Ejecuta el updater v2; esta candidata no omite ninguna garantía de recovery.
-
-Versión del proyecto: `0.1.5`.
+Versión estable **v0.2.0**.
+La versión declarada de backend y frontend es `0.2.0`.
 
 > **Seguridad:** Ticketyn actualmente NO implementa autenticación ni autorización.
 > No expongas el servicio directamente a Internet. Para pruebas internas utiliza
@@ -21,7 +16,9 @@ Versión del proyecto: `0.1.5`.
 
 - Dashboard con estadísticas globales SQL y tickets recientes.
 - Creación, detalle, edición y finalización de tickets; referencias inmutables.
-- Clientes y circuitos con códigos manuales, administración y activación.
+- Seguimiento cronológico con intervenciones internas/públicas y responsable opcional.
+- Resolución documentada y PDF individual interno o para cliente, con textos autorizados separados.
+- Clientes y circuitos con códigos manuales, administración, activación y eliminación únicamente sin dependencias.
 - Catálogos: sectores, departamentos, tipos de incidencia, nodos y responsables.
 - Combobox de cliente/circuito y creación rápida Circuito → Nodo sin perder el ticket.
 - Configuración persistente de numeración con vista previa.
@@ -29,13 +26,113 @@ Versión del proyecto: `0.1.5`.
 - Reportería General, Por sector, Por nodo y Por responsable.
 - Exportaciones PDF/XLSX de reportes y todos los tickets filtrados.
 
-No hay usuarios/auth, adjuntos, auditoría, comentarios, SLA ni borrado físico.
+No hay usuarios/auth, adjuntos, auditoría completa, SLA ni eliminación de tickets/intervenciones.
 Existe un instalador de primera instalación, `install.sh`, para sistemas
 soportados con frontend precompilado. Existen `update.sh`, `backup.sh`,
 `restore.sh` y `restore.sh --finalize`; no existe rollback automático de updates.
 El instalador, backup/restore y el updater con forward recovery fueron validados
 end-to-end en Debian. La provisión del nuevo comando `ticketyn-update` debe
 validarse también en el laboratorio antes de desplegarla en producción.
+
+## Actualización a v0.2.0
+
+Desde una instalación administrada v0.1.6 (Alembic `0007_e2e_recovery_probe`),
+la versión añade `0008_ticket_updates` y `0009_ticket_resolution`. Conserva
+clientes, circuitos y tickets existentes; las nuevas columnas de resolución y
+textos de cliente comienzan en NULL. No se publican automáticamente textos internos.
+
+Para actualizar desde el tag oficial, utiliza `ticketyn-update v0.2.0`. Requiere instalación administrada válida,
+backup previo satisfactorio y ausencia de estados de update/restore pendientes.
+El updater conserva sus garantías: prepara la release, crea backup, detiene el
+servicio, migra y activa. Ante un fallo después de cambiar el esquema no debe
+volverse al código anterior a ciegas; se conserva el estado para recuperación hacia
+delante. No hay downgrade ni restore automático.
+
+El tag incluye `frontend/dist` actualizado y ambas migraciones. La publicación
+no ejecuta una actualización real ni modifica producción.
+
+## Eliminación de registros creados por error
+
+Clientes y Circuitos ofrecen **Eliminar** con confirmación del código y nombre o
+descripción. `DELETE /api/customers/{id}` exige ausencia de circuitos y tickets;
+`DELETE /api/circuits/{id}` exige ausencia de tickets. Devuelven `204` sin contenido,
+`404` si no existen y `409` si tienen dependencias o hay un conflicto concurrente.
+No hay cascadas: los registros relacionados y el seguimiento se conservan. Si hay
+dependencias, puede desactivarse el registro en lugar de eliminarlo.
+
+## Seguimiento de tickets
+
+El detalle permite registrar intervenciones en tickets abiertos o cerrados.
+Descripción (`content`), responsable opcional, fecha/hora local editable y
+visibilidad interna/pública se guardan sin modificar el estado ni Inicio/Fin.
+El botón **Nueva intervención** abre un modal accesible. El historial muestra primero
+las intervenciones recientes, con páginas de diez y **Cargar más**, ordenadas por
+`occurred_at DESC, id DESC`. Al guardar, se recarga la primera página. Las nuevas
+intervenciones anteriores al cursor aparecen al recargar; no desplazan las páginas
+ya consultadas.
+
+- `GET /api/tickets/{id}/updates`: conserva la lista completa ascendente para consumidores existentes, incluyendo `created_at` para auditoría.
+  Con `limit` (1–100) devuelve `{items, next_cursor}` en orden descendente; el cursor
+  opaco opcional consulta la siguiente página y está asociado al ticket.
+- `POST /api/tickets/{id}/updates`: registrar; sin fecha usa la actual del servidor,
+  sin visibilidad usa `INTERNAL`. Las fechas deben incluir zona horaria.
+
+`created_at` se genera en PostgreSQL y no se acepta como entrada de la API.
+La vista operativa muestra únicamente la fecha de intervención. No se ofrecen
+edición ni eliminación de intervenciones. Nuevas asignaciones usan responsables
+activos; el historial conserva los desactivados. Las exportaciones globales de
+tickets/reportes no incluyen seguimiento; los PDF individuales aplican las
+reglas de privacidad descritas a continuación. `PUBLIC` es una clasificación
+del contenido, **no un control de acceso**; esta fase no añade autenticación.
+Instalación/updater aplicarán 0008 mediante su flujo Alembic existente cuando
+se despliegue v0.2.0. Los dumps completos incluyen la nueva tabla;
+no cambian los formatos ni garantías de backup/restore.
+
+## Resolución y PDF individual de tickets
+
+La edición/cierre permite guardar una resolución interna opcional (`resolution`),
+incluidos tickets cerrados históricos. Guardar una resolución no cambia Inicio,
+Fin ni estado automáticamente. NULL retira la resolución; el contenido no vacío
+admite hasta 10 000 caracteres. Cada cambio efectivo registra los valores anterior
+y nuevo como una intervención **INTERNAL**, en la misma transacción. Esta evidencia
+no atribuye identidad al editor: Ticketyn todavía no tiene usuarios ni una auditoría
+de actores. La resolución actual sigue siendo un campo editable, separado del
+historial de cambios.
+
+El detalle ofrece **Exportar PDF**:
+
+- `GET /api/tickets/{id}/reports/internal/pdf`: identificación operativa,
+  descripción/resolución internas y todo el seguimiento.
+- `GET /api/tickets/{id}/reports/customer/pdf`: referencia, cliente, circuito,
+  tiempos, textos autorizados y únicamente intervenciones PUBLIC. No incluye
+  personal asignado, catálogos internos ni descripción del circuito. Ambos PDF
+  identifican el incidente con su referencia y título.
+
+Ambos aceptan solo `timezone` (zona IANA, UTC por defecto); parámetros para
+habilitar información interna son rechazados. Fechas con offset, emisión en el
+pie, paginación y seguimiento ascendente por `occurred_at, id`. En abiertos se
+muestra tiempo transcurrido al emitir, explícitamente distinto de resolución;
+en cerrados se usa Fin − Inicio, o «no disponible» si no hay Fin. Exportar no
+escribe en la DB ni altera fechas.
+
+**Autorización del contenido de cliente:** `customer_description` y
+`customer_resolution` son textos opcionales separados (máximo 10 000 caracteres).
+Escribirlos y guardarlos es la autorización explícita del operador para compartirlos.
+No se copian automáticamente desde los campos privados, ni se usan estos como
+fallback. Todos los tickets existentes comienzan con estos textos NULL. Vaciar
+un campo retira ese texto; el documento indica que no hay contenido autorizado.
+El operador debe revisar también las intervenciones marcadas PUBLIC y no aprobar
+IPs internas, comentarios privados ni información sensible. No existe aprobación
+atribuible a un usuario mientras no haya autenticación.
+
+**Seguridad:** los dos endpoints deben permanecer restringidos a redes confiables,
+VPN/firewall o control de acceso externo. PUBLIC describe visibilidad documental,
+no acceso público por Internet. La consulta de cliente selecciona únicamente
+columnas permitidas y aplica PUBLIC en SQL; no recibe el documento interno ni
+depende de ocultar datos en React. Las exportaciones usan snapshot consistente y
+archivos `SpooledTemporaryFile` privados, cerrados al finalizar/fallar la descarga,
+con `Cache-Control: no-store`. El backup/restore mantiene el esquema completo;
+no cambia su formato ni el funcionamiento del updater.
 
 ## Stack y estructura
 
@@ -149,14 +246,17 @@ La cadena actual tiene un único HEAD:
 → 0004_nodes_responsibles
 → 0005_e2e_update_probe
 → 0006_e2e_postmigration_probe
-→ 0007_e2e_recovery_probe (head)
+→ 0007_e2e_recovery_probe
+→ 0008_ticket_updates
+→ 0009_ticket_resolution (head)
 ```
 
 0001 crea los primeros catálogos; 0002 elimina Service histórico; 0003 añade
 Tickets, departamentos, tipos y numeración; 0004 añade Nodes/Responsibles y sus
 FK nullable. 0005–0007 añaden únicamente columnas internas nullable para las
-pruebas E2E; la aplicación no depende de ellas. Esta candidata mantiene HEAD
-0007 y no añade 0008. No modificar revisiones aplicadas. Una instalación vacía no contiene
+pruebas E2E; la aplicación no depende de ellas. 0008 añade `ticket_updates`
+sin alterar tickets existentes. 0009 agrega resolución y textos autorizados nullable
+con límites de contenido, sin transformar datos ni cambiar PK/FK/secuencias. No modificar revisiones aplicadas. Una instalación vacía no contiene
 catálogos empresariales ni asignaciones ficticias.
 
 `alembic.ini` localiza `alembic/` respecto al propio archivo. `env.py` importa los
