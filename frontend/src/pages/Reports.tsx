@@ -1,3 +1,5 @@
+import { PeriodShortcuts } from '../components/PeriodShortcuts'
+import { EscalationStatistics } from '../components/EscalationStatistics'
 import { FeedbackMessage } from '../components/FeedbackMessage'
 import { useEffect, useMemo, useState } from 'react'
 import { FileText, FileSpreadsheet, RefreshCw, SlidersHorizontal, Tickets, CircleCheck, Clock3, Timer } from 'lucide-react'
@@ -78,7 +80,7 @@ export function Reports() {
   }
   function ranking(title: string, rows: ReportRanking[], field: string) {
     const reportView = field === 'sector_id' ? 'sector' : field === 'node_id' ? 'node' : field === 'responsible_id' ? 'responsible' : null
-    return <RankingSection key={field} title={title} rows={rows} destination={(row) => view === 'general' && reportView ? `/reports?${new URLSearchParams({ view: reportView, period: 'custom', [field]: String(row.id), from: selection.from, to: selection.to })}` : ticketDrillDown(field, row.id, selection.from, selection.to, sector_id, node_id, responsible_id)} />
+    return <RankingSection key={field} title={title} rows={rows} destination={(row) => view === 'general' && reportView ? `/reports?${new URLSearchParams({ view: reportView, period: selection.period === 'all' ? 'all' : 'custom', [field]: String(row.id), ...(selection.period === 'all' ? {} : { from: selection.from, to: selection.to }) })}` : ticketDrillDown(field, row.id, selection.from, selection.to, sector_id, node_id, responsible_id)} />
   }
   return <>
     <PageHeading title="Reportería" description="Incidencias por período operativo de Inicio. Una incidencia corresponde a un ticket." action={<div className="flex flex-wrap gap-2"><button className="button-secondary" type="button" onClick={() => setRetry(retry + 1)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Actualizar</button><button className="button-secondary" type="button" disabled={loading || Boolean(invalid) || Boolean(error) || exporting || !summary} onClick={() => exportReport('pdf')}><FileText size={14} aria-hidden="true" />Exportar PDF</button><button className="button-secondary" type="button" disabled={loading || Boolean(invalid) || Boolean(error) || exporting || !summary} onClick={() => exportReport('xlsx')}><FileSpreadsheet size={14} aria-hidden="true" />Exportar Excel</button></div>} />
@@ -88,9 +90,7 @@ export function Reports() {
         <div className="segmented-control" role="group" aria-label="Tipo de reporte">
           {['general', 'sector', 'node', 'responsible'].map((view) => <button key={view} type="button" className="segment-button" aria-pressed={view === (params.get('view') ?? 'general')} onClick={() => change({ view, sector_id: '', node_id: '', responsible_id: '' })}>{view === 'general' ? 'General' : view === 'node' ? 'Por nodo' : view === 'responsible' ? 'Por responsable' : 'Por sector'}</button>)}
         </div>
-        <div className="segmented-control" role="group" aria-label="Período del reporte">
-          {['1', '7', '15', '30', 'custom'].map((value) => <button key={value} type="button" className="segment-button" aria-label={value === 'custom' ? 'Personalizado' : `${value} ${value === '1' ? 'día' : 'días'}`} aria-pressed={selection.period === value} onClick={() => period(value)}>{value === 'custom' ? 'Personalizado' : `${value}D`}</button>)}
-        </div>
+        <PeriodShortcuts includeAll label="Período del reporte" value={selection.period} onChange={period} />
       </div>
       <div className="mt-2 flex flex-wrap items-end gap-3">
         {scopedView && <div className="min-w-0 w-full basis-full flex-1 sm:min-w-64 sm:w-auto sm:basis-0"><FormField id="report-sector" label={dimension.label}><SearchableSelect id="report-sector" label={dimension.label} value={params.get(dimension.key) ?? ''} options={(view === 'node' ? nodes : view === 'responsible' ? responsibles : sectors).map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ [dimension.key]: value })} disabled={sectorLoading || Boolean(sectorError)} placeholder={`Selecciona un ${dimension.label.toLowerCase()}`} emptyMessage="No hay sectores." noMatchMessage="No se encontraron sectores." /></FormField></div>}
@@ -143,5 +143,6 @@ export function Reports() {
       {detail.loading || detail.error || detail.tickets.length === 0 ? <RequestState loading={detail.loading} error={detail.error} empty={detail.tickets.length === 0} onRetry={() => setRetry(retry + 1)} /> : <TicketTable tickets={detail.tickets} />}
       <div className="pagination-bar"><span className="text-xs text-slate-500">Página {Math.floor(offset / 50) + 1} · Las exportaciones incluyen todos los resultados.</span><div className="flex gap-2"><button className="button-secondary" disabled={offset === 0 || detail.loading} onClick={() => change({ offset: offset > 50 ? String(offset - 50) : '' }, false)}>Anterior</button><button className="button-secondary" disabled={detail.loading || Boolean(detail.error) || detail.tickets.length < 50} onClick={() => change({ offset: String(offset + 50) }, false)}>Siguiente</button></div></div>
     </>}
+    {!invalid && <EscalationStatistics query={selection.query} summary={summary?.escalations ?? null} people={responsibles} loading={loading} onRecipientChange={(value) => change({ recipient_id: value })} />}
   </>
 }

@@ -13,7 +13,7 @@ def test_health(monkeypatch):
         from ticketyn.main import create_app
 
         app = create_app()
-        assert app.version == "0.2.0"
+        assert app.version == "0.3.0"
         with TestClient(app) as client:
             response = client.get("/health")
         assert response.status_code == 200

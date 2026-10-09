@@ -14,6 +14,7 @@ from reportlab.platypus import KeepTogether
 from starlette.background import BackgroundTask
 
 from ticketyn.api.crud import DBSession
+from ticketyn.api.escalation_data import list_escalations
 from ticketyn.api.documents import build_pdf, duration_text, fonts, modern_table, paragraph, section, MUTED
 from ticketyn.api.reports import read_snapshot
 from ticketyn.api.ticket_data import get_ticket
@@ -135,8 +136,26 @@ def internal_pdf(session, ticket_id, output, zone, issued):
         story.extend([history_heading, paragraph('Sin intervenciones registradas.', size=10)])
     for index, update in enumerate(updates):
         visibility = 'Interna' if update.visibility == 'INTERNAL' else 'Pública'
-        heading = paragraph(f'{date_text(update.occurred_at, zone)} · {update.responsible.name if update.responsible else "Sin asignar"} · {visibility}', bold=True, size=9)
+        association = f' · Escalamiento #{update.escalation_id}' if update.escalation_id is not None else ''
+        heading = paragraph(f'{date_text(update.occurred_at, zone)} · {update.responsible.name if update.responsible else "Sin asignar"} · {visibility}{association}', bold=True, size=9)
         story.extend(intervention_block(heading, paragraph(update.content, size=10), history_heading if index == 0 else None))
+    escalations = list_escalations(session, ticket_id)
+    escalation_heading = section('Historial de escalamientos', keep=False)
+    if not escalations:
+        escalation_heading.style.keepWithNext = True
+        story.extend([escalation_heading, paragraph('Sin escalamientos registrados.', size=10)])
+    for index, escalation in enumerate(escalations):
+        heading = paragraph(f'Escalamiento #{escalation.id} · Destinatario: {escalation.recipient.name} · {"Activo" if escalation.status == "ACTIVE" else "Finalizado"}', bold=True, size=9)
+        details = []
+        if escalation.recipient_department_name:
+            details.append(f'Departamento histórico: {escalation.recipient_department_name}')
+        position = escalation.recipient_position_name or escalation.recipient_level
+        if position:
+            details.append(f'Puesto histórico: {position}')
+        details.extend([f'Motivo: {escalation.reason.name}', f'Creado: {date_text(escalation.created_at, zone)}'])
+        if escalation.finished_at:
+            details.extend([f'Finalizado: {date_text(escalation.finished_at, zone)}', f'Duración: {duration_text((escalation.finished_at - escalation.created_at).total_seconds())}'])
+        story.extend(intervention_block(heading, paragraph('\n'.join([*details, escalation.description]), size=10), escalation_heading if index == 0 else None))
     build_pdf(output, 'Reporte técnico interno', str(zone), story, issued_at=date_text(issued, zone))
 
 

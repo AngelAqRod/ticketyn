@@ -8,8 +8,9 @@ from ticketyn.schemas.ticket import PositiveId
 
 
 class ReportFilters(BaseModel):
-    from_at: AwareDatetime = Field(alias='from', description='Inicio inclusivo del período; timestamp con zona horaria')
-    to_at: AwareDatetime = Field(alias='to', description='Fin exclusivo del período; timestamp con zona horaria')
+    from_at: AwareDatetime | None = Field(default=None, alias='from', description='Inicio inclusivo del período; timestamp con zona horaria')
+    to_at: AwareDatetime | None = Field(default=None, alias='to', description='Fin exclusivo del período; timestamp con zona horaria')
+    recipient_id: PositiveId | None = None  # Only escalation statistics.
     sector_id: PositiveId | None = None
     node_id: PositiveId | None = None
     responsible_id: PositiveId | None = None
@@ -27,6 +28,10 @@ class ReportFilters(BaseModel):
 
     @model_validator(mode='after')
     def valid_period(self):
+        if (self.from_at is None) != (self.to_at is None):
+            raise ValueError('Completa ambos límites del período')
+        if self.from_at is None:
+            return self
         seconds = (self.to_at - self.from_at).total_seconds()
         if seconds <= 0 or seconds > 3660 * 86400:
             raise ValueError('El período debe ser positivo y no superar diez años')
@@ -43,8 +48,8 @@ class ReportFilters(BaseModel):
 
 
 class ReportPeriod(BaseModel):
-    from_at: datetime
-    to_exclusive: datetime
+    from_at: datetime | None
+    to_exclusive: datetime | None
     timezone: str
     granularity: str
 
@@ -83,7 +88,21 @@ class SectorDuration(BaseModel):
     average_duration_seconds: float
 
 
+class EscalationSummary(BaseModel):
+    total_tickets: int
+    escalated_tickets: int
+    events: int
+    active: int
+    finished: int
+    average_duration_seconds: float | None
+    escalated_percentage: float
+    granularity: str
+    trend: list[TrendBucket]
+    recipients: list[ReportRanking]
+
+
 class ReportSummary(BaseModel):
+    escalations: EscalationSummary | None = None
     node: dict[str, str | int] | None = None
     responsible: dict[str, str | int] | None = None
     nodes: list[ReportRanking] = Field(default_factory=list)

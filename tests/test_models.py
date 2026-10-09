@@ -100,6 +100,7 @@ def test_business_identifier_is_unique(db_session, model, field, constraint):
     second = make_item()
     if model is Circuit:
         second.customer.customer_code = "IDgt-00000"
+        second.customer.name = "Otra empresa"  # Exercise circuit-code uniqueness independently of customer names.
     db_session.add(second)
     with pytest.raises(IntegrityError) as error:
         db_session.flush()

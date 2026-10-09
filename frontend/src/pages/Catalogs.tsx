@@ -8,7 +8,7 @@ export function Catalogs() {
   return <>
     <nav aria-label="Catálogos" className="segmented-control segmented-control--soft mb-4">
       <span className="icon-surface mx-1" aria-hidden="true"><Layers3 size={15} /></span>
-      {(['sectors', 'departments', 'incident-types', 'nodes', 'responsibles'] as const).map((value) => <button type="button" key={value} className="segment-button" aria-pressed={value === kind} onClick={() => setKind(value)}>{value === 'sectors' ? 'Sectores' : value === 'departments' ? 'Departamentos' : value === 'nodes' ? 'Nodos' : value === 'responsibles' ? 'Responsables' : 'Tipos de incidencia'}</button>)}
+      {(['sectors', 'departments', 'incident-types', 'nodes', 'responsibles', 'positions', 'escalation-reasons'] as const).map((value) => <button type="button" key={value} className="segment-button" aria-pressed={value === kind} onClick={() => setKind(value)}>{value === 'positions' ? 'Puestos' : value === 'escalation-reasons' ? 'Motivos de escalamiento' : value === 'sectors' ? 'Sectores' : value === 'departments' ? 'Departamentos' : value === 'nodes' ? 'Nodos' : value === 'responsibles' ? 'Responsables' : 'Tipos de incidencia'}</button>)}
     </nav>
     <CatalogAdmin key={kind} kind={kind} />
   </>

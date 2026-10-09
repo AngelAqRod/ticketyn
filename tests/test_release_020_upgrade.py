@@ -30,7 +30,7 @@ def test_016_to_020_preserves_domain_and_supports_followup(postgres_engine, monk
                     {'number': number, 'reference': f'REL020-{number}', 'end': end, 'status': status})
             db.execute(text("UPDATE tickets SET _ticketyn_e2e_update_probe='Probe conservada', _ticketyn_e2e_postmigration_probe='Dato previo', _ticketyn_e2e_recovery_probe='Dato original' WHERE id=1"))
             before = snapshot(db, [])
-        cli(url, 'upgrade', 'head')
+        cli(url, 'upgrade', '0009_ticket_resolution')
         with engine.connect() as db:
             assert db.scalar(text('SELECT version_num FROM alembic_version')) == '0009_ticket_resolution'
             after = snapshot(db, ['resolution', 'customer_description', 'customer_resolution'])
@@ -43,6 +43,7 @@ def test_016_to_020_preserves_domain_and_supports_followup(postgres_engine, monk
             actions = db.execute(text("SELECT confdeltype::text FROM pg_constraint WHERE contype='f' AND confrelid IN ('customers'::regclass,'circuits'::regclass,'tickets'::regclass)")).scalars().all()
             assert actions and set(actions) <= {'a', 'r'}  # NO ACTION / RESTRICT; never CASCADE.
             assert inspect(db).get_foreign_keys('ticket_updates')
+        cli(url, 'upgrade', 'head')  # Current backend also needs the additive escalation schema.
         monkeypatch.setenv('DATABASE_URL', url.render_as_string(hide_password=False))
         get_settings.cache_clear()
         from ticketyn.main import create_app
@@ -52,7 +53,7 @@ def test_016_to_020_preserves_domain_and_supports_followup(postgres_engine, monk
                 yield db
         app.dependency_overrides[get_session] = session
         with TestClient(app) as client:
-            assert app.version == '0.2.0'
+            assert app.version == '0.3.0'
             assert client.get('/health').json() == {'status': 'ok'}
             for id in [1, 2]:
                 before_ticket = client.get(f'/api/tickets/{id}').json()

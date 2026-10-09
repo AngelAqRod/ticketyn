@@ -31,7 +31,7 @@ def validate_ticket_values(session: Session, values: dict, changed_relations: se
     if values["end_at"] is not None and values["end_at"] < values["start_at"]:
         raise HTTPException(status_code=422, detail="end_at debe ser igual o posterior a start_at")
     if "responsible_id" in changed_relations and values.get("responsible_id") is not None:
-        responsible = session.scalar(select(Responsible).where(Responsible.id == values["responsible_id"]).with_for_update(read=True))
+        responsible = session.scalar(select(Responsible).where(Responsible.id == values["responsible_id"]).with_for_update(read=True, of=Responsible))
         if responsible is None:
             raise HTTPException(404, "El responsable indicado no existe")
         if not responsible.active:

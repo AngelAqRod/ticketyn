@@ -1,7 +1,7 @@
 from typing import Annotated, TypeVar
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, func
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,8 @@ DBSession = Annotated[Session, Depends(get_session)]
 Model = TypeVar("Model", bound=Base)
 
 UNIQUE_ERRORS = {
+    "uq_positions_department_name": "Ya existe un puesto con ese nombre en el departamento",
+    "uq_escalation_reasons_name": "Ya existe un motivo con ese name",
     "uq_nodes_name": "Ya existe un nodo con ese name",
     "uq_responsibles_name": "Ya existe un responsable con ese name",
     "uq_customers_customer_code": "Ya existe un cliente con ese customer_code",
@@ -24,6 +26,33 @@ UNIQUE_ERRORS = {
 }
 
 
+CATALOG_NAMES = {
+    'customers': 'cliente', 'sectors': 'sector', 'departments': 'departamento',
+    'incident_types': 'tipo de incidencia', 'nodes': 'nodo', 'responsibles': 'responsable',
+    'escalation_reasons': 'motivo', 'positions': 'puesto en este departamento',
+}
+for table, label in CATALOG_NAMES.items():
+    UNIQUE_ERRORS[f'uq_{table}_name_normalized'] = f'Ya existe un {label} con ese nombre (sin distinguir mayúsculas ni espacios externos)'
+
+
+def validate_catalog_name(session, item):
+    table = item.__tablename__
+    if table not in CATALOG_NAMES:
+        return
+    model = type(item)
+    statement = select(model.id).where(func.lower(func.btrim(model.name).collate('C.utf8')) == func.lower(func.btrim(item.name).collate('C.utf8')))
+    if item.id is not None:
+        statement = statement.where(model.id != item.id)
+    if table == 'positions':
+        statement = statement.where(model.department_id == item.department_id)
+    with session.no_autoflush:
+        if session.scalar(statement.limit(1)) is not None:
+            code_conflict = table == 'customers' and session.scalar(select(model.id).where(model.customer_code == item.customer_code, model.id != item.id if item.id is not None else True)) is not None
+            session.rollback()
+            key = 'uq_customers_customer_code' if code_conflict else f'uq_{table}_name_normalized'
+            raise HTTPException(409, UNIQUE_ERRORS[key])
+
+
 def get_or_404(session: Session, model: type[Model], id: int) -> Model:
     item = session.get(model, id)
     if item is None:
@@ -34,7 +63,7 @@ def get_or_404(session: Session, model: type[Model], id: int) -> Model:
 def filtered_items(
     model: type[Model], *, search: str | None, search_fields: tuple[str, ...],
     order_field: str, include_inactive: bool, customer_id: int | None = None,
-    active: bool | None = None, node_id: int | None = None,
+    active: bool | None = None, node_id: int | None = None, department_id: int | None = None,
 ):
     """Query reutilizable antes de paginar. active explícito prevalece sobre include_inactive."""
     statement = select(model)
@@ -48,6 +77,8 @@ def filtered_items(
         ))
     if customer_id is not None:
         statement = statement.where(model.customer_id == customer_id)
+    if department_id is not None:
+        statement = statement.where(model.department_id == department_id)
     if node_id is not None:
         statement = statement.where(model.node_id == node_id)
     return statement.order_by(getattr(model, order_field), model.id)
@@ -56,14 +87,15 @@ def filtered_items(
 def list_items(
     session: Session, model: type[Model], *, search: str | None,
     search_fields: tuple[str, ...], order_field: str, include_inactive: bool,
-    limit: int, offset: int, customer_id: int | None = None, active: bool | None = None, node_id: int | None = None,
+    limit: int, offset: int, customer_id: int | None = None, active: bool | None = None, node_id: int | None = None, department_id: int | None = None,
 ) -> list[Model]:
     statement = filtered_items(model, search=search, search_fields=search_fields, order_field=order_field,
-                               include_inactive=include_inactive, customer_id=customer_id, active=active, node_id=node_id)
+                               include_inactive=include_inactive, customer_id=customer_id, active=active, node_id=node_id, department_id=department_id)
     return list(session.scalars(statement.limit(limit).offset(offset)))
 
 
 def save_item(session: Session, item: Model) -> Model:
+    validate_catalog_name(session, item)
     session.add(item)
     try:
         session.commit()

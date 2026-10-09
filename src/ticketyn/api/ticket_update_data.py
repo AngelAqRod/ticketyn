@@ -7,13 +7,15 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from ticketyn.api.crud import get_or_404, save_item
-from ticketyn.models import Responsible, Ticket, TicketUpdate
+from ticketyn.models import Responsible, Ticket, TicketUpdate, TicketEscalation
 
 
-def list_updates(session: Session, ticket_id: int) -> list[TicketUpdate]:
+def list_updates(session: Session, ticket_id: int, escalation_id: int | None = None) -> list[TicketUpdate]:
     get_or_404(session, Ticket, ticket_id)
-    return list(session.scalars(select(TicketUpdate).where(TicketUpdate.ticket_id == ticket_id)
-                               .order_by(TicketUpdate.occurred_at, TicketUpdate.id)))
+    statement = select(TicketUpdate).where(TicketUpdate.ticket_id == ticket_id)
+    if escalation_id is not None:
+        statement = statement.where(TicketUpdate.escalation_id == escalation_id)
+    return list(session.scalars(statement.order_by(TicketUpdate.occurred_at, TicketUpdate.id)))
 
 
 def create_update(session: Session, ticket_id: int, values: dict) -> TicketUpdate:
@@ -23,9 +25,14 @@ def create_update(session: Session, ticket_id: int, values: dict) -> TicketUpdat
                                 .with_for_update(read=True, of=Ticket))
         if ticket is None:
             raise HTTPException(404, "El ticket indicado no existe")
+        if values.get("escalation_id") is not None:
+            escalation = session.scalar(select(TicketEscalation.id).where(
+                TicketEscalation.id == values["escalation_id"], TicketEscalation.ticket_id == ticket_id).with_for_update(read=True, of=TicketEscalation))
+            if escalation is None:
+                raise HTTPException(422, "El escalamiento debe pertenecer al mismo ticket")
         if values.get("responsible_id") is not None:
             responsible = session.scalar(select(Responsible).where(Responsible.id == values["responsible_id"])
-                                         .with_for_update(read=True))
+                                         .with_for_update(read=True, of=Responsible))
             if responsible is None:
                 raise HTTPException(404, "El responsable indicado no existe")
             if not responsible.active:
@@ -36,9 +43,11 @@ def create_update(session: Session, ticket_id: int, values: dict) -> TicketUpdat
         raise
 
 
-def page_updates(session: Session, ticket_id: int, limit: int, cursor: str | None):
+def page_updates(session: Session, ticket_id: int, limit: int, cursor: str | None, escalation_id: int | None = None):
     get_or_404(session, Ticket, ticket_id)
     statement = select(TicketUpdate).where(TicketUpdate.ticket_id == ticket_id)
+    if escalation_id is not None:
+        statement = statement.where(TicketUpdate.escalation_id == escalation_id)
     if cursor is not None:
         try:
             data = json.loads(base64.b64decode(cursor, altchars=b"-_", validate=True))

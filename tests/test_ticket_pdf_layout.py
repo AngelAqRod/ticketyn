@@ -46,6 +46,7 @@ def render_internal(monkeypatch, updates):
     ticket = incident()
     monkeypatch.setattr(reports, 'get_ticket', lambda *_: ticket)
     monkeypatch.setattr(reports, 'list_updates', lambda *_: updates)
+    monkeypatch.setattr(reports, 'list_escalations', lambda *_: [])
     output = BytesIO()
     reports.internal_pdf(None, 1, output, ZoneInfo('UTC'), ticket.end_at)
     return output.getvalue()
@@ -53,7 +54,7 @@ def render_internal(monkeypatch, updates):
 
 def intervention(content, minutes=0):
     return SimpleNamespace(content=content, occurred_at=incident().end_at + timedelta(minutes=minutes),
-        responsible=SimpleNamespace(name='Operador de prueba'), visibility='INTERNAL')
+        responsible=SimpleNamespace(name='Operador de prueba'), visibility='INTERNAL', escalation_id=None)
 
 
 def test_short_history_starts_on_first_page(monkeypatch, rendered):

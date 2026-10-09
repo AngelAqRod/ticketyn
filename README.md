@@ -4,8 +4,11 @@ Ticketyn es un producto web de gestión de incidencias: tickets, clientes,
 circuitos/servicios contratados, catálogos, filtros operativos y reportería.
 Licencia **GNU AGPL v3, AGPL-3.0-only**; texto completo en [LICENSE](LICENSE).
 
-Versión estable **v0.2.0**.
-La versión declarada de backend y frontend es `0.2.0`.
+Candidata estable **v0.3.0**, preparada para validación y publicación.
+La versión declarada de backend y frontend es `0.3.0`.
+
+Notas: [CHANGELOG](CHANGELOG.md), [release v0.3.0](docs/releases/v0.3.0.md) y
+[actualización desde v0.2.0](docs/upgrading-v0.3.0.md).
 
 > **Seguridad:** Ticketyn actualmente NO implementa autenticación ni autorización.
 > No expongas el servicio directamente a Internet. Para pruebas internas utiliza
@@ -19,7 +22,8 @@ La versión declarada de backend y frontend es `0.2.0`.
 - Seguimiento cronológico con intervenciones internas/públicas y responsable opcional.
 - Resolución documentada y PDF individual interno o para cliente, con textos autorizados separados.
 - Clientes y circuitos con códigos manuales, administración, activación y eliminación únicamente sin dependencias.
-- Catálogos: sectores, departamentos, tipos de incidencia, nodos y responsables.
+- Catálogos: sectores, departamentos, puestos, tipos de incidencia, nodos, responsables y motivos de escalamiento.
+- Escalamientos con historial independiente, intervenciones relacionadas y estadísticas exportables.
 - Combobox de cliente/circuito y creación rápida Circuito → Nodo sin perder el ticket.
 - Configuración persistente de numeración con vista previa.
 - Filtros operativos persistidos en URL.
@@ -248,7 +252,10 @@ La cadena actual tiene un único HEAD:
 → 0006_e2e_postmigration_probe
 → 0007_e2e_recovery_probe
 → 0008_ticket_updates
-→ 0009_ticket_resolution (head)
+→ 0009_ticket_resolution
+→ 0010_ticket_escalations
+→ 0011_department_positions
+→ 0012_catalog_name_uniqueness (head)
 ```
 
 0001 crea los primeros catálogos; 0002 elimina Service histórico; 0003 añade
@@ -676,7 +683,7 @@ Las nuevas instalaciones publican `/usr/local/sbin/ticketyn-update`. Puede
 invocarse como root desde cualquier directorio, sin checkout externo:
 
 ```bash
-ticketyn-update v0.2.0
+ticketyn-update v0.3.0
 ticketyn-update --recover v0.2.1
 ```
 
@@ -710,7 +717,7 @@ Ejecutar como root, o mediante sudo, indicando **un tag explícito** del reposit
 oficial `https://github.com/AngelAqRod/ticketyn.git`:
 
 ```bash
-./update.sh v0.2.0
+./update.sh v0.3.0
 # También se admiten prereleases SemVer:
 ./update.sh v0.1.1-test.1
 ```
@@ -950,3 +957,134 @@ Ticketyn contra su fuente verificada. Cachés de otra versión de Python o
 personalizaciones `.pth` (salvo el shim estándar de setuptools) se rechazan;
 requieren revisión administrativa, no una opción force. El hash del recibo
 detecta alteración/inconsistencia, no constituye una firma contra root malicioso.
+
+## Escalamientos (v0.3.0)
+
+La versión incorpora solicitudes de apoyo, **sin transferir la
+responsabilidad principal**. Registrar o finalizar un escalamiento no cambia
+responsable, departamento, estado ni Inicio/Fin del ticket. También pueden
+registrarse en tickets cerrados y finalizarse varias solicitudes independientes.
+No hay secuencia jerárquica obligatoria, SLA, aprobación ni usuarios nuevos.
+
+- Catálogos → Puestos administra nombre (hasta 100 caracteres), departamento,
+  descripción opcional y estado. El nombre es único dentro de cada departamento;
+  departamentos distintos pueden tener un Supervisor. No hay jerarquía fija.
+- Catálogos → Responsables permite seleccionar departamento y puesto opcionales.
+  Los puestos se filtran por el departamento elegido, que es independiente del
+  departamento del incidente. Varios responsables pueden compartir un puesto.
+  Los datos antiguos `attention_level` permanecen legibles, sin edición libre ni
+  asignaciones inventadas: el operador configura el puesto explícitamente.
+- Cada nueva solicitud conserva snapshots del nombre del puesto y departamento
+  del destinatario. Renombrar/reasignar después no altera estos datos históricos.
+  Los snapshots anteriores `recipient_level` también se conservan íntegros.
+- Catálogos → Motivos de escalamiento administra nombre único, descripción
+  opcional y estado. No tiene eliminación física. Las relaciones históricas
+  conservan motivos/personas inactivos; las nuevas solicitudes exigen activos.
+- Motivos sugeridos: Apoyo técnico especializado, Falta de respuesta,
+  Autorización requerida, Recursos adicionales, Coordinación entre áreas,
+  Incidente crítico y Otro. Se crean explícitamente en el catálogo: la migración
+  no inserta datos iniciales ni inventa responsables.
+- Detalle → Escalamientos pide únicamente destinatario, motivo y descripción;
+  permite consultar intervenciones y finalizar sin eliminar el registro.
+  Sin autenticación, el solicitante queda sin registrar: nunca se deduce del
+  responsable principal. Las identidades de solicitantes históricos permanecen.
+  La API sigue aceptando un `requester_id` opcional válido para compatibilidad.
+- Nueva intervención admite un escalamiento opcional del mismo ticket, incluso
+  finalizado. El contenido se guarda una sola vez y `created_at`/`occurred_at`
+  conservan su semántica. La API y una FK compuesta impiden relaciones entre
+  tickets distintos. Los PDF de cliente siguen excluyendo toda metadata de
+  escalamientos y únicamente incluyen contenido de intervenciones PUBLIC.
+
+### API y estadísticas
+
+- `POST/GET /api/tickets/{id}/escalations` (GET con `limit`/`offset`).
+- `POST /api/tickets/{id}/escalations/{escalation_id}/finish`: idempotente;
+  estado ACTIVE → FINISHED y fecha real del servidor, sin reabrir solicitudes.
+- `POST/GET /api/escalation-reasons` y `GET/PATCH /api/escalation-reasons/{id}`,
+  con el patrón de búsqueda e inclusión de inactivos de los demás catálogos.
+- `POST/GET /api/positions` y `GET/PATCH /api/positions/{id}`; listado con
+  `department_id`, búsqueda e inclusión de inactivos. No hay DELETE físico.
+- `GET /api/escalations/summary` y `/api/escalations/tickets`: fechas opcionales
+  `from` inclusiva / `to` exclusiva (ambas o ninguna), zona IANA, granularidad y
+  filtros `sector_id`, `node_id`, `responsible_id` (principal) y `recipient_id`
+  (quien recibe apoyo). El detalle devuelve tickets únicos con paginación.
+- El GET de intervenciones admite `escalation_id`; su creación acepta ese campo
+  nullable. Omitirlo conserva el comportamiento independiente de v0.2.0.
+
+Reportería muestra estadísticas de colaboración **separadas** de las métricas de
+incidentes. El período filtra **creación del escalamiento**, no Inicio del ticket.
+Los estados son los actuales de los eventos creados en ese período. El promedio
+usa Fin − Creación únicamente para eventos finalizados. Tickets únicos y eventos
+se cuentan por separado mediante SQL; varios eventos del mismo ticket aportan
+solo un ticket al porcentaje.
+
+El denominador del porcentaje y la comparación con/sin escalamiento son **todos
+los tickets del contexto de sector/nodo/responsable principal**, sin restringirlos
+por Inicio. El destinatario filtra eventos recibidos, nunca la asignación principal.
+Se incluyen personas históricas inactivas en la selección estadística. Las gráficas
+son comparación con/sin, evolución y ranking por destinatario; no hay gráficas por
+motivo. Las exportaciones PDF/XLSX de Reportería incluyen el mismo resumen,
+ranking por destinatario y evolución, sin sumar eventos como tickets. Los
+reportes operativos existentes mantienen sus cálculos. El destinatario filtra
+solo las métricas de escalamientos y queda registrado en las exportaciones.
+
+Tickets y estadísticas comparten Todos/Hoy/Ayer/7D/15D/30D/Personalizado.
+Reportería usa un único selector global: Todos/Hoy/Ayer/7D/15D/30D/Personalizado,
+compartido por incidentes y escalamientos. No hay un período independiente
+en escalamientos. Todos omite ambos límites; los buckets se derivan de los datos
+sin restringir los totales. Inicio/Fin conserva su semántica en incidentes y
+Creación conserva la suya en escalamientos.
+Todos no envía límites. Hoy cubre el día local completo; Ayer termina exactamente
+al comenzar Hoy. Hasta se muestra inclusivo como antes y se convierte al inicio
+exclusivo del día siguiente. 7D/15D/30D siguen incluyendo Hoy y los días anteriores.
+Se mantiene la zona del navegador que usa actualmente Ticketyn; no se introduce
+una configuración horaria global diferente. Las URLs históricas `period=1`
+siguen funcionando, con la etiqueta Hoy.
+
+### Prueba local
+
+Solo en una base DEV autorizada o temporal: aplicar `alembic upgrade head`
+(HEAD es `0012_catalog_name_uniqueness`, posterior a `0011_department_positions`;
+`0010` y `0011` no se modifican). `0011` conserva el texto antiguo y admite solicitante
+NULL. Su downgrade rechaza registros sin solicitante en lugar de inventarlos o
+eliminarlos. Arrancar
+backend/frontend con los comandos de desarrollo anteriores; crear dos
+responsables y un motivo; registrar un ticket, solicitar apoyo, asociar una
+intervención y finalizar el escalamiento. Verificar que el responsable principal,
+estado y fechas del ticket no cambian, y consultar Reportería → Estadísticas de
+escalamientos. La preparación de v0.3.0 no ejecuta migraciones en DEV/producción.
+`frontend/dist` contiene el build precompilado de la candidata v0.3.0.
+
+### Reportes internos y unicidad de catálogos (v0.3.0)
+
+El PDF técnico por ticket incluye un historial cronológico de escalamientos,
+con departamento/puesto históricos, motivo, contenido, fechas, estado y duración
+si finalizó. El seguimiento permanece independiente: cada intervención se
+imprime una sola vez y puede indicar `Escalamiento #ID`. El PDF de cliente no
+recibe escalamientos, snapshots ni asociaciones: únicamente textos autorizados
+y contenido de intervenciones PUBLIC, sin responsables internos.
+
+`0012_catalog_name_uniqueness` añade índices únicos PostgreSQL sobre
+`lower(btrim(name) COLLATE "C.utf8")`: Clientes, Sectores, Departamentos, Tipos de incidencia,
+Nodos, Responsables y Motivos; Puestos usa además `department_id`. Clientes
+con nombres equivalentes ahora también se rechazan, aunque sus códigos difieran.
+Los códigos de cliente/circuito mantienen su unicidad y comparación anteriores;
+la descripción de circuito no se convierte en una clave única.
+
+La migración exige la collation PostgreSQL `C.utf8`, disponible en Debian/Ubuntu
+con PostgreSQL UTF-8, para comparar también nombres acentuados incluso en una
+base legacy con locale `C`; si falta, aborta sin cambios.
+
+La API recorta los espacios externos del nombre y conserva su capitalización.
+Valida creación/edición con errores 409; los índices arbitran solicitudes
+concurrentes y escrituras externas. No se cambia la identidad ni relaciones.
+La migración inspecciona primero todos los catálogos: ante duplicados informa
+tabla, departamento cuando aplica, IDs y nombres, y aborta. No renombra, fusiona,
+reasigna ni elimina datos. Resolver cada conflicto explícitamente después de
+revisar sus relaciones, con backup y autorización, antes de repetir la migración.
+
+Para aplicar posteriormente en una base DEV autorizada, usando su entorno y
+configuración verificados: `alembic current`, `alembic heads`,
+`alembic upgrade head`, `alembic current`. No ejecutar estos comandos sobre
+producción como parte del desarrollo. La migración pendiente es 0012 cuando
+la base ya está en 0011; desde v0.2.0 se conserva la cadena 0009→0010→0011→0012.

@@ -124,19 +124,22 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
 def test_candidate_release_and_real_migration_lineage(tmp_path):
     spec = importlib.util.spec_from_file_location('update_validator', ROOT/'deploy/update_support.py')
     updater = importlib.util.module_from_spec(spec); spec.loader.exec_module(updater)
-    assert updater.tag_version('v0.2.0') == '0.2.0'
-    updater.forward('0.1.6', '0.2.0')
+    assert updater.tag_version('v0.3.0') == '0.3.0'
+    updater.forward('0.1.6', '0.3.0')
     # Applied migration bytes must still match the actual official source tag.
     tracked = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'v0.1.6', 'alembic'], cwd=ROOT).decode().splitlines()
     for name in tracked:
         assert (ROOT/name).read_bytes() == subprocess.check_output(['git', 'show', f'v0.1.6:{name}'], cwd=ROOT)
-    assert updater.ri.project_version(ROOT) == '0.2.0'
+    assert updater.ri.project_version(ROOT) == '0.3.0'
     previous = tmp_path/'previous'; previous.mkdir()
     shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', previous/'alembic.ini')
     # The source release predates the additive follow-up migration.
     (previous/'alembic/versions/0008_ticket_updates.py').unlink()
     (previous/'alembic/versions/0009_ticket_resolution.py').unlink()
+    (previous/'alembic/versions/0010_ticket_escalations.py').unlink()
+    (previous/'alembic/versions/0011_department_positions.py').unlink()
+    (previous/'alembic/versions/0012_catalog_name_uniqueness.py').unlink()
     archive = tmp_path/'candidate.tar'
     # The candidate retains every applied revision and adds follow-up/resolution.
     names = set(subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT).decode().strip('\0').split('\0'))
@@ -146,18 +149,29 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
                 output.add(ROOT/name, arcname=name, recursive=False)
     candidate = tmp_path/'candidate'
     updater.extract_release(archive, candidate)
-    assert updater.ri.project_version(candidate) == '0.2.0'
-    assert updater.migration_plan(previous, candidate, HEAD) == '0009_ticket_resolution'
+    assert updater.ri.project_version(candidate) == '0.3.0'
+    assert updater.migration_plan(previous, candidate, HEAD) == '0012_catalog_name_uniqueness'
+    # Also demonstrate the exact stable production path v0.2.0 -> v0.3.0.
+    stable = tmp_path/'stable020'; stable.mkdir()
+    shutil.copytree(ROOT/'alembic', stable/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    shutil.copy2(ROOT/'alembic.ini', stable/'alembic.ini')
+    for name in ('0010_ticket_escalations.py', '0011_department_positions.py', '0012_catalog_name_uniqueness.py'):
+        (stable/'alembic/versions'/name).unlink()
+    for name in subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'v0.2.0', 'alembic'], cwd=ROOT).decode().splitlines():
+        assert (ROOT/name).read_bytes() == subprocess.check_output(['git', 'show', f'v0.2.0:{name}'], cwd=ROOT)
+    updater.forward('0.2.0', '0.3.0')
+    assert updater.migration_plan(stable, candidate, '0009_ticket_resolution') == '0012_catalog_name_uniqueness'
+
     assert (candidate/'alembic/versions/0008_ticket_updates.py').is_file()
     assert (candidate/'alembic/versions/0009_ticket_resolution.py').is_file()
-    assert not list((candidate/'alembic/versions').glob('0010*'))
-    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.2.0'
+    assert (candidate/'alembic/versions/0010_ticket_escalations.py').is_file()
+    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.3.0'
     lock = json.loads((ROOT/'frontend/package-lock.json').read_text())
-    assert lock['version'] == lock['packages']['']['version'] == '0.2.0'
+    assert lock['version'] == lock['packages']['']['version'] == '0.3.0'
     assert (candidate/'frontend/dist/index.html').is_file()
     installation = subprocess.run(['bash', '-c', 'source "$1/install.sh"; SOURCE="$2"; check_project; validate_release_source "$SOURCE"; project_version "$SOURCE"', 'release-check', str(ROOT), str(candidate)], capture_output=True, text=True)
     assert installation.returncode == 0, installation.stderr
-    assert installation.stdout.strip() == '0.2.0'
+    assert installation.stdout.strip() == '0.3.0'
 
     assert (candidate/'update.sh').read_bytes() == (ROOT/'update.sh').read_bytes()
     assert (candidate/'deploy/update_support.py').read_bytes() == (ROOT/'deploy/update_support.py').read_bytes()

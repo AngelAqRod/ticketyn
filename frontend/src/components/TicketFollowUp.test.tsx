@@ -22,6 +22,7 @@ const entry: TicketUpdate = { id: 1, ticket_id: 27, content: 'Intervención hist
 const responsible = { id: 3, name: 'Operador activo', active: true, created_at: entry.created_at }
 function mockApi(updates: TicketUpdate[] = [], save?: (body: Record<string, unknown>) => Promise<Response>) {
   const mock = vi.fn((path: string, options?: RequestInit) => {
+    if (path.includes('/escalations?')) return Promise.resolve(jsonResponse([]))
     if (path.startsWith('/api/responsibles?')) return Promise.resolve(jsonResponse([responsible]))
     if (path.startsWith('/api/tickets/27/updates')) {
       if (options?.method === 'POST') {
@@ -156,7 +157,8 @@ describe('seguimiento', () => {
     const later = { ...entry, content: 'Microsegundo posterior', occurred_at: '2026-10-07T10:00:00.000001Z' }
     const earlier = { ...entry, id: 9, content: 'Instante anterior', occurred_at: '2026-10-07T10:00:00.000000Z' }
     vi.stubGlobal('fetch', vi.fn((path: string, options?: RequestInit) => {
-      if (path.startsWith('/api/responsibles?')) return Promise.resolve(jsonResponse([]))
+      if (path.includes('/escalations?')) return Promise.resolve(jsonResponse([]))
+    if (path.startsWith('/api/responsibles?')) return Promise.resolve(jsonResponse([]))
       if (options?.method === 'POST') { posted = true; return Promise.resolve(jsonResponse(earlier)) }
       return Promise.resolve(pageResponse(posted ? [later, earlier] : [later]))
     }))
@@ -169,7 +171,8 @@ describe('seguimiento', () => {
   it('un GET fallido después del POST no convierte un registro confirmado en error de guardado', async () => {
     let gets = 0
     const mock = vi.fn((path: string, options?: RequestInit) => {
-      if (path.startsWith('/api/responsibles?')) return Promise.resolve(jsonResponse([]))
+      if (path.includes('/escalations?')) return Promise.resolve(jsonResponse([]))
+    if (path.startsWith('/api/responsibles?')) return Promise.resolve(jsonResponse([]))
       if (options?.method === 'POST') return Promise.resolve(jsonResponse(entry))
       gets += 1
       return Promise.resolve(gets === 2 ? jsonResponse({ detail: 'Recarga no disponible' }, 503) : pageResponse(gets === 1 ? [] : [entry]))
@@ -249,6 +252,7 @@ describe('modal y páginas de seguimiento', () => {
     let posted = false
     const long = 'Texto'.repeat(400) + '\nSegunda línea'
     const mock = vi.fn((path: string, options?: RequestInit) => {
+      if (path.includes('/escalations?')) return Promise.resolve(jsonResponse([]))
       if (path.startsWith('/api/responsibles')) return Promise.resolve(jsonResponse([]))
       if (options?.method === 'POST') { posted = true; return Promise.resolve(jsonResponse(entry)) }
       if (path.includes('cursor=')) return Promise.resolve(pageResponse([{ ...entry, id: 2, content: 'Antigua página' }]))

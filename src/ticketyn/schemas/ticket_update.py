@@ -7,8 +7,9 @@ from ticketyn.schemas.common import AssignmentSummary, InputSchema, NonEmptyStri
 
 
 class TicketUpdateCreate(InputSchema):
-    nullable_fields = {"responsible_id"}
+    nullable_fields = {"responsible_id", "escalation_id"}
 
+    escalation_id: PositiveId | None = None
     content: NonEmptyString
     occurred_at: AwareDatetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     responsible_id: PositiveId | None = None
@@ -25,6 +26,7 @@ class TicketUpdateResponse(BaseModel):
 
     id: int
     ticket_id: int
+    escalation_id: int | None
     content: str
     occurred_at: datetime
     created_at: datetime

@@ -1,6 +1,6 @@
 import { getJson, postJson, patchJson, deleteResource, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
-import type { Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
+import type { Position, PositionInput, ResponsibleInput, EscalationReason, Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
 
 async function catalogList<T>(path: string, signal?: AbortSignal, filters: Record<string, string> = {}, includeInactive = false): Promise<T[]> {
   const items: T[] = []
@@ -77,8 +77,16 @@ export const listNodes = (signal?: AbortSignal, includeInactive = false) => cata
 export const listResponsibles = (signal?: AbortSignal, includeInactive = false) => catalogList<Responsible>("/api/responsibles", signal, {}, includeInactive)
 export const createNode = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Node>("/api/nodes", payload, signal)
 export const updateNode = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Node>(`/api/nodes/${id}`, payload, signal)
-export const createResponsible = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Responsible>("/api/responsibles", payload, signal)
-export const updateResponsible = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Responsible>(`/api/responsibles/${id}`, payload, signal)
+export const createResponsible = (payload: ResponsibleInput, signal?: AbortSignal) => postJson<Responsible>("/api/responsibles", payload, signal)
+export const updateResponsible = (id: number, payload: Partial<ResponsibleInput>, signal?: AbortSignal) => patchJson<Responsible>(`/api/responsibles/${id}`, payload, signal)
 
 export const deleteCustomer = (id: number, signal?: AbortSignal) => deleteResource(`/api/customers/${id}`, signal)
 export const deleteCircuit = (id: number, signal?: AbortSignal) => deleteResource(`/api/circuits/${id}`, signal)
+
+export const listEscalationReasons = (signal?: AbortSignal, includeInactive = false) => catalogList<EscalationReason>('/api/escalation-reasons', signal, {}, includeInactive)
+export const createEscalationReason = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<EscalationReason>('/api/escalation-reasons', payload, signal)
+export const updateEscalationReason = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<EscalationReason>(`/api/escalation-reasons/${id}`, payload, signal)
+
+export const listPositions = (signal?: AbortSignal, includeInactive = false, departmentId?: number) => catalogList<Position>('/api/positions', signal, departmentId === undefined ? {} : { department_id: String(departmentId) }, includeInactive)
+export const createPosition = (payload: PositionInput, signal?: AbortSignal) => postJson<Position>('/api/positions', payload, signal)
+export const updatePosition = (id: number, payload: Partial<PositionInput>, signal?: AbortSignal) => patchJson<Position>(`/api/positions/${id}`, payload, signal)

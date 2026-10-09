@@ -1,3 +1,5 @@
+import { listEscalations } from '../api/escalations'
+import type { Escalation } from '../types/escalation'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Plus } from 'lucide-react'
@@ -23,6 +25,8 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
   const [catalogRetry, setCatalogRetry] = useState(0)
   const [content, setContent] = useState('')
   const [intervention, setIntervention] = useState(() => localDateTimeValue().split('T'))
+  const [escalations, setEscalations] = useState<Escalation[]>([])
+  const [escalationId, setEscalationId] = useState('')
   const [responsibleId, setResponsibleId] = useState('')
   const [visibility, setVisibility] = useState<TicketUpdateVisibility>('INTERNAL')
   const [saving, setSaving] = useState(false)
@@ -46,7 +50,8 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
   useEffect(() => {
     const controller = new AbortController()
     setCatalogLoading(true); setCatalogError(null)
-    listResponsibles(controller.signal).then((items) => {
+    Promise.all([listResponsibles(controller.signal), listEscalations(ticketId, controller.signal)]).then(([items, escalations]) => {
+      if (!controller.signal.aborted) setEscalations(escalations)
       if (!controller.signal.aborted) { setResponsibles(items); setCatalogLoading(false) }
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) { setCatalogError(message(error)); setCatalogLoading(false) }
@@ -68,6 +73,7 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
     sending.current = true; setSaving(true)
     try {
       await createTicketUpdate(ticketId, { content, occurred_at: occurredAt,
+        ...(escalationId ? { escalation_id: Number(escalationId) } : {}),
         responsible_id: responsibleId ? Number(responsibleId) : null, visibility }, controller.signal)
       if (!controller.signal.aborted) {
         onCreated()
@@ -99,6 +105,7 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
         <FormField id="follow-up-content" label="Descripción de la intervención" required {...fieldProps('content')}>
           <textarea ref={initialFocus} id="follow-up-content" className="form-input" rows={3} required value={content} onChange={(event) => setContent(event.target.value)} />
         </FormField>
+        <FormField id="follow-up-escalation" label="Escalamiento relacionado (opcional)"><SearchableSelect id="follow-up-escalation" label="Escalamiento relacionado" value={escalationId} onChange={setEscalationId} options={escalations.map((item) => ({ value: String(item.id), label: `#${item.id} · ${item.recipient.name} · ${item.reason.name}` }))} placeholder="Sin escalamiento" emptyMessage="Este ticket no tiene escalamientos." noMatchMessage="Sin coincidencias." /></FormField>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <FormField id="follow-up-responsible" label="Responsable de la intervención" {...fieldProps('responsible_id')}>
             <SearchableSelect id="follow-up-responsible" label="Responsable de la intervención" value={responsibleId} options={responsibles.map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} onChange={setResponsibleId} disabled={saving || catalogLoading || Boolean(catalogError)} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="Sin coincidencias." />

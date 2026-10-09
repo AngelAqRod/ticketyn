@@ -1,3 +1,4 @@
+from sqlalchemy import Index, func
 from typing import TYPE_CHECKING
 
 from sqlalchemy import String
@@ -17,3 +18,6 @@ class Customer(CommonFields, Base):
     name: Mapped[str] = mapped_column(String, index=True)
 
     circuits: Mapped[list["Circuit"]] = relationship(back_populates="customer")
+
+
+Index('uq_customers_name_normalized', func.lower(func.btrim(Customer.name).collate('C.utf8')), unique=True)

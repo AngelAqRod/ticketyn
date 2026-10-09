@@ -4,6 +4,7 @@ import pytest
 
 
 RESOURCES = [
+    ("escalation-reasons", "name", {"name": "Motivo de prueba"}),
     ("nodes", "name", {"name": "Nodo de prueba"}),
     ("responsibles", "name", {"name": "Persona de prueba"}),
     ("customers", "customer_code", {"customer_code": "SGgt-00000", "name": "Empresa ABC"}),
@@ -36,7 +37,7 @@ def create(api_client, path, payload):
 def test_create_and_get(api_client, resource):
     path, _, payload = resource
     item = create(api_client, path, payload)
-    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"node", "node_id"} if path == "/api/circuits" else set())
+    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"node", "node_id"} if path == "/api/circuits" else {"attention_level", "department_id", "position_id", "department", "position"} if path == "/api/responsibles" else {"description"} if path == "/api/escalation-reasons" else set())
     assert item["id"] > 0
     assert item["active"] is True
     assert datetime.fromisoformat(item["created_at"]).tzinfo is not None
@@ -48,7 +49,7 @@ def test_create_and_get(api_client, resource):
 
 def test_list_and_order(api_client, resource):
     path, field, payload = resource
-    items = [create(api_client, path, {**payload, field: value}) for value in ("C", "A", "B")]
+    items = [create(api_client, path, {**payload, field: value, **({"name": f"Empresa {value}"} if field == "customer_code" else {})}) for value in ("C", "A", "B")]
     response = api_client.get(path)
     assert response.status_code == 200
     assert [item[field] for item in response.json()] == ["A", "B", "C"]
@@ -84,20 +85,20 @@ def test_duplicate_create_rolls_back(api_client, resource):
     create(api_client, path, payload)
     response = api_client.post(path, json=payload)
     assert response.status_code == 409
-    assert field in response.json()["detail"]
+    assert field in response.json()["detail"] or (field == "name" and "nombre" in response.json()["detail"])
     assert "IntegrityError" not in response.text
     assert "uq_" not in response.text
-    create(api_client, path, {**payload, field: "OTRO"})
+    create(api_client, path, {**payload, field: "OTRO", **({"name": "Empresa distinta"} if field == "customer_code" else {})})
     assert len(api_client.get(path).json()) == 2
 
 
 def test_duplicate_update_rolls_back(api_client, resource):
     path, field, payload = resource
     first = create(api_client, path, payload)
-    second = create(api_client, path, {**payload, field: "OTRO"})
+    second = create(api_client, path, {**payload, field: "OTRO", **({"name": "Empresa distinta"} if field == "customer_code" else {})})
     response = api_client.patch(f"{path}/{second['id']}", json={field: first[field], "active": False})
     assert response.status_code == 409
-    assert field in response.json()["detail"]
+    assert field in response.json()["detail"] or (field == "name" and "nombre" in response.json()["detail"])
     assert api_client.get(f"{path}/{second['id']}").json() == second
     response = api_client.patch(f"{path}/{second['id']}", json={field: "TERCERO"})
     assert response.status_code == 200
@@ -128,7 +129,7 @@ def test_search_case_insensitive(api_client, resource, search_field):
 def test_search_treats_special_characters_as_literals(api_client, resource, literal):
     path, field, payload = resource
     found = create(api_client, path, {**payload, field: f"VAL{literal}UE"})
-    create(api_client, path, {**payload, field: "VALUE"})
+    create(api_client, path, {**payload, field: "VALUE", **({"name": "Empresa sin carácter especial"} if field == "customer_code" else {})})
     response = api_client.get(path, params={"search": literal})
     assert response.status_code == 200
     assert response.json() == [found]
@@ -137,7 +138,7 @@ def test_search_treats_special_characters_as_literals(api_client, resource, lite
 def test_active_inactive_and_reactivation(api_client, resource):
     path, field, payload = resource
     active = create(api_client, path, payload)
-    inactive = create(api_client, path, {**payload, field: "OTRO"})
+    inactive = create(api_client, path, {**payload, field: "OTRO", **({"name": "Empresa distinta"} if field == "customer_code" else {})})
     response = api_client.patch(f"{path}/{inactive['id']}", json={"active": False})
     assert response.status_code == 200
     assert response.json()["active"] is False
@@ -153,7 +154,7 @@ def test_active_inactive_and_reactivation(api_client, resource):
 def test_pagination(api_client, resource):
     path, field, payload = resource
     for value in ("C", "A", "B"):
-        create(api_client, path, {**payload, field: value})
+        create(api_client, path, {**payload, field: value, **({"name": f"Empresa {value}"} if field == "customer_code" else {})})
     response = api_client.get(path, params={"limit": 1, "offset": 1})
     assert response.status_code == 200
     assert [item[field] for item in response.json()] == ["B"]
@@ -173,7 +174,7 @@ def test_invalid_pagination(api_client, resource, params):
 @pytest.mark.parametrize("value", [None, "", "   "])
 def test_invalid_text_input(api_client, resource, value):
     path, field, payload = resource
-    assert api_client.post(path, json={**payload, field: value}).status_code == 422
+    assert api_client.post(path, json={**payload, field: value, **({"name": f"Empresa {value}"} if field == "customer_code" else {})}).status_code == 422
     item = create(api_client, path, payload)
     assert api_client.patch(f"{path}/{item['id']}", json={field: value}).status_code == 422
     assert api_client.get(f"{path}/{item['id']}").json() == item

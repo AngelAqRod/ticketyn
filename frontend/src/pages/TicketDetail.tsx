@@ -1,3 +1,4 @@
+import { TicketEscalations } from '../components/TicketEscalations'
 import { RequestState } from '../components/RequestState'
 import { FeedbackMessage } from '../components/FeedbackMessage'
 import { useEffect, useState } from 'react'
@@ -84,6 +85,7 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
         <dl className="flex flex-wrap gap-x-8 gap-y-2">{metadata.map(([label, value]) => <div key={label} className="flex flex-wrap items-baseline gap-2"><dt className="text-xs text-slate-500">{label}</dt><dd className="text-xs tabular-nums text-slate-600">{value}</dd></div>)}</dl>
       </section>
     </div>
+    <TicketEscalations ticketId={ticket.id} />
     <TicketFollowUp key={ticket.id} ticketId={ticket.id} />
   </>
 }

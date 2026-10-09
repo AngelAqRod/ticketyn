@@ -1,3 +1,4 @@
+import { PeriodShortcuts } from './PeriodShortcuts'
 import { RequestState } from './RequestState'
 import { useEffect, useState } from 'react'
 import { listCircuits, listCustomers, listDepartments, listIncidentTypes, listSectors, listNodes, listResponsibles } from '../api'
@@ -64,9 +65,7 @@ export function TicketFilters({ params, change, clear }: Props) {
   const assignments = [['node_id', 'Nodo', catalogs?.nodes], ['responsible_id', 'Responsable', catalogs?.responsibles]] as const
   return <section aria-label="Filtros de tickets" className="filter-toolbar">
     <p className="toolbar-heading gap-3"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros de tickets</p>
-    <div className="segmented-control mb-3 max-w-full" role="group" aria-label="Período de tickets">
-      {['all', '1', '7', '15', '30', 'custom'].map((value) => <button key={value} type="button" className="segment-button" aria-pressed={selectedPeriod === value} onClick={() => choosePeriod(value)}>{value === 'all' ? 'Todos' : value === 'custom' ? 'Personalizado' : `${value}D`}</button>)}
-    </div>
+    <div className="mb-3"><PeriodShortcuts label="Período de tickets" value={selectedPeriod} onChange={choosePeriod} includeAll /></div>
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
       <FormField id="filter-search" label="Buscar tickets"><input id="filter-search" className="form-input" type="search" placeholder="Referencia, número, título o descripción" value={params.get('search') ?? ''} onChange={(event) => change({ search: event.target.value })} /></FormField>
       <FormField id="filter-status" label="Estado"><select id="filter-status" className="form-input" value={params.get('status') ?? ''} onChange={(event) => change({ status: event.target.value })}><option value="">Todos</option><option value="OPEN">Abierto</option><option value="CLOSED">Cerrado</option></select></FormField>

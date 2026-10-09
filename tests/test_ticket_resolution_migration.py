@@ -26,7 +26,7 @@ def test_upgrade_0008_preserves_existing_tickets_and_followup(postgres_engine):
             sequences = db.execute(text('SELECT sequencename,last_value FROM pg_sequences ORDER BY sequencename')).all()
         before_fks = inspect(engine).get_foreign_keys('tickets')
         before_indexes = inspect(engine).get_indexes('tickets')
-        cli(url, 'upgrade', 'head')
+        cli(url, 'upgrade', '0009_ticket_resolution')
         columns = {column['name']: column for column in inspect(engine).get_columns('tickets')}
         assert all(columns[field]['nullable'] and columns[field]['default'] is None for field in fields)
         assert inspect(engine).get_foreign_keys('tickets') == before_fks

@@ -19,8 +19,8 @@ def metadata(summary):
         ['Nodo', summary.node['name'] if summary.node else 'Todos'],
         ['Responsable', summary.responsible['name'] if summary.responsible else 'Todos'],
         ['Zona horaria', summary.period.timezone],
-        ['Desde (incluido)', summary.period.from_at.astimezone(zone).isoformat()],
-        ['Hasta (excluido)', summary.period.to_exclusive.astimezone(zone).isoformat()],
+        ['Desde (incluido)', summary.period.from_at.astimezone(zone).isoformat() if summary.period.from_at else 'Todos'],
+        ['Hasta (excluido)', summary.period.to_exclusive.astimezone(zone).isoformat() if summary.period.to_exclusive else 'Sin límite'],
         ['Generado', summary.generated_at.astimezone(zone).isoformat()],
         ['Incidencias iniciadas', summary.kpis.started], ['Incidencias cerradas', summary.kpis.closed],
         ['Duración promedio (segundos)', summary.kpis.average_duration_seconds],
@@ -87,6 +87,13 @@ def export_xlsx(session, filters, summary, output):
         sheet(name, ['Período', 'Incidencias'], ([row.label, row.count] for row in getattr(summary, key)), [25, 18])
     sheet('Duración por sector', ['Sector', 'Cierres', 'Promedio (segundos)'], ([row.label, row.count, row.average_duration_seconds] for row in summary.sector_durations), [35, 18, 28])
     sheet('Duración por departamento', ['Departamento', 'Cierres', 'Promedio (segundos)'], ([row.label, row.count, row.average_duration_seconds] for row in summary.department_durations), [35, 18, 28])
+    if summary.escalations is not None:
+        data = summary.escalations
+        rows = escalation_metadata(data)
+        sheet('Escalamientos', ['Concepto', 'Valor'], rows, [45, 100])
+        sheet('Escalamientos por persona', ['ID', 'Destinatario', 'Eventos'], ([row.id, row.label, row.count] for row in data.recipients), [14, 50, 18])
+        sheet('Evolución escalamientos', ['Bucket ISO', 'Eventos'], ([row.start_at.astimezone(zone).isoformat(), row.count] for row in data.trend), [35, 18])
+        sheet('Contexto escalamientos', ['Concepto', 'Valor'], [['Destinatario ID', filters.recipient_id], ['Criterio', 'Creación del escalamiento en el período; destinatario solo filtra escalamientos.']], [35, 110])
     workbook.save(output)
 
 
@@ -100,8 +107,9 @@ def export_pdf(session, filters, summary, output):
     width = landscape(A4)[0] - 60
     title = report_title(summary)
     context = ' · '.join(f'{label}: {value["name"]}' for label, value in [('Nodo', summary.node), ('Responsable', summary.responsible)] if value)
+    period_label = f'{summary.period.from_at.astimezone(zone):%d/%m/%Y %H:%M} — {summary.period.to_exclusive.astimezone(zone):%d/%m/%Y %H:%M} (fin exclusivo)' if summary.period.from_at else 'Todos · Sin restricción temporal'
     story = [paragraph(title, size=21, bold=True),
-        paragraph(f"Período: {summary.period.from_at.astimezone(zone):%d/%m/%Y %H:%M} — {summary.period.to_exclusive.astimezone(zone):%d/%m/%Y %H:%M} (fin exclusivo)", size=9),
+        paragraph(f"Período: {period_label}", size=9),
         paragraph(f"Sector: {summary.sector['name'] if summary.sector else 'Todos los sectores'} · Generado: {summary.generated_at.astimezone(zone):%d/%m/%Y %H:%M}", size=8),
         paragraph(context, size=8), Spacer(1, 8), section('Resumen', 1), metric_strip([
             ('INICIADAS', summary.kpis.started), ('CERRADAS', summary.kpis.closed),
@@ -145,6 +153,17 @@ def export_pdf(session, filters, summary, output):
             modern_table(['Sector', 'Cierres', 'Duración promedio'],
                 ([row.label, row.count, duration_text(row.average_duration_seconds)] for row in summary.sector_durations), [width - 210, 85, 125]), width))
         number += 1
+    if summary.escalations is not None:
+        data = summary.escalations
+        story.extend(analytical_block(section('Estadísticas de escalamientos', number), None,
+            modern_table(['Indicador', 'Valor'], escalation_metadata(data), [width * .45, width * .55]), width))
+        number += 1
+        story.append(paragraph(f'Destinatario ID: {filters.recipient_id if filters.recipient_id else "Todos"}. Este filtro no modifica las estadísticas generales de tickets.', size=8))
+        story.extend(analytical_block(section('Escalamientos recibidos por persona', number), BarsGraphic(data.recipients, width),
+            modern_table(['Destinatario', 'Eventos'], ([row.label, row.count] for row in data.recipients), [width - 100, 100]), width))
+        number += 1
+        story.append(KeepTogether([section('Evolución de escalamientos', number), TrendGraphic(data.trend, zone, width, data.granularity)]))
+        number += 1
     story.extend([PageBreak(), section('Detalle de tickets — todos los iniciados en el período', number, keep=False),
         ticket_pdf_table(report_tickets(session, filters), zone, width)])
     build_pdf(output, title, filters.timezone, story)
@@ -154,3 +173,15 @@ def report_title(summary):
     if summary.node: return "Reporte por Nodo"
     if summary.responsible: return "Reporte por Responsable"
     return "Reporte por Sector" if summary.sector else "Reporte General"
+
+
+def escalation_metadata(data):
+    return [
+        ['Tickets únicos escalados', data.escalated_tickets], ['Eventos totales de escalamiento', data.events],
+        ['Escalamientos activos', data.active], ['Escalamientos finalizados', data.finished],
+        ['Duración promedio (segundos)', data.average_duration_seconds],
+        ['Porcentaje de tickets con escalamiento', data.escalated_percentage],
+        ['Tickets del contexto (denominador)', data.total_tickets],
+        ['Criterio temporal', 'Creación del escalamiento. Duración: Fin menos Creación solo finalizados.'],
+        ['Porcentaje', 'Tickets únicos escalados / todos los tickets del contexto, sin restringir Inicio.'],
+    ]

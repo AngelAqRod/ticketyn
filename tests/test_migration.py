@@ -37,7 +37,7 @@ def normalized_ddl(statements):
 def historical_metadata():
     metadata = MetaData(naming_convention=Base.metadata.naming_convention)
     for table in Base.metadata.sorted_tables:
-        if table.name not in {'nodes', 'responsibles', 'ticket_updates'}:
+        if table.name not in {'nodes', 'responsibles', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions'}:
             table.to_metadata(metadata)
     for table_name, field in [('circuits', 'node_id'), ('tickets', 'responsible_id'), *[('tickets', field) for field in ('resolution', 'customer_description', 'customer_resolution')]]:
         table = metadata.tables[table_name]
@@ -50,6 +50,11 @@ def historical_metadata():
         for foreign_key in list(table.c[field].foreign_keys):
             table.foreign_keys.discard(foreign_key)
         table._columns.remove(table.c[field])
+    # This fixture represents 0003; normalized-name indexes only arrive in 0012.
+    for table in metadata.tables.values():
+        for index in list(table.indexes):
+            if index.name.endswith('_name_normalized'):
+                table.indexes.remove(index)
     return metadata
 
 

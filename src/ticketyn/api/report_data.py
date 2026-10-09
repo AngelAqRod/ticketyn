@@ -55,7 +55,7 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
     selected_node = get_or_404(session, Node, filters.node_id) if filters.node_id else None
     selected_responsible = get_or_404(session, Responsible, filters.responsible_id) if filters.responsible_id else None
     started = ticket_statement(filters.ticket_filters()).order_by(None).subquery()
-    closed = ticket_statement({**filters.ticket_filters(), 'status': 'CLOSED'}, time_field='end_at').order_by(None).subquery()
+    closed = ticket_statement({**filters.ticket_filters(), 'status': 'CLOSED'}, time_field='end_at').where(Ticket.end_at.is_not(None)).order_by(None).subquery()
     duration = func.extract('epoch', closed.c.end_at - closed.c.start_at)
     closed_stats = session.execute(select(func.count(), func.avg(duration), func.coalesce(func.sum(duration), 0)).select_from(closed)).one()
     started_count = session.scalar(select(func.count()).select_from(started))
@@ -76,9 +76,18 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
             statement = statement.join(Customer, model.customer_id == Customer.id).add_columns(Customer.id.label('customer_id'), Customer.customer_code, Customer.name.label('customer_name'))
             groups.extend([Customer.id, Customer.customer_code, Customer.name])
         rankings[key] = [dict(row._mapping) for row in session.execute(statement.group_by(*groups).order_by(count.desc(), model.id))]
-    grain = granularity(filters)
-    started_trend = trend(session, started, filters, grain)
-    closed_trend = trend(session, closed, filters, grain, 'end_at')
+    period_filters = filters
+    if filters.from_at is None:
+        # All-time totals have no temporal restriction. Bounds only generate buckets.
+        bounds = session.execute(select(func.min(started.c.start_at), func.max(started.c.start_at)).select_from(started)).one()
+        last_close = session.scalar(select(func.max(closed.c.end_at)))
+        zone = ZoneInfo(filters.timezone)
+        begin = (bounds[0] or last_close or datetime.now(timezone.utc)).astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = max(value for value in (bounds[1], last_close, begin) if value is not None).astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        period_filters = ReportFilters.model_construct(from_at=begin, to_at=end, timezone=filters.timezone, granularity='auto')
+    grain = granularity(period_filters)
+    started_trend = trend(session, started, period_filters, grain)
+    closed_trend = trend(session, closed, period_filters, grain, 'end_at')
     activity = [{'start_at': a['start_at'], 'started': a['count'], 'closed': b['count']} for a, b in zip(started_trend, closed_trend)]
     distributions = {}
     for key, part, labels in [
@@ -96,7 +105,11 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
             .group_by(model.id, model.name).order_by(average.desc(), model.id))]
     sector_durations = durations_by(Sector, 'sector_id')
     department_durations = durations_by(Department, 'department_id')
+    from ticketyn.api.escalation_stats import escalation_summary
+    from ticketyn.schemas.escalation_stats import EscalationFilters
+    escalation_filters = EscalationFilters.model_validate(filters.model_dump(by_alias=True))
     return ReportSummary(
+        escalations=escalation_summary(session, escalation_filters),
         period={'from_at': filters.from_at, 'to_exclusive': filters.to_at, 'timezone': filters.timezone, 'granularity': grain},
         generated_at=datetime.now(timezone.utc),
         sector={'id': selected_sector.id, 'name': selected_sector.name} if selected_sector else None,

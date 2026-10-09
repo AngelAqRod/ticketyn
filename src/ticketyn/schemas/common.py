@@ -18,6 +18,8 @@ class InputSchema(BaseModel):
             raise ValueError("El campo no admite null")
         if isinstance(value, str) and not value.strip():
             raise ValueError("El campo no puede estar vacío")
+        if info.field_name == 'name' and isinstance(value, str):
+            value = value.strip()
         return value
 
 

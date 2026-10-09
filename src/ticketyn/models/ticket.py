@@ -53,3 +53,5 @@ class Ticket(Base):
         if self.end_at is None:
             return None
         return (self.end_at - self.start_at).total_seconds()
+
+    escalations: Mapped[list["TicketEscalation"]] = relationship(back_populates="ticket", lazy="raise")

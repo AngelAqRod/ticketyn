@@ -10,10 +10,11 @@ import { reportExportUrl } from '../api/reports'
 vi.mock('../components/ReportCharts', () => ({
   ActivityChart: () => <div role="img" aria-label="Gráfica iniciadas vs cerradas" />,
   DistributionChart: ({ title, rows }: { title: string; rows: { label: string; count: number }[] }) => <div role="img" aria-label={`Gráfica ${title}`} data-values={JSON.stringify(rows)} />,
-  TrendChart: ({ trend, granularity }: { trend: ReportSummary['trend']; granularity: string }) => <div role="img" aria-label="Gráfica de evolución de incidencias">{granularity}: {trend.length} buckets</div>,
+  TrendChart: ({ trend, granularity, title = 'Evolución de incidencias' }: { trend: ReportSummary['trend']; granularity: string; title?: string }) => <div role="img" aria-label={`Gráfica de ${title.toLocaleLowerCase()}`}>{granularity}: {trend.length} buckets</div>,
   RankingChart: ({ title }: { title: string }) => <div role="img" aria-label={`Gráfica ${title}`} />,
 }))
 const report: ReportSummary = {
+  escalations: { total_tickets: 123, escalated_tickets: 2, events: 3, active: 1, finished: 2, average_duration_seconds: 3600, escalated_percentage: 2 / 123 * 100, granularity: 'day', trend: [], recipients: [] },
   period: { from_at: '2026-10-01T00:00:00Z', to_exclusive: '2026-10-03T00:00:00Z', timezone: 'UTC', granularity: 'day' },
   generated_at: '2026-10-02T12:00:00Z', sector: null,
   kpis: { started: 123, closed: 12, average_duration_seconds: 3600, total_duration_seconds: 86400 },
@@ -33,6 +34,8 @@ function Location() { const location = useLocation(); const navigate = useNaviga
 function setup(path = '/reports?period=custom&from=2026-10-01&to=2026-10-02', options: { fail?: boolean; empty?: boolean; pending?: boolean; fullPage?: boolean; app?: boolean; exportFail?: boolean; pendingExport?: boolean } = {}) {
   const mock = vi.fn((path: string) => {
     const address = new URL(path, 'http://local')
+    if (address.pathname === '/api/escalations/summary') return Promise.resolve(jsonResponse({ total_tickets: 0, escalated_tickets: 0, events: 0, active: 0, finished: 0, average_duration_seconds: null, escalated_percentage: 0, granularity: 'day', trend: [], recipients: [] }))
+    if (address.pathname === '/api/escalations/tickets') return Promise.resolve(jsonResponse([]))
     if (address.pathname === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
     if (address.pathname.startsWith('/api/reports/export')) {
       if (options.pendingExport) return new Promise<Response>(() => {})
@@ -63,7 +66,7 @@ describe('reportería operativa', () => {
     setup(); await loaded()
     const kpis = screen.getByText('Incidencias iniciadas').parentElement!
     expect(within(kpis).getByText('123')).toBeInTheDocument()
-    expect(screen.getByText('1 h')).toBeInTheDocument()
+    expect(screen.getByText('Duración promedio').parentElement).toHaveTextContent('1 h')
     expect(screen.getByText('1 d')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Gráfica de evolución de incidencias' })).toHaveTextContent('2 buckets')
     expect(screen.getByRole('img', { name: 'Gráfica Sectores con más incidencias' })).toBeInTheDocument()
@@ -73,11 +76,11 @@ describe('reportería operativa', () => {
   })
   it.each(['1', '7', '15', '30'])('selecciona período %s, persiste URL y reinicia offset', async (value) => {
     const mock = setup('/reports?period=custom&from=2026-10-01&to=2026-10-02&offset=50'); await loaded()
-    fireEvent.click(screen.getByRole('button', { name: `${value} ${value === '1' ? 'día' : 'días'}` }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Período del reporte' })).getByRole('button', { name: value === '1' ? 'Hoy' : `${value}D` }))
     expect(screen.getByTestId('url')).toHaveTextContent(`period=${value}`)
     expect(screen.getByTestId('url')).not.toHaveTextContent('offset=')
     await waitFor(() => expect(mock.mock.calls.some(([path]) => path.includes(`granularity=${value === '1' ? 'hour' : 'auto'}`))).toBe(true))
-    expect(screen.getByRole('button', { name: `${value} ${value === '1' ? 'día' : 'días'}` })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(screen.getByRole('group', { name: 'Período del reporte' })).getByRole('button', { name: value === '1' ? 'Hoy' : `${value}D` })).toHaveAttribute('aria-pressed', 'true')
   })
   it('Personalizado restaura fechas de URL y soporta atrás/adelante', async () => {
     setup(); await loaded()
@@ -89,8 +92,8 @@ describe('reportería operativa', () => {
     await waitFor(() => expect(screen.getByLabelText('Desde')).toHaveValue('2026-10-01'))
     fireEvent.click(screen.getByRole('button', { name: 'Adelante' }))
     await waitFor(() => expect(screen.getByLabelText('Desde')).toHaveValue('2026-09-01'))
-    fireEvent.click(screen.getByRole('button', { name: '7 días' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Personalizado' }))
+    fireEvent.click(screen.getByRole('button', { name: '7D' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Período del reporte' })).getByRole('button', { name: 'Personalizado' }))
     expect(screen.getByLabelText('Desde')).toBeInTheDocument()
   })
   it('Por sector solicita selección y conserva catálogos históricos', async () => {
@@ -109,7 +112,7 @@ describe('reportería operativa', () => {
   it('abre directamente sector desde URL', async () => {
     setup('/reports?view=sector&sector_id=1&period=7')
     expect(await screen.findByText('Reporte por Sector — Sector histórico')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '7 días' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '7D' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(within(screen.getByRole('region', { name: 'Clientes con más incidencias' })).getByRole('button', { name: 'Ver ranking completo (1)' }))
     const customerLink = new URL(screen.getByRole('link', { name: 'C-2 — Cliente' }).getAttribute('href')!, 'http://local')
     expect(customerLink.searchParams.get('sector_id')).toBe('1')
@@ -248,4 +251,28 @@ it('presenta departamentos con ranking completo, drill-down y resolución', asyn
   fireEvent.click(ranking.getByRole('button', { name: 'Ver ranking completo (1)' }))
   expect(ranking.getByRole('link', { name: 'Departamento histórico' })).toHaveAttribute('href', '/tickets?department_id=7&from=2026-10-01&to=2026-10-02')
   expect(screen.getByRole('img', { name: 'Gráfica Tiempo de resolución por departamento (minutos)' })).toHaveAttribute('data-values', JSON.stringify([{ label: 'Departamento histórico', count: 90 }]))
+})
+
+it('comparte un único período con escalamientos, destinatario y exportaciones', async () => {
+  const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  const mock = setup(); await loaded()
+  expect(screen.getAllByRole('group', { name: /Período/ })).toHaveLength(1)
+  const group = screen.getByRole('group', { name: 'Período del reporte' })
+  for (const name of ['Hoy', 'Ayer', '7D', '15D', '30D', 'Personalizado', 'Todos']) {
+    fireEvent.click(within(group).getByRole('button', { name }))
+    await waitFor(() => expect(mock.mock.calls.some(([url]) => url.includes('/api/reports/summary') && (name === 'Todos' ? !new URL(url, 'http://local').searchParams.has('from') : new URL(url, 'http://local').searchParams.has('from')))).toBe(true))
+    await loaded()
+    const reports = mock.mock.calls.filter(([url]) => url.includes('/api/reports/summary')).at(-1)![0]
+    const escalations = mock.mock.calls.filter(([url]) => url.includes('/api/escalations/tickets')).at(-1)![0]
+    const a = new URL(reports, 'http://local').searchParams, b = new URL(escalations, 'http://local').searchParams
+    expect(b.get('from')).toBe(a.get('from')); expect(b.get('to')).toBe(a.get('to'))
+  }
+  fireEvent.click(screen.getByRole('combobox', { name: 'Escalamientos recibidos por' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Operador asignado' }))
+  await waitFor(() => expect(mock.mock.calls.some(([url]) => url.includes('/api/reports/summary') && url.includes('recipient_id=6'))).toBe(true))
+  await loaded()
+  fireEvent.click(screen.getByRole('button', { name: 'Exportar PDF' }))
+  await waitFor(() => expect(mock.mock.calls.some(([url]) => url.includes('/api/reports/export/pdf') && url.includes('recipient_id=6'))).toBe(true))
+  expect(mock.mock.calls.some(([url]) => url.includes('/api/escalations/summary'))).toBe(false)
+  anchorClick.mockRestore()
 })

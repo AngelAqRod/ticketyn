@@ -21,3 +21,37 @@ describe('períodos de reportería', () => {
     expect(localDateValue(today)).toBe('2026-10-02')
   })
 })
+
+it('Ayer termina exactamente donde comienza Hoy en el calendario local', () => {
+  const yesterday = reportPeriod(new URLSearchParams('period=yesterday'), today)
+  const current = reportPeriod(new URLSearchParams('period=1'), today)
+  expect(yesterday.from).toBe('2026-10-01')
+  expect(yesterday.to).toBe('2026-10-01')
+  expect(yesterday.query.from).toBe(new Date(2026, 9, 1).toISOString())
+  expect(yesterday.query.to).toBe(current.query.from)
+  expect(yesterday.query.granularity).toBe('hour')
+})
+it('Ayer cruza correctamente límites de mes y año', () => {
+  const range = reportPeriod(new URLSearchParams('period=yesterday'), new Date(2026, 0, 1, 0, 1))
+  expect(range.from).toBe('2025-12-31')
+  expect(range.query.to).toBe(new Date(2026, 0, 1).toISOString())
+})
+it('Hoy/Ayer conservan medianoches locales incluso durante cambios DST', () => {
+  for (const date of [new Date(2026, 2, 9, 12), new Date(2026, 10, 2, 12)]) {
+    const yesterday = reportPeriod(new URLSearchParams('period=yesterday'), date)
+    const current = reportPeriod(new URLSearchParams('period=1'), date)
+    expect(yesterday.query.to).toBe(current.query.from)
+    expect(new Date(yesterday.query.from!).getHours()).toBe(0)
+    expect(new Date(yesterday.query.to!).getHours()).toBe(0)
+  }
+})
+
+it('Todos omite los límites y conserva contexto y destinatario separado', () => {
+  const result = reportPeriod(new URLSearchParams('period=all&view=node&node_id=5&recipient_id=2'), today)
+  expect(result.query.from).toBeUndefined()
+  expect(result.query.to).toBeUndefined()
+  expect(result.query.node_id).toBe(5)
+  expect(result.query.recipient_id).toBe(2)
+  expect(result.from).toBe('')
+  expect(result.to).toBe('')
+})

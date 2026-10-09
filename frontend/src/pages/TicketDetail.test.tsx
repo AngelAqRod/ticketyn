@@ -19,6 +19,7 @@ function mockApi(initial: Ticket = ticket, patch?: (options: RequestInit) => Pro
       current = { ...current, ...JSON.parse(String(options.body)) }
       return Promise.resolve(jsonResponse(current))
     }
+    if (path.includes('/escalations?')) return Promise.resolve(jsonResponse([]))
     if (path === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
     if (path.startsWith('/api/tickets/1/updates')) return Promise.resolve(jsonResponse({ items: [], next_cursor: null }))
     if (path === '/api/tickets/1') return Promise.resolve(jsonResponse(current))

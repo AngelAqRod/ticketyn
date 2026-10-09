@@ -63,6 +63,7 @@ export function TicketFollowUp({ ticketId }: { ticketId: number }) {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500">
               <time dateTime={update.occurred_at} className="font-medium tabular-nums text-slate-700">{formatDate(update.occurred_at)}</time>
               <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">{update.responsible?.name ?? 'Sin asignar'}</span>
+              {update.escalation_id && <span className="chip chip-neutral">Escalamiento #{update.escalation_id}</span>}
               <span className={`chip ${update.visibility === 'PUBLIC' ? 'bg-blue-50 text-primary' : 'bg-slate-50 text-slate-600'}`}><InternalIcon size={12} aria-hidden="true" />{update.visibility === 'INTERNAL' ? 'Interna' : 'Pública'}</span>
             </div>
             <p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm leading-6 text-slate-700">{update.content}</p>

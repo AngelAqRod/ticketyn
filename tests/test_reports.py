@@ -87,8 +87,11 @@ def test_invalid_report_parameters(api_client, changes):
         assert api_client.get(f'/api/reports/{path}', params={**BASE, **changes}).status_code == 422
 
 
-def test_required_period(api_client):
-    assert api_client.get('/api/reports/summary').status_code == 422
+def test_all_time_period(api_client):
+    response = api_client.get('/api/reports/summary')
+    assert response.status_code == 200
+    assert response.json()['period']['from_at'] is None
+    assert api_client.get('/api/reports/summary', params={'from': BASE['from']}).status_code == 422
 
 
 @pytest.mark.parametrize('sector_view', [False, True])
@@ -162,7 +165,7 @@ def test_report_query_count_is_constant(api_client, ticket_payload, db_session):
         assert summary(api_client)['kpis']['started'] == 5
     finally:
         event.remove(connection, 'before_cursor_execute', record)
-    assert len(statements) == 15  # Consultas agregadas constantes, independientes de la cantidad de tickets.
+    assert len(statements) == 19  # 15 consultas existentes + 4 agregaciones de escalamientos; sin N+1.
 
 
 def test_snapshot_uses_repeatable_read_in_isolated_engine(postgres_engine):

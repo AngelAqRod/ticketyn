@@ -31,7 +31,7 @@ describe('período de tickets', () => {
     expect(screen.getByLabelText('Hasta')).toHaveValue('')
     expect(screen.getByTestId('query')).toHaveTextContent('{"status":"OPEN"}')
   })
-  it.each([['1D', '2026-01-31'], ['7D', '2026-01-25'], ['15D', '2026-01-17'], ['30D', '2026-01-02']])('%s utiliza el rango local inclusivo hasta hoy', (label, from) => {
+  it.each([['Hoy', '2026-01-31'], ['7D', '2026-01-25'], ['15D', '2026-01-17'], ['30D', '2026-01-02']])('%s utiliza el rango local inclusivo hasta hoy', (label, from) => {
     setup()
     fireEvent.click(period(label))
     expect(period(label)).toHaveAttribute('aria-pressed', 'true')
@@ -56,4 +56,13 @@ describe('período de tickets', () => {
     expect(screen.getByLabelText('Desde')).toHaveValue('2026-01-10')
     expect(screen.getByLabelText('Hasta')).toHaveValue('2026-01-20')
   })
+})
+
+it('Ayer usa un día completo y al editar pasa a Personalizado', () => {
+  setup()
+  fireEvent.click(period('Ayer'))
+  expect(screen.getByLabelText('Desde')).toHaveValue('2026-01-30')
+  expect(screen.getByLabelText('Hasta')).toHaveValue('2026-01-30')
+  fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-01-31' } })
+  expect(period('Personalizado')).toHaveAttribute('aria-pressed', 'true')
 })

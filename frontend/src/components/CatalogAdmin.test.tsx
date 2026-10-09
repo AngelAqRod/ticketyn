@@ -14,6 +14,8 @@ type Row = typeof customer | typeof circuit | typeof named
 interface Options { empty?: boolean; fail?: boolean; write?: (path: string, options: RequestInit) => Promise<Response> }
 function mockApi(options: Options = {}) {
   const rows: Record<CatalogKind, Row[]> = {
+    positions: [{ ...named, name: 'Consultor de redes', department_id: 1, department: named } as Row, { ...named, id: 2, name: 'Otro departamento', department_id: 2, department: inactiveCustomer } as Row],
+    'escalation-reasons': [],
     nodes: [named, { ...named, id: 2, name: 'Nombre inactivo', active: false }], responsibles: [named, { ...named, id: 2, name: 'Nombre inactivo', active: false }],
     customers: [customer, inactiveCustomer],
     circuits: [circuit, { ...circuit, id: 2, circuit_code: 'LINK-B', description: 'Enlace secundario', active: false }],
@@ -90,7 +92,7 @@ describe('administración de catálogos', () => {
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
     const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: null } : { name: 'Nuevo registro', active: true }
-    expect(JSON.parse(String(created[1]?.body))).toEqual(expected)
+    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null } : expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
     fireEvent.change(field(resource === 'circuits' ? 'Descripción' : 'Nombre'), { target: { value: 'Corregido' } })
@@ -260,4 +262,70 @@ it('crea Nodo desde CircuitForm sin guardar Circuito ni perder sus datos', async
     if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close)
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
   }
+})
+
+it('selecciona puesto por departamento sin texto libre ni usuarios', async () => {
+  const mock = mockApi(); open('/catalogs'); await selectCatalog('Responsables')
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo responsable' }))
+  fireEvent.change(field('Nombre'), { target: { value: 'Especialista IPv6' } })
+  expect(screen.queryByLabelText('Nivel o cargo (opcional)')).not.toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Puesto' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('combobox', { name: 'Departamento' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
+  fireEvent.click(screen.getByRole('combobox', { name: 'Puesto' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Consultor de redes' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+  await screen.findByText('Registro creado correctamente.')
+  expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ name: 'Especialista IPv6', department_id: 1, position_id: 1, active: true })
+})
+it('crea motivos con descripción opcional y no ofrece eliminación física', async () => {
+  const mock = mockApi(); open('/catalogs')
+  fireEvent.click(screen.getByRole('button', { name: 'Motivos de escalamiento' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo motivo de escalamiento' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo motivo de escalamiento' }))
+  fireEvent.change(field('Nombre'), { target: { value: 'Autorización requerida' } })
+  fireEvent.change(screen.getByLabelText('Descripción (opcional)'), { target: { value: 'Apoyo de dirección' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+  await screen.findByText('Registro creado correctamente.')
+  expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ name: 'Autorización requerida', description: 'Apoyo de dirección', active: true })
+  expect(screen.getByRole('table', { name: 'Motivos de escalamiento' })).toHaveTextContent('Autorización requerida')
+  expect(screen.queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument()
+})
+
+it('crea y edita puestos con departamento obligatorio y filtra mediante API', async () => {
+  const mock = mockApi(); open('/catalogs')
+  fireEvent.click(screen.getByRole('button', { name: 'Puestos' }))
+  await screen.findByRole('table', { name: 'Puestos' })
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo puesto' }))
+  fireEvent.change(field('Nombre'), { target: { value: 'Supervisor' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+  expect(writes(mock)).toHaveLength(0)
+  fireEvent.click(screen.getByRole('combobox', { name: 'Departamento' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
+  fireEvent.change(screen.getByLabelText('Descripción (opcional)'), { target: { value: 'Apoyo NOC' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+  await screen.findByText('Registro creado correctamente.')
+  expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ name: 'Supervisor', department_id: 1, description: 'Apoyo NOC', active: true })
+  fireEvent.click(screen.getByRole('button', { name: 'Editar Supervisor' }))
+  expect(screen.getByRole('combobox', { name: 'Departamento' })).toHaveValue('Nombre inicial')
+  fireEvent.change(field('Nombre'), { target: { value: 'Supervisor de turno' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+  await screen.findByText('Cambios guardados correctamente.')
+  fireEvent.click(screen.getByRole('combobox', { name: 'Filtrar por departamento' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
+  await waitFor(() => expect(mock.mock.calls.some(([url]) => url === '/api/positions?department_id=1&include_inactive=true&limit=200&offset=0')).toBe(true))
+})
+
+it('limita puestos al departamento seleccionado y limpia el puesto al cambiarlo', async () => {
+  mockApi(); open('/catalogs'); await selectCatalog('Responsables')
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo responsable' }))
+  fireEvent.click(screen.getByRole('combobox', { name: 'Departamento' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
+  fireEvent.click(screen.getByRole('combobox', { name: 'Puesto' }))
+  expect(screen.queryByRole('option', { name: 'Otro departamento' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('option', { name: 'Consultor de redes' }))
+  expect(screen.getByRole('combobox', { name: 'Puesto' })).toHaveValue('Consultor de redes')
+  fireEvent.click(screen.getByRole('button', { name: 'Limpiar Departamento' }))
+  expect(screen.getByRole('combobox', { name: 'Puesto' })).toHaveValue('')
+  expect(screen.getByRole('combobox', { name: 'Puesto' })).toBeDisabled()
 })
