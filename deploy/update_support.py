@@ -491,6 +491,8 @@ class Updater:
             self.validate_recovery()
             return
         d = self.data
+        if d.get('kind') == 'migration_retry':
+            fail('Esta operación requiere --retry-migration o forward recovery explícita; no se reanuda como update normal.')
         for key, expected in [('target', str(self.target)), ('env_hash', self.env_hash), ('db_oid', self.db_oid), ('cluster', self.cluster), ('origin', ORIGIN)]:
             if d.get(key) != expected:
                 fail('Identidad de actualización cambió: '+key)
@@ -626,11 +628,12 @@ class Updater:
             fail('Backup no corresponde al estado validado.')
         self.record('prepared', backup=str(backup), backup_sha256=digest(backup))
 
-    def verify_target(self):
+    def verify_target(self, evidence=None):
+        evidence = self.data if evidence is None else evidence
         secure(self.target, directory=True)
-        if stamp(self.target) != self.data.get('target_inode'):
+        if stamp(self.target) != evidence.get('target_inode'):
             fail('Identidad del directorio destino cambió.')
-        for name, expected in self.data.get('release_hashes', {}).items():
+        for name, expected in evidence.get('release_hashes', {}).items():
             if not selected(name) or '..' in name.split('/'):
                 fail('Ruta del estado destino inválida.')
             path = self.target/name
@@ -640,7 +643,7 @@ class Updater:
         if ri.identity(self.target) != self.version:
             fail('Identidad destino cambió.')
         marker = json.loads((self.target/'.ticketyn-release.json').read_text())
-        if marker['commit'] != self.data['commit'] or marker.get('operation') != self.data['operation']:
+        if marker['commit'] != evidence['commit'] or marker.get('operation') != evidence['operation']:
             fail('Manifiesto destino no corresponde a la operación.')
 
     def revalidate(self):
@@ -856,12 +859,16 @@ class Updater:
 
     def validate_ancestors(self, data):
         seen = set()
-        while data.get('kind') == 'recovery':
+        while data.get('kind') in ('recovery', 'migration_retry'):
             if data['operation'] in seen or len(seen) >= 100:
                 fail('Cadena de recovery cíclica/excesiva.')
             seen.add(data['operation'])
+            child = data
             data = self.parent_record(data)
-            self.validate_parent(data)
+            if child.get('kind') == 'migration_retry':
+                validate_retry_link(self, child, data)
+            else:
+                self.validate_parent(data)
 
     def pointer_matches(self, data, allow_target=False):
         if not self.current.is_symlink():
@@ -875,7 +882,7 @@ class Updater:
 
     def validate_recovery(self):
         d = self.data
-        if d.get('kind') not in ('update', 'recovery') or (d.get('result') == 'success' and d.get('phase') != 'complete'):
+        if d.get('kind') not in ('update', 'recovery', 'migration_retry') or (d.get('result') == 'success' and d.get('phase') != 'complete'):
             fail('Tipo/resultado de operación incoherente.')
         self.recovery_identity(d)
         if d.get('kind') == 'recovery' and d['tag'] == self.tag:
@@ -1060,6 +1067,322 @@ class Updater:
         self.finish_recovery_activation()
 
 
+def normalized_schema(sql):
+    """Ignore only PostgreSQL-generated version banners and random restrict keys.
+
+    Never normalize SQL, user comments, whitespace, owners or object definitions.
+    Different pg_dump output conventions deliberately fail closed.
+    """
+    if len(sql) > 64 * 1024**2:
+        fail('Esquema demasiado grande para esta comprobación conservadora.')
+    text = sql.decode('utf-8')
+    boundary = text.find('\nSET statement_timeout = ')
+    if boundary < 0 or boundary > 4096 or not text.startswith('--\n-- PostgreSQL database dump\n--\n'):
+        fail('Cabecera de esquema PostgreSQL no reconocida; no se normaliza SQL arbitrario.')
+    header, body = text[:boundary], text[boundary:]
+    header = re.sub(r'(?m)^-- Dumped (?:from database|by pg_dump) version [^\r\n]+\n', '', header)
+    header = re.sub(r'(?m)^\\restrict [A-Za-z0-9]+$', r'\\restrict <generated-key>', header)
+    # Only the actual final pg_restore footer; never lines in a function/body.
+    body = re.sub(r'(--\n-- PostgreSQL database dump complete\n--\n\n)\\unrestrict [A-Za-z0-9]+(\n*)\Z',
+                  r'\1\\unrestrict <generated-key>\2', body)
+    return (header+body).encode('utf-8')
+
+
+def validate_retry_link(obj, child, parent):
+    """Historical authorization, not a claim that the parent migration succeeded."""
+    obj.verify_checkpoint(parent)
+    proof = child.get('schema_proof', {})
+    if (parent.get('kind') not in ('update', 'migration_retry')
+            or parent.get('phase') != 'migrating'
+            or parent.get('result') != 'interrupted_or_failed'
+            or proof.get('method') != 'pg-schema-ddl-v1'
+            or not re.fullmatch('[a-f0-9]{64}', proof.get('backup_schema_sha256', ''))
+            or proof.get('live_schema_sha256') != proof.get('backup_schema_sha256')
+            or proof.get('original_backup_sha256') != parent.get('backup_sha256')):
+        fail('Autorización histórica de reintento de migración inválida.')
+    for key in ('tag', 'source_version', 'target_version', 'previous', 'target',
+                'previous_inode', 'current_inode', 'source_snapshot', 'target_inode',
+                'target_snapshot', 'source_head', 'target_head', 'commit', 'tag_oid',
+                'release_hashes', 'env_hash', 'db_oid', 'cluster', 'unit_hash', 'site_hash'):
+        if child.get(key) != parent.get(key):
+            fail('Identidad histórica del reintento cambió: '+key)
+    obj.recovery_identity(parent)
+    obj.bound_release(parent, 'previous'); obj.bound_release(parent, 'target')
+    obj.bound_backup(parent, Path(parent['previous']), parent['source_head'])
+
+
+class MigrationRetryUpdater(Updater):
+    """Explicit authorization after proving the failed DDL left the source schema.
+
+    Validation/backup never stop a running service. Atomic exchange never exposes
+    an empty state slot. No database restoration or release overwrite is involved.
+    """
+    def __init__(self, **paths):
+        super().__init__('v0.0.0', **paths)
+        self.aborting = True  # read the recorded tag; never guess a destination
+
+    def pg(self, sql, database='postgres'):
+        return self.run(['runuser', '-u', 'postgres', '--', 'env', '-i',
+            'PATH=/usr/bin:/bin', 'HOME=/nonexistent', 'PGPASSFILE=/dev/null',
+            'PGAPPNAME=ticketyn-retry-migration',
+            'PGOPTIONS=-c default_transaction_read_only=on -c search_path=pg_catalog',
+            'psql', '--host=/var/run/postgresql', '--port=5432', '--username=postgres',
+            '--no-password', '--dbname='+database, '-XAt', '--set=ON_ERROR_STOP=1', '-c', sql])
+
+    def db_revision(self):
+        value = self.pg("SELECT c.relkind::text||':'||pg_get_userbyid(c.relowner)||':'||a.atttypid::text||':'||c.relrowsecurity::text FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid WHERE n.nspname='public' AND c.relname='alembic_version' AND a.attname='version_num' AND NOT a.attisdropped", 'ticketyn')
+        if value not in ('r:ticketyn:1043:false', 'r:ticketyn:25:false'):
+            fail('Identidad/tipo de alembic_version inesperados.')
+        return super().db_revision()
+
+    def schema_proof(self, data):
+        # Extension internals are omitted by pg_dump. This initial verifier only
+        # supports the built-in plpgsql baseline; do not pretend to compare them.
+        if self.pg("SELECT extname||':'||extversion FROM pg_catalog.pg_extension ORDER BY extname", 'ticketyn') != 'plpgsql:1.0':
+            fail('Extensiones no comparables de forma segura con este respaldo.')
+        relation = self.pg("SELECT c.relkind::text||':'||pg_get_userbyid(c.relowner)||':'||a.atttypid::text||':'||c.relrowsecurity::text FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid WHERE n.nspname='public' AND c.relname='alembic_version' AND a.attname='version_num' AND NOT a.attisdropped", 'ticketyn')
+        if relation not in ('r:ticketyn:1043:false', 'r:ticketyn:25:false'):
+            fail('Identidad/tipo de alembic_version inesperados.')
+        self.bound_backup(data, Path(data['previous']), data['source_head'])
+        temporary = Path(tempfile.mkdtemp(prefix='retry-schema-', dir=self.work))
+        try:
+            rs.validate(Path(data['backup']), temporary/'content')
+            metadata = rs.metadata(temporary/'content/metadata.txt')
+            actual = self.run(['pg_dump', '--version'])
+            expected_version = re.search(r'PostgreSQL\) ([0-9]+)', metadata['pg_dump_version'])
+            actual_version = re.search(r'PostgreSQL\) ([0-9]+)', actual)
+            if not expected_version or not actual_version or expected_version[1] != actual_version[1]:
+                fail('Se requiere el mismo major de pg_dump que produjo el backup para comparar esquemas.')
+            # Same pg_restore renders both archives; do not execute SQL from backup.
+            original = self.run(['pg_restore', '--schema-only', '--file=-', temporary/'content/database.dump'], binary=True)
+            live = self.run(['runuser', '-u', 'postgres', '--', 'env', '-i',
+                'PATH=/usr/bin:/bin', 'HOME=/nonexistent', 'PGPASSFILE=/dev/null',
+                'PGOPTIONS=-c default_transaction_read_only=on',
+                'pg_dump', '--host=/var/run/postgresql', '--port=5432', '--username=postgres',
+                '--dbname=ticketyn', '--no-password', '--lock-wait-timeout=60s',
+                '--format=custom', '--schema-only'], binary=True)
+            archive = temporary/'live.dump'
+            with open(archive, 'xb', opener=lambda p, flags: os.open(p, flags, 0o600)) as stream:
+                stream.write(live)
+            current = self.run(['pg_restore', '--schema-only', '--file=-', archive], binary=True)
+            before, after = normalized_schema(original), normalized_schema(current)
+            if before != after:
+                fail('El esquema actual difiere del backup de origen; DDL parcial o comparación incompatible. No se autoriza el reintento.')
+            value = hashlib.sha256(before).hexdigest()
+            return {'method': 'pg-schema-ddl-v1', 'backup_schema_sha256': value,
+                    'live_schema_sha256': value, 'original_backup_sha256': data['backup_sha256']}
+        finally:
+            shutil.rmtree(temporary)  # private mkdtemp only, never a persistent path
+
+    def refresh_retry_identity(self):
+        secure(self.env, private=True); rs.config(self.env)
+        secure(self.unit); secure(self.site)
+        if (not self.link.is_symlink() or self.link.lstat().st_uid != os.geteuid()
+                or self.link.resolve(strict=True) != self.site):
+            fail('Identidad del enlace Nginx cambió durante el reintento.')
+        self.env_hash = digest(self.env)
+        self.db_oid = self.pg("SELECT oid FROM pg_database WHERE datname='ticketyn'")
+        self.cluster = self.pg('SELECT system_identifier FROM pg_control_system()')
+        self.revision = self.db_revision()
+        if self.pg("SELECT pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding) FROM pg_database WHERE datname='ticketyn'") != 'ticketyn:UTF8':
+            fail('Propietario/encoding DB cambió durante el reintento.')
+        self.recovery_identity(self.data)
+
+    def validate_resume(self):
+        d = self.data
+        self.refresh_retry_identity()
+        if d.get('kind') not in ('update', 'migration_retry') or 'abort' in d:
+            fail('Reintento solo admite una actualización normal o su reintento administrado.')
+        self.recovery_identity(d)
+        if d.get('kind') == 'migration_retry' and d['phase'] == 'complete':
+            self.validate_ancestors(d)
+            self.bound_release(d, 'previous'); self.verify_target(d)
+            if self.head(self.target) != d.get('target_head'):
+                fail('HEAD de reintento completado cambió.')
+            self.validate_recovery_complete(d)
+            return
+        if d.get('kind') == 'migration_retry' and d['phase'] in ('migrated', 'activating', 'starting', 'checking'):
+            self.stopped()
+            self.validate_ancestors(d)
+            self.bound_release(d, 'previous'); self.bound_release(d, 'target')
+            self.verify_target(d)
+            self.bound_backup(d, Path(d['previous']), d['source_head'])
+            if self.revision != d['target_head'] or self.head(self.target) != self.revision:
+                fail('Revisión DB inesperada después de migrar el reintento.')
+            switched = self.pointer_matches(d, allow_target=d['phase'] != 'migrated')
+            if d['phase'] in ('starting', 'checking') and not switched:
+                fail('Fase/current de reintento incoherentes.')
+            self.old = Path(d['previous']); self.source_version = d['source_version']
+            self.resume_activation = True
+            return
+        self.stopped()  # never stop/disable implicitly, including rejected calls
+        self.recovery_identity(d)
+        previous = self.bound_release(d, 'previous')
+        self.bound_release(d, 'target')
+        if self.pointer_matches(d) or self.revision != d.get('source_head') or self.head(previous) != self.revision:
+            fail('No se conserva la identidad/esquema de origen.')
+        self.parent = self.parent_record(d) if d.get('kind') == 'migration_retry' else d
+        self.validate_ancestors(d)
+        self.verify_target(d)
+        if self.head(self.target) != d.get('target_head'):
+            fail('HEAD de candidata cambió.')
+        self.run([self.target/'.venv/bin/python', '-I', '-B', Path(__file__), 'plan', previous, self.target, d['source_head']], cwd=self.target)
+        if d.get('kind') == 'migration_retry' and d['phase'] == 'prepared':
+            if d.get('result') not in ('pending', 'interrupted_or_failed'):
+                fail('Resultado de reintento inválido.')
+            self.schema_proof(d)
+            return
+        if d['phase'] != 'migrating' or d.get('result') != 'interrupted_or_failed':
+            fail('Se requiere una migración fallida explícitamente registrada; no se interpreta pending tras SIGKILL como fallo.')
+        self.proof = self.schema_proof(d)
+
+    def verify_target(self, evidence=None):
+        # Reused candidate keeps its original manifest operation identity.
+        data = evidence or self.data
+        if data.get('kind') == 'migration_retry':
+            data = self.parent_record(data)
+            while data.get('kind') == 'migration_retry':
+                data = self.parent_record(data)
+        return super().verify_target(data)
+
+    def retry_backup(self, parent):
+        result = self.run([self.scripts/'backup.sh'])
+        paths = [line.removeprefix('✓ Backup completo y verificado: ') for line in result.splitlines() if line.startswith('✓ Backup completo y verificado: ')]
+        if len(paths) != 1:
+            fail('No se identificó el nuevo backup obligatorio.')
+        path = Path(paths[0])
+        if path == Path(parent['backup']):
+            fail('El segundo backup no puede reutilizar el original.')
+        data = dict(parent, backup=str(path), backup_sha256=digest(path))
+        self.bound_backup(data, self.old, parent['source_head'])
+        self.schema_proof(data)
+        return path, data['backup_sha256']
+
+    def begin_retry(self):
+        parent = dict(self.data)
+        if parent.get('kind') == 'migration_retry' and parent['phase'] == 'prepared':
+            return
+        history = self.config/'update-history'
+        if not history.exists():
+            history.mkdir(mode=0o700); rs.sync_directory(self.config)
+        secure(history, directory=True, private=True)
+        archived = history/parent['operation']
+        if archived.exists() or archived.is_symlink():
+            secure(archived, directory=True, private=True)
+            secure(archived/'state.json', private=True)
+            if read_json(archived/'state.json') != parent:
+                fail('Historial original incoherente.')
+        else:
+            stage = Path(tempfile.mkdtemp(prefix='.retry-archive-', dir=self.config))
+            write_json(stage/'state.json', parent, exclusive=True)
+            rs.rename_exclusive(stage, archived); rs.sync_directory(history)
+        transitions = self.config/'migration-retry-transitions'
+        if not transitions.exists():
+            transitions.mkdir(mode=0o700); rs.sync_directory(self.config)
+        secure(transitions, directory=True, private=True)
+        intent_path = transitions/(parent['operation']+'.json')
+        if intent_path.exists() or intent_path.is_symlink():
+            secure(intent_path, private=True)
+            intent = read_json(intent_path)
+            if intent.get('parent_sha256') != digest(archived/'state.json') or not re.fullmatch('[a-f0-9]{32}', intent.get('child_operation', '')):
+                fail('Transición de reintento alterada.')
+            initial = self.config/('.migration-retry-'+intent['child_operation'])
+            secure(initial, directory=True, private=True)
+            if stamp(initial) != intent.get('stage_inode'):
+                fail('Estado preparado de reintento reemplazado.')
+            data = read_json(initial/'state.json'); self.verify_checkpoint(data)
+            if data['operation'] != intent['child_operation'] or digest(initial/'state.json') != intent.get('child_sha256'):
+                fail('Estado preparado de reintento alterado.')
+            validate_retry_link(self, data, parent)
+            self.bound_backup(data, self.old, parent['source_head'])
+        else:
+            path, value = self.retry_backup(parent)
+            data = dict(parent)
+            for key in ('checkpoint', 'activated_current_inode'):
+                data.pop(key, None)
+            data.update(operation=secrets.token_hex(16), kind='migration_retry',
+                parent_operation_id=parent['operation'], parent_sha256=digest(archived/'state.json'),
+                original_backup=parent['backup'], backup=str(path), backup_sha256=value,
+                schema_proof=self.proof, phase='prepared', result='pending',
+                authorized_at=datetime.now(timezone.utc).isoformat())
+            initial = self.config/('.migration-retry-'+data['operation'])
+            initial.mkdir(mode=0o700)
+            self.persist(initial/'state.json', data, exclusive=True)
+            rs.sync_directory(self.config)
+            write_json(intent_path, {'parent_sha256': data['parent_sha256'],
+                'child_operation': data['operation'], 'child_sha256': digest(initial/'state.json'),
+                'stage_inode': stamp(initial)}, exclusive=True)
+        # Recheck the complete pre-DDL proof after backup and immediately before exchange.
+        self.validate_resume()
+        if read_json(self.state/'state.json') != parent:
+            fail('Estado original cambió durante autorización.')
+        exchange(initial, self.state); rs.sync_directory(self.config)
+        # Exchanged failed state stays private; never expose an empty live state.
+        self.data = data; self.parent = parent
+
+    def recovery_revalidate(self):
+        current = read_json(self.state/'state.json'); self.verify_checkpoint(current)
+        if current != self.data:
+            fail('Estado de reintento cambió.')
+        self.refresh_retry_identity()
+        self.stopped()
+        self.recovery_identity(self.data)
+        self.bound_release(self.data, 'previous'); self.bound_release(self.data, 'target')
+        self.validate_ancestors(self.data)
+        self.verify_target()
+
+    def activate_retry(self):
+        self.recovery_revalidate()
+        self.pointer_matches(self.data)
+        self.schema_proof(self.data)
+        self.recovery_revalidate()
+        self.pointer_matches(self.data)
+        if self.revision != self.data['source_head']:
+            fail('Revisión DB cambió antes de reintentar migración.')
+        self.stopped()
+        self.authorized = True
+        self.record('migrating')
+        self.stopped()
+        if self.data['target_head'] != self.data['source_head']:
+            self.run([self.target/'.venv/bin/python', '-I', '-B', Path(__file__), 'migrate', self.target, self.env], cwd=self.target)
+        if self.db_revision() != self.data['target_head']:
+            fail('Alembic no alcanzó HEAD del reintento.')
+        self.record('migrated')
+        self.finish_recovery_activation()
+
+    def execute(self):
+        self.lock()
+        self.work = Path(tempfile.mkdtemp(prefix='ticketyn-retry-migration-'))
+        try:
+            self.data = None; self.authorized = False
+            self.read_state()
+            if not self.data:
+                fail('No existe una migración fallida pendiente; no se modifica nada.')
+            self.tag = self.data['tag']; self.version = tag_version(self.tag)
+            self.preflight()
+            if self.data['phase'] == 'complete':
+                self.archive_state()
+                print('✓ Reintento ya completado y verificado; historial archivado, sin repetir migración.'); return
+            answer = input('Escribe exactamente "REINTENTAR MIGRACION" para autorizar (Enter cancela): ')
+            if answer != 'REINTENTAR MIGRACION':
+                print('Reintento cancelado; instalación sin cambios.'); return
+            if getattr(self, 'resume_activation', False):
+                self.authorized = True
+                self.finish_recovery_activation()
+                return
+            self.begin_retry()
+            self.activate_retry()
+        except BaseException:
+            # No stop/disable on validation, backup, or transition failure.
+            if self.authorized:
+                self.failure()
+            raise
+        finally:
+            shutil.rmtree(self.work)
+            if self.lock_fd is not None:
+                os.close(self.lock_fd); self.lock_fd = None
+
+
 class AbortUpdater(Updater):
     """Read-only identity checks, then durable intent and atomic state archival.
 
@@ -1193,14 +1516,17 @@ if __name__ == '__main__':
         else:
             args = sys.argv[1:]
             abort = args == ['--abort']
+            retry = args == ['--retry-migration']
             recover = len(args) == 2 and args[0] == '--recover'
-            if os.geteuid() != 0 or not (abort or recover or len(args) == 1 and not args[0].startswith('--')):
+            if os.geteuid() != 0 or not (abort or retry or recover or len(args) == 1 and not args[0].startswith('--')):
                 fail('Se requiere root y un tag explícito.')
             os.umask(0o077)
             def interrupted(signum, frame):
                 raise UpdateError('Interrumpido por señal '+str(signum)+'.')
             signal.signal(signal.SIGINT, interrupted); signal.signal(signal.SIGTERM, interrupted)
-            if abort:
+            if retry:
+                MigrationRetryUpdater().execute()
+            elif abort:
                 AbortUpdater().execute()
             else:
                 Updater(args[-1], recover=recover).execute()

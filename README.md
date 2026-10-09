@@ -645,6 +645,16 @@ estado sin ejecutar ningún DROP ni exigir un backup previo inexistente.
 
 ## Actualización de producción
 
+### Reintento administrativo tras migración fallida
+
+`ticketyn-update --retry-migration` permite autorizar otro intento únicamente si
+se demuestra que la instalación y el esquema siguen en el origen, comparando el
+DDL actual con el respaldo original además de la revisión Alembic. Requiere
+servicio detenido/deshabilitado; si está activo, rechaza sin interrumpirlo.
+Crea un segundo backup, conserva el padre fallido y registra una operación hija
+con checkpoints durables. No restaura datos, sobrescribe releases ni hace downgrade.
+Ver [procedimiento, despliegue y límites](docs/migration-retry.md).
+
 ### Abandonar un update fallido antes de migrar
 
 ```bash
