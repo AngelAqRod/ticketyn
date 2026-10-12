@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { TicketEscalations } from './TicketEscalations'
 import { TicketFollowUp } from './TicketFollowUp'
 import { jsonResponse } from '../test/fixtures'
+import { formatDate } from '../lib/format'
+import { ticketynTimezone } from '../lib/datetime'
 import type { Escalation } from '../types/escalation'
 const person = { id: 1, department_id: 1, name: 'Pedro', active: true, created_at: '2026-10-09T12:00:00Z' }
 const recipient = { ...person, id: 2, name: 'Ángel', position: { ...person, name: 'N3' }, department_id: 1, department: { ...person, name: 'NOC' } }
@@ -29,6 +31,10 @@ function mockApi(rows: Escalation[] = [], options: { failSave?: boolean; failFin
       return Promise.resolve(jsonResponse({ items: [], next_cursor: null }))
     }
     if (url.endsWith('/finish')) return Promise.resolve(jsonResponse(options.failFinish ? { detail: 'No se pudo finalizar.' } : { ...escalation, status: 'FINISHED', finished_at: '2026-10-09T13:00:00Z' }, options.failFinish ? 409 : 200))
+    if (init?.method === 'PATCH') {
+      rows = [{ ...rows[0], ...JSON.parse(String(init.body)), updated_at: '2026-10-12T18:00:00Z' }]
+      return Promise.resolve(jsonResponse(rows[0]))
+    }
     if (init?.method === 'POST') {
       if (options.pending) return new Promise<Response>(() => {})
       if (options.failSave) return Promise.resolve(jsonResponse({ detail: 'No se pudo registrar.' }, 409))
@@ -146,7 +152,6 @@ it('muestra pendiente de asignación y metadatos sin atribuir un técnico', asyn
   mockApi([{ ...escalation, recipient_id: null, recipient: null, recipient_department_name: 'NOC', recipient_level: null }])
   render(<TicketEscalations ticketId={1} />)
   expect(await screen.findByText(/Pendiente de asignación — NOC/)).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Ver intervenciones' }))
   expect(await screen.findByText('METADATOS')).toBeInTheDocument()
   expect(screen.getByText('Fecha de creación')).toBeInTheDocument()
   expect(screen.getByText('Última actualización')).toBeInTheDocument()
@@ -162,6 +167,10 @@ it('corrige fechas sin reenviar metadatos ni alterar la precisión de fechas sin
   await screen.findByText('Escalamiento actualizado. La responsabilidad principal no cambia.')
   const write = mock.mock.calls.find(([, init]) => init?.method === 'PATCH')!
   expect(JSON.parse(String(write[1]?.body))).toEqual({ started_at: '2026-10-09T11:30:00.000Z' })
+  const metadata = screen.getByRole('region', { name: 'Metadatos del escalamiento' })
+  await waitFor(() => expect(within(metadata).getByText(formatDate('2026-10-12T18:00:00Z', ticketynTimezone))).toBeInTheDocument())
+  expect(within(metadata).getByText(formatDate(escalation.created_at, ticketynTimezone))).toBeInTheDocument()
+
 })
 it('rechaza finalización anterior al inicio sin enviar la petición y conserva el modal', async () => {
   const mock = mockApi([escalation]); render(<TicketEscalations ticketId={1} />)
@@ -171,4 +180,27 @@ it('rechaza finalización anterior al inicio sin enviar la petición y conserva 
   expect(await screen.findAllByText('La finalización no puede ser anterior al inicio.')).not.toHaveLength(0)
   expect(screen.getByRole('dialog')).toBeInTheDocument()
   expect(mock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+})
+
+it('muestra metadatos administrativos independientes en varios escalamientos sin desplegarlos', async () => {
+  const rows: Escalation[] = [
+    escalation,
+    { ...escalation, id: 9, status: 'FINISHED', started_at: '2020-01-01T12:00:00Z', finished_at: '2020-01-01T13:00:00Z', created_at: '2026-10-10T15:00:00Z', updated_at: '2026-10-11T16:00:00Z' },
+  ]
+  const mock = mockApi(rows)
+  render(<TicketEscalations ticketId={1} />)
+  await screen.findByText('Finalizado')
+  const items = within(screen.getByRole('list', { name: 'Historial de escalamientos' })).getAllByRole('listitem')
+  expect(items).toHaveLength(2)
+  items.forEach((item, index) => {
+    const metadata = within(item).getByRole('region', { name: 'Metadatos del escalamiento' })
+    expect(within(metadata).getByText('METADATOS')).toBeInTheDocument()
+    expect(within(metadata).getByText('Fecha de creación')).toBeInTheDocument()
+    expect(within(metadata).getByText('Última actualización')).toBeInTheDocument()
+    expect(metadata).toHaveTextContent(formatDate(rows[index].created_at, ticketynTimezone))
+    expect(metadata).toHaveTextContent(formatDate(rows[index].updated_at, ticketynTimezone))
+    expect(within(metadata).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(within(item).getByRole('button', { name: 'Ver intervenciones' })).toHaveAttribute('aria-expanded', 'false')
+  })
+  expect(mock.mock.calls.some(([url]) => url.includes('/audit') || url.includes('escalation_id='))).toBe(false)
 })
