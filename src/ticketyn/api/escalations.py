@@ -1,9 +1,10 @@
 from typing import Annotated
 from fastapi import APIRouter, Path, Query
+from sqlalchemy import select
 from ticketyn.api.crud import DBSession, get_or_404
-from ticketyn.api.escalation_data import create_escalation, finish_escalation, list_escalations
-from ticketyn.models import Ticket
-from ticketyn.schemas.escalation import EscalationCreate, EscalationResponse
+from ticketyn.api.escalation_data import create_escalation, finish_escalation, list_escalations, change_escalation
+from ticketyn.models import Ticket, TicketEscalation, EscalationAudit
+from ticketyn.schemas.escalation import EscalationCreate, EscalationResponse, EscalationEdit, EscalationFinish, EscalationAuditResponse
 
 router = APIRouter(prefix='/api/tickets', tags=['escalations'])
 
@@ -21,5 +22,19 @@ def history(id: Annotated[int, Path(gt=0)], session: DBSession,
 
 
 @router.post('/{id}/escalations/{escalation_id}/finish', response_model=EscalationResponse)
-def finish(id: Annotated[int, Path(gt=0)], escalation_id: Annotated[int, Path(gt=0)], session: DBSession):
-    return finish_escalation(session, id, escalation_id)
+def finish(id: Annotated[int, Path(gt=0)], escalation_id: Annotated[int, Path(gt=0)], session: DBSession, payload: EscalationFinish = EscalationFinish()):
+    return finish_escalation(session, id, escalation_id, payload.model_dump(exclude_unset=True))
+
+
+@router.patch('/{id}/escalations/{escalation_id}', response_model=EscalationResponse)
+def edit(id: Annotated[int, Path(gt=0)], escalation_id: Annotated[int, Path(gt=0)], payload: EscalationEdit, session: DBSession):
+    return change_escalation(session, id, escalation_id, payload.model_dump(exclude_unset=True))
+
+
+@router.get('/{id}/escalations/{escalation_id}/audit', response_model=list[EscalationAuditResponse])
+def history_audit(id: Annotated[int, Path(gt=0)], escalation_id: Annotated[int, Path(gt=0)], session: DBSession):
+    item = get_or_404(session, TicketEscalation, escalation_id)
+    if item.ticket_id != id:
+        from fastapi import HTTPException
+        raise HTTPException(404, 'Escalamiento no encontrado en este ticket')
+    return list(session.scalars(select(EscalationAudit).where(EscalationAudit.escalation_id == escalation_id).order_by(EscalationAudit.id)))

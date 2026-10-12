@@ -7,12 +7,15 @@ from ticketyn.schemas.report import ReportFilters, EscalationSummary
 class EscalationFilters(BaseModel):
     from_at: AwareDatetime | None = Field(default=None, alias='from')
     to_at: AwareDatetime | None = Field(default=None, alias='to')
-    timezone: str = Field(default='UTC', max_length=100)
+    timezone: str = Field(default='America/Guatemala', max_length=100)
     granularity: Literal['auto', 'hour', 'day', 'week', 'month'] = 'auto'
     sector_id: PositiveId | None = None
     node_id: PositiveId | None = None
     responsible_id: PositiveId | None = None  # Principal, never the recipient.
     recipient_id: PositiveId | None = None
+    department_id: PositiveId | None = None
+    reason_id: PositiveId | None = None
+    status: Literal['ACTIVE', 'FINISHED'] | None = None
 
     @model_validator(mode='after')
     def validate_period(self):

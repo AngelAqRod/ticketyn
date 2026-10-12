@@ -22,7 +22,7 @@ from ticketyn.core.config import get_settings
 
 def create_app() -> FastAPI:
     get_settings()
-    app = FastAPI(title="Ticketyn", version="0.3.0")
+    app = FastAPI(title="Ticketyn", version="0.3.1")
     app.include_router(escalations_router)
     app.include_router(escalation_reasons_router)
     app.include_router(escalation_stats_router)

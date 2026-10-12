@@ -13,6 +13,6 @@ from ticketyn.models.node import Node
 from ticketyn.models.responsible import Responsible
 from ticketyn.models.position import Position
 
-from ticketyn.models.escalation import EscalationReason, TicketEscalation
+from ticketyn.models.escalation import EscalationReason, TicketEscalation, EscalationAudit
 
-__all__ = ["Position", "EscalationReason", "TicketEscalation", "Customer", "Circuit", "Sector", "Department", "IncidentType", "TicketNumberConfig", "Ticket", "Node", "Responsible", "TicketUpdate"]
+__all__ = ["EscalationAudit", "Position", "EscalationReason", "TicketEscalation", "Customer", "Circuit", "Sector", "Department", "IncidentType", "TicketNumberConfig", "Ticket", "Node", "Responsible", "TicketUpdate"]

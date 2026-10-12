@@ -37,7 +37,7 @@ def normalized_ddl(statements):
 def historical_metadata():
     metadata = MetaData(naming_convention=Base.metadata.naming_convention)
     for table in Base.metadata.sorted_tables:
-        if table.name not in {'nodes', 'responsibles', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions'}:
+        if table.name not in {'nodes', 'responsibles', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit'}:
             table.to_metadata(metadata)
     for table_name, field in [('circuits', 'node_id'), ('tickets', 'responsible_id'), *[('tickets', field) for field in ('resolution', 'customer_description', 'customer_resolution')]]:
         table = metadata.tables[table_name]

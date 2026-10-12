@@ -59,8 +59,9 @@ def test_report_shared_statistics_period_exports(api_client, ticket_payload, db_
     for delta in (0, 1, 24, -1):
         result = api_client.post(f"/api/tickets/{ticket['id']}/escalations", json={**values, 'requester_id': None}).json()
         ids.append(result['id'])
-        db_session.execute(text('UPDATE ticket_escalations SET created_at=:start WHERE id=:id'), {'start': start + timedelta(hours=delta), 'id': result['id']})
-    db_session.execute(text("UPDATE ticket_escalations SET status='FINISHED', finished_at=created_at + interval '2 hours' WHERE id=:id"), {'id': ids[0]})
+        db_session.execute(text('UPDATE ticket_escalations SET started_at=:start WHERE id=:id'), {'start': start + timedelta(hours=delta), 'id': result['id']})
+    db_session.execute(text("UPDATE ticket_escalations SET status='FINISHED', finished_at=started_at + interval '2 hours' WHERE id=:id"), {'id': ids[0]})
+    db_session.execute(text('UPDATE tickets SET start_at=:start WHERE id=:id'), {'start': start, 'id': ticket['id']})
     db_session.commit()
     filters = {'from': start.isoformat(), 'to': (start + timedelta(days=1)).isoformat(), 'timezone': 'America/Guatemala', 'recipient_id': recipient['id']}
     data = api_client.get('/api/reports/summary', params=filters).json()

@@ -20,7 +20,7 @@ def test_020_to_030_preserves_existing_domain(postgres_engine):
             db.execute(text("INSERT INTO tickets(ticket_number,reference,title,description,customer_id,circuit_id,sector_id,department_id,incident_type_id,responsible_id,start_at,end_at,status,resolution,customer_description) VALUES (1,'R030-1','Histórico','Descripción',1,1,1,1,1,1,'2020-01-01T12:00:00Z','2020-01-01T13:00:00Z','CLOSED','Resolución','Texto público')"))
             db.execute(text("INSERT INTO ticket_updates(ticket_id,content,visibility,occurred_at) VALUES (1,'Intervención histórica','PUBLIC','2019-12-31T12:00:00Z')"))
             before = snapshot(db, [])
-        cli(url, 'upgrade', 'head')
+        cli(url, 'upgrade', '0012_catalog_name_uniqueness')
         with engine.connect() as db:
             assert db.scalar(text('SELECT version_num FROM alembic_version')) == '0012_catalog_name_uniqueness'
             after = snapshot(db, ['attention_level', 'department_id', 'position_id', 'escalation_id'])

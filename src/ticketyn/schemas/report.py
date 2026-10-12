@@ -88,6 +88,10 @@ class SectorDuration(BaseModel):
     average_duration_seconds: float
 
 
+class EscalationRanking(ReportRanking):
+    id: int | None
+
+
 class EscalationSummary(BaseModel):
     total_tickets: int
     escalated_tickets: int
@@ -98,7 +102,9 @@ class EscalationSummary(BaseModel):
     escalated_percentage: float
     granularity: str
     trend: list[TrendBucket]
-    recipients: list[ReportRanking]
+    recipients: list[EscalationRanking]
+    departments: list[EscalationRanking] = Field(default_factory=list)
+    event_tickets: int = 0
 
 
 class ReportSummary(BaseModel):
@@ -110,7 +116,7 @@ class ReportSummary(BaseModel):
     activity: list[ActivityBucket] = Field(default_factory=list)
     hours: list[ReportRanking] = Field(default_factory=list)
     weekdays: list[ReportRanking] = Field(default_factory=list)
-    departments: list[ReportRanking] = Field(default_factory=list)
+    departments: list[EscalationRanking] = Field(default_factory=list)
     department_durations: list[SectorDuration] = Field(default_factory=list)
     sector_durations: list[SectorDuration] = Field(default_factory=list)
     period: ReportPeriod

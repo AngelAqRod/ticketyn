@@ -1,4 +1,4 @@
-import { getJson, postJson } from './client'
+import { getJson, postJson, patchJson } from './client'
 import type { Escalation, EscalationInput, EscalationSummary, EscalationTicket } from '../types/escalation'
 export async function listEscalations(id: number, signal?: AbortSignal) {
   const items: Escalation[] = []
@@ -10,6 +10,8 @@ export async function listEscalations(id: number, signal?: AbortSignal) {
   }
 }
 export const createEscalation = (id: number, payload: EscalationInput, signal?: AbortSignal) => postJson<Escalation>(`/api/tickets/${id}/escalations`, payload, signal)
-export const finishEscalation = (id: number, escalation: number, signal?: AbortSignal) => postJson<Escalation>(`/api/tickets/${id}/escalations/${escalation}/finish`, {}, signal)
+export const finishEscalation = (id: number, escalation: number, signal?: AbortSignal, finishedAt?: string) => postJson<Escalation>(`/api/tickets/${id}/escalations/${escalation}/finish`, finishedAt ? { finished_at: finishedAt } : {}, signal)
 export const escalationSummary = (query: URLSearchParams, signal?: AbortSignal) => getJson<EscalationSummary>(`/api/escalations/summary?${query}`, signal)
 export const escalationTickets = (query: URLSearchParams, signal?: AbortSignal) => getJson<EscalationTicket[]>(`/api/escalations/tickets?${query}`, signal)
+
+export const editEscalation = (id: number, escalation: number, payload: unknown, signal?: AbortSignal) => patchJson<Escalation>(`/api/tickets/${id}/escalations/${escalation}`, payload, signal)

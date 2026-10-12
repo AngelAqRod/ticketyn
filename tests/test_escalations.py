@@ -106,10 +106,12 @@ def test_statistics_unique_tickets_events_duration_boundaries(api_client, ticket
         response = api_client.post(f'/api/tickets/{ticket_id}/escalations', json=values)
         assert response.status_code == 201
         item = db_session.get(TicketEscalation, response.json()['id'])
-        item.created_at = start + timedelta(hours=delta)
+        item.started_at = start + timedelta(hours=delta)
         if finished:
-            item.status = 'FINISHED'; item.finished_at = item.created_at + timedelta(hours=2)
+            item.status = 'FINISHED'; item.finished_at = item.started_at + timedelta(hours=2)
         db_session.commit()
+    db_session.execute(text('UPDATE tickets SET start_at=:start WHERE id IN (:first, :second, :third)'), {'start': start, 'first': ticket['id'], 'second': second, 'third': third})
+    db_session.commit()
     query = {'from': start.isoformat(), 'to': (start+timedelta(days=1)).isoformat(), 'timezone': 'America/Guatemala', 'recipient_id': recipient['id']}
     response = api_client.get('/api/escalations/summary', params=query)
     assert response.status_code == 200, response.text
