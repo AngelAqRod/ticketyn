@@ -86,7 +86,7 @@ def test_unsafe_source_aborts_without_command(layout, kind):
     assert not command.exists()
 
 
-@pytest.mark.parametrize('args', [['v0.2.0'], ['--recover', 'v0.2.1'], ['--abort']])
+@pytest.mark.parametrize('args', [['v0.2.0'], ['--recover', 'v0.2.1'], ['--abort'], ['--retry-migration']])
 def test_launcher_arbitrary_cwd_no_checkout_and_argument_forwarding(layout, tmp_path, args):
     source, base, command = layout
     # Harmless plumbing fixture using the same relative auxiliary resolution;
