@@ -1098,3 +1098,7 @@ configuración verificados: `alembic current`, `alembic heads`,
 `alembic upgrade head`, `alembic current`. No ejecutar estos comandos sobre
 producción como parte del desarrollo. La migración pendiente es 0012 cuando
 la base ya está en 0011; desde v0.2.0 se conserva la cadena 0009→0010→0011→0012.
+
+### Escalamientos v0.3.1
+
+Fechas operativas, destinos por departamento y semántica del período: [documentación](docs/escalations-v0.3.1.md). La auditoría conserva actor desconocido mientras Ticketyn no tenga autenticación.

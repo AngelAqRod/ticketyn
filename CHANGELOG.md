@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.1 — En desarrollo
+
+- Corrección integral del período y poblaciones de los reportes de escalamientos.
+- Fechas operativas reales y corrección auditada de fechas de escalamientos.
+- Metadatos administrativos independientes; escalamientos en tickets cerrados.
+- Destino por departamento, técnico opcional y asignación posterior auditada.
+- Rankings de departamentos y categoría de responsables no asignados en PDF/XLSX.
+- Períodos calendario en America/Guatemala y mayor coherencia estadística.
+- Migración incremental `0013_escalation_operations`, sin eliminación de datos.
+
+Detalles y limitaciones: [escalamientos v0.3.1](docs/escalations-v0.3.1.md).
+
 ## 0.3.0 — Publicación pendiente
 
 ### Funcionalidades nuevas
