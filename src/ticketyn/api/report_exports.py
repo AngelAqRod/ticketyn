@@ -92,8 +92,9 @@ def export_xlsx(session, filters, summary, output):
         rows = escalation_metadata(data)
         sheet('Escalamientos', ['Concepto', 'Valor'], rows, [45, 100])
         sheet('Escalamientos por persona', ['ID', 'Destinatario', 'Eventos'], ([row.id, row.label, row.count] for row in data.recipients), [14, 50, 18])
+        sheet('Escalamientos por departamento', ['ID', 'Departamento', 'Eventos'], ([row.id, row.label, row.count] for row in data.departments), [14, 50, 18])
         sheet('Evolución escalamientos', ['Bucket ISO', 'Eventos'], ([row.start_at.astimezone(zone).isoformat(), row.count] for row in data.trend), [35, 18])
-        sheet('Contexto escalamientos', ['Concepto', 'Valor'], [['Destinatario ID', filters.recipient_id], ['Criterio', 'Creación del escalamiento en el período; destinatario solo filtra escalamientos.']], [35, 110])
+        sheet('Contexto escalamientos', ['Concepto', 'Valor'], [['Destinatario ID', filters.recipient_id], ['Criterio', 'Inicio operativo del escalamiento en el período; destinatario solo filtra escalamientos.']], [35, 110])
     workbook.save(output)
 
 
@@ -162,6 +163,8 @@ def export_pdf(session, filters, summary, output):
         story.extend(analytical_block(section('Escalamientos recibidos por persona', number), BarsGraphic(data.recipients, width),
             modern_table(['Destinatario', 'Eventos'], ([row.label, row.count] for row in data.recipients), [width - 100, 100]), width))
         number += 1
+        story.extend(analytical_block(section('Escalamientos por departamento', number), BarsGraphic(data.departments, width), modern_table(['Departamento', 'Eventos'], ([row.label, row.count] for row in data.departments), [width - 100, 100]), width))
+        number += 1
         story.append(KeepTogether([section('Evolución de escalamientos', number), TrendGraphic(data.trend, zone, width, data.granularity)]))
         number += 1
     story.extend([PageBreak(), section('Detalle de tickets — todos los iniciados en el período', number, keep=False),
@@ -177,11 +180,11 @@ def report_title(summary):
 
 def escalation_metadata(data):
     return [
-        ['Tickets únicos escalados', data.escalated_tickets], ['Eventos totales de escalamiento', data.events],
+        ['Tickets únicos escalados', data.escalated_tickets], ['Tickets distintos con eventos en el período', data.event_tickets], ['Eventos totales de escalamiento', data.events],
         ['Escalamientos activos', data.active], ['Escalamientos finalizados', data.finished],
         ['Duración promedio (segundos)', data.average_duration_seconds],
         ['Porcentaje de tickets con escalamiento', data.escalated_percentage],
         ['Tickets del contexto (denominador)', data.total_tickets],
-        ['Criterio temporal', 'Creación del escalamiento. Duración: Fin menos Creación solo finalizados.'],
-        ['Porcentaje', 'Tickets únicos escalados / todos los tickets del contexto, sin restringir Inicio.'],
+        ['Criterio temporal', 'Inicio operativo del escalamiento. Duración: Fin menos Inicio solo finalizados.'],
+        ['Porcentaje', 'Tickets iniciados en el período con escalamiento iniciado en el período / tickets iniciados en el período.'],
     ]

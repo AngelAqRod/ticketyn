@@ -334,7 +334,7 @@ def test_real_020_failed_030_transaction_then_retry_preserves_data(failed_migrat
             db.execute(text("INSERT INTO ticket_updates(ticket_id,content) VALUES (1,'Intervención conservada')"))
             before=db.scalar(text('SELECT to_jsonb(t) FROM tickets t'))
         obj=real_schema_object(failed_migration,engine)
-        with pytest.raises(AssertionError,match='unicidad'): cli(url,'upgrade','head')
+        with pytest.raises(AssertionError,match='unicidad'): cli(url,'upgrade','0012_catalog_name_uniqueness')
         with engine.connect() as db:
             assert db.scalar(text('SELECT version_num FROM alembic_version'))=='0009_ticket_resolution'
             assert db.scalar(text("SELECT to_regclass('public.ticket_escalations')")) is None
@@ -343,7 +343,7 @@ def test_real_020_failed_030_transaction_then_retry_preserves_data(failed_migrat
         # Authorized fictional-data conflict correction, not a database restore.
         with engine.begin() as db: db.execute(text("UPDATE nodes SET name='Otro nodo ficticio' WHERE name='Ufinet'"))
         obj.schema_proof(obj.data)
-        cli(url,'upgrade','head')
+        cli(url,'upgrade','0012_catalog_name_uniqueness')
         with engine.connect() as db:
             assert db.scalar(text('SELECT version_num FROM alembic_version'))=='0012_catalog_name_uniqueness'
             assert db.scalar(text('SELECT to_jsonb(t) FROM tickets t'))==before

@@ -92,9 +92,11 @@ def test_escalation_without_requester_cross_department_snapshot(api_client, tick
     historical = api_client.get(path).json()[0]
     assert historical['recipient_position_name'] == 'Supervisor'
     assert historical['recipient_department_name'] == 'Red Externa'
+    assert api_client.post(path, json={**body, 'requester_id': None}).status_code == 422
+    api_client.patch(f"/api/responsibles/{person['id']}", json={'department_id': b['id']})
     no_position = post(api_client, path, {**body, 'requester_id': None})
     assert no_position['recipient_position_name'] is None
-    assert no_position['recipient_department_name'] is None
+    assert no_position['recipient_department_name'] == 'Campo'
     assert api_client.get(f"/api/tickets/{ticket['id']}").json() == ticket
     stats = api_client.get('/api/escalations/summary', params={'recipient_id': person['id']}).json()
     assert stats['escalated_tickets'] == 1 and stats['events'] == 2

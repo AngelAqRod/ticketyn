@@ -26,7 +26,7 @@ function setup(fail = false) {
 describe('Estadísticas de escalamientos', () => {
   it('distingue tickets de eventos y no presenta gráficos por motivo', async () => {
     const mock = setup()
-    expect(await screen.findByText('25.0 %')).toBeInTheDocument()
+    expect(await screen.findByText('25.00 %')).toBeInTheDocument()
     expect(screen.getByText('Tickets únicos escalados').nextElementSibling).toHaveTextContent('1')
     expect(screen.getByText('Eventos de escalamiento').nextElementSibling).toHaveTextContent('3')
     expect(screen.getByRole('link', { name: 'T-1' })).toHaveAttribute('href', '/tickets/1')
@@ -35,12 +35,12 @@ describe('Estadísticas de escalamientos', () => {
     expect(query.get('node_id')).toBe('5'); expect(query.has('from')).toBe(false)
   })
   it('selección de persona y ranking filtran destinatario, no responsable principal', async () => {
-    const mock = setup(); await screen.findByText('25.0 %')
+    const mock = setup(); await screen.findByText('25.00 %')
     fireEvent.click(screen.getByRole('combobox', { name: 'Escalamientos recibidos por' }))
     fireEvent.click(await screen.findByRole('option', { name: 'Especialista' }))
     await waitFor(() => expect(mock.mock.calls.some(([path]) => path.includes('recipient_id=2'))).toBe(true))
     expect(mock.mock.calls.every(([path]) => !path.includes('responsible_id='))).toBe(true)
-    await screen.findByText('25.0 %')
+    await screen.findByText('25.00 %')
     fireEvent.click(screen.getByRole('button', { name: 'Ver ranking completo (1)' }))
     fireEvent.click(within(screen.getByRole('table', { name: 'Escalamientos recibidos por persona' })).getByRole('button', { name: 'Especialista' }))
     expect(screen.getByRole('combobox', { name: 'Escalamientos recibidos por' })).toHaveValue('Especialista')
@@ -55,6 +55,6 @@ describe('Estadísticas de escalamientos', () => {
     setup(true)
     expect(await screen.findByRole('alert')).toHaveTextContent('Estadísticas no disponibles.')
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
-    expect(screen.queryByText('25.0 %')).not.toBeInTheDocument()
+    expect(screen.queryByText('25.00 %')).not.toBeInTheDocument()
   })
 })

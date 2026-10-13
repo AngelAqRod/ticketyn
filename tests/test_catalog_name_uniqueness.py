@@ -59,7 +59,7 @@ def test_migration_conflicts_no_changes_and_concurrency(postgres_engine):
             db.execute(text("INSERT INTO positions(department_id,name) VALUES (1,'Supervisor'),(1,' supervisor '),(2,'Supervisor')"))
             before = {table: db.execute(text(f'SELECT to_jsonb(t) FROM {table} t ORDER BY id')).scalars().all() for table in ('customers','positions')}
         with pytest.raises(AssertionError, match='ids=') as error:
-            cli(url, 'upgrade', 'head')
+            cli(url, 'upgrade', '0012_catalog_name_uniqueness')
         assert 'customers' in str(error.value) and 'positions' in str(error.value)
         with engine.begin() as db:
             assert db.scalar(text('SELECT version_num FROM alembic_version')) == '0011_department_positions'
@@ -69,7 +69,7 @@ def test_migration_conflicts_no_changes_and_concurrency(postgres_engine):
             # Explicit correction exclusively in this disposable fixture, no merge/delete.
             db.execute(text("UPDATE customers SET name=name || id::text WHERE id>1"))
             db.execute(text("UPDATE positions SET name='Supervisor suplente' WHERE id=2"))
-        cli(url, 'upgrade', 'head')
+        cli(url, 'upgrade', '0012_catalog_name_uniqueness')
         with engine.connect() as db:
             assert db.scalar(text('SELECT version_num FROM alembic_version')) == '0012_catalog_name_uniqueness'
             assert db.scalar(text('SELECT count(*) FROM customers')) == 3

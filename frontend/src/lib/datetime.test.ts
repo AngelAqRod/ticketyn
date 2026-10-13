@@ -26,3 +26,10 @@ describe('fechas operativas locales', () => {
     expect(result.trim()).toBe(expected)
   })
 })
+
+it('convierte fechas operativas de Guatemala independientemente del navegador', async () => {
+  const { ticketynDateTimeToIso, ticketynDateTimeValue } = await import('./datetime')
+  expect(ticketynDateTimeToIso('2026-10-12T08:00')).toBe('2026-10-12T14:00:00.000Z')
+  expect(ticketynDateTimeValue(new Date('2026-10-12T05:59:00Z'))).toBe('2026-10-11T23:59')
+  expect(() => ticketynDateTimeToIso('2026-02-30T08:00')).toThrow()
+})

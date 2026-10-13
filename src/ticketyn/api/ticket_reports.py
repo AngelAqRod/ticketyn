@@ -145,16 +145,16 @@ def internal_pdf(session, ticket_id, output, zone, issued):
         escalation_heading.style.keepWithNext = True
         story.extend([escalation_heading, paragraph('Sin escalamientos registrados.', size=10)])
     for index, escalation in enumerate(escalations):
-        heading = paragraph(f'Escalamiento #{escalation.id} · Destinatario: {escalation.recipient.name} · {"Activo" if escalation.status == "ACTIVE" else "Finalizado"}', bold=True, size=9)
+        heading = paragraph(f'Escalamiento #{escalation.id} · Destinatario: {escalation.recipient.name if escalation.recipient else "Pendiente de asignación"} · {"Activo" if escalation.status == "ACTIVE" else "Finalizado"}', bold=True, size=9)
         details = []
         if escalation.recipient_department_name:
             details.append(f'Departamento histórico: {escalation.recipient_department_name}')
         position = escalation.recipient_position_name or escalation.recipient_level
         if position:
             details.append(f'Puesto histórico: {position}')
-        details.extend([f'Motivo: {escalation.reason.name}', f'Creado: {date_text(escalation.created_at, zone)}'])
+        details.extend([f'Motivo: {escalation.reason.name}', f'Inicio: {date_text(escalation.started_at, zone)}'])
         if escalation.finished_at:
-            details.extend([f'Finalizado: {date_text(escalation.finished_at, zone)}', f'Duración: {duration_text((escalation.finished_at - escalation.created_at).total_seconds())}'])
+            details.extend([f'Finalizado: {date_text(escalation.finished_at, zone)}', f'Duración: {duration_text((escalation.finished_at - escalation.started_at).total_seconds())}'])
         story.extend(intervention_block(heading, paragraph('\n'.join([*details, escalation.description]), size=10), escalation_heading if index == 0 else None))
     build_pdf(output, 'Reporte técnico interno', str(zone), story, issued_at=date_text(issued, zone))
 

@@ -8,10 +8,10 @@ export function formatTableDate(value: string | null): string {
   return Number.isNaN(date.getTime()) ? 'Fecha no válida' : tableDateFormatter.format(date)
 }
 
-export function formatDate(value: string | null): string {
+export function formatDate(value: string | null, timeZone?: string): string {
   if (value === null) return '—'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? 'Fecha no válida' : dateFormatter.format(date)
+  return Number.isNaN(date.getTime()) ? 'Fecha no válida' : (timeZone ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short', timeZone }) : dateFormatter).format(date)
 }
 
 export function formatDuration(seconds: number | null): string {

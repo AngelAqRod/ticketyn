@@ -3,11 +3,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { TicketEscalations } from './TicketEscalations'
 import { TicketFollowUp } from './TicketFollowUp'
 import { jsonResponse } from '../test/fixtures'
+import { formatDate } from '../lib/format'
+import { ticketynTimezone } from '../lib/datetime'
 import type { Escalation } from '../types/escalation'
-const person = { id: 1, name: 'Pedro', active: true, created_at: '2026-10-09T12:00:00Z' }
-const recipient = { ...person, id: 2, name: 'Ángel', position: { ...person, name: 'N3' }, department: { ...person, name: 'NOC' } }
+const person = { id: 1, department_id: 1, name: 'Pedro', active: true, created_at: '2026-10-09T12:00:00Z' }
+const recipient = { ...person, id: 2, name: 'Ángel', position: { ...person, name: 'N3' }, department_id: 1, department: { ...person, name: 'NOC' } }
 const reason = { ...person, id: 3, name: 'Apoyo técnico', description: null }
-const escalation: Escalation = { id: 8, ticket_id: 1, requester_id: 1, recipient_id: 2, reason_id: 3, requester: person, recipient, reason, description: 'Ayuda BGP\nSin cambio de asignación', status: 'ACTIVE', created_at: person.created_at, finished_at: null, recipient_level: 'N3' }
+const escalation: Escalation = { id: 8, ticket_id: 1, requester_id: 1, recipient_id: 2, reason_id: 3, department_id: 1, started_at: person.created_at, updated_at: person.created_at, requester: person, recipient, reason, description: 'Ayuda BGP\nSin cambio de asignación', status: 'ACTIVE', created_at: person.created_at, finished_at: null, recipient_level: 'N3' }
 const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal'), originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
 beforeAll(() => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.setAttribute('open', '') } })
@@ -20,6 +22,8 @@ afterAll(() => {
 function mockApi(rows: Escalation[] = [], options: { failSave?: boolean; failFinish?: boolean; pending?: boolean; failLoad?: boolean } = {}) {
   const mock = vi.fn((url: string, init?: RequestInit) => {
     if (url.includes('/responsibles?')) return Promise.resolve(jsonResponse([person, recipient]))
+    if (url.includes('/departments?')) return Promise.resolve(jsonResponse([{ ...person, name: 'NOC' }]))
+    if (url.includes('/audit')) return Promise.resolve(jsonResponse([]))
     if (url.includes('/escalation-reasons?')) return Promise.resolve(jsonResponse([reason]))
     if (url.includes('/updates')) {
       if (init?.method === 'POST') return Promise.resolve(jsonResponse({ id: 9, ...JSON.parse(String(init.body)) }, 201))
@@ -27,6 +31,10 @@ function mockApi(rows: Escalation[] = [], options: { failSave?: boolean; failFin
       return Promise.resolve(jsonResponse({ items: [], next_cursor: null }))
     }
     if (url.endsWith('/finish')) return Promise.resolve(jsonResponse(options.failFinish ? { detail: 'No se pudo finalizar.' } : { ...escalation, status: 'FINISHED', finished_at: '2026-10-09T13:00:00Z' }, options.failFinish ? 409 : 200))
+    if (init?.method === 'PATCH') {
+      rows = [{ ...rows[0], ...JSON.parse(String(init.body)), updated_at: '2026-10-12T18:00:00Z' }]
+      return Promise.resolve(jsonResponse(rows[0]))
+    }
     if (init?.method === 'POST') {
       if (options.pending) return new Promise<Response>(() => {})
       if (options.failSave) return Promise.resolve(jsonResponse({ detail: 'No se pudo registrar.' }, 409))
@@ -45,7 +53,7 @@ async function select(name: string, option: string) {
 async function fill() {
   fireEvent.change(screen.getByLabelText(/Descripción de la solicitud/), { target: { value: 'Ayuda BGP' } })
   expect(screen.queryByRole('combobox', { name: 'Solicitante' })).not.toBeInTheDocument()
-  await select('Destinatario', 'Ángel · N3 — NOC'); await select('Motivo', 'Apoyo técnico')
+  await select('Destinatario (opcional)', 'Ángel · N3 — NOC'); await select('Motivo', 'Apoyo técnico')
 }
 async function open() {
   render(<TicketEscalations ticketId={1} />)
@@ -61,7 +69,7 @@ describe('Escalamientos', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByText('Pedro → Ángel · N3')).toBeInTheDocument()
     const write = mock.mock.calls.find(([, init]) => init?.method === 'POST')!
-    expect(JSON.parse(String(write[1]?.body))).toEqual({ recipient_id: 2, reason_id: 3, description: 'Ayuda BGP' })
+    expect(JSON.parse(String(write[1]?.body))).toMatchObject({ recipient_id: 2, department_id: 1, started_at: expect.any(String), reason_id: 3, description: 'Ayuda BGP' })
     expect(mock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false)
   })
   it('mantiene contenido y modal ante error, y bloquea envíos duplicados', async () => {
@@ -89,6 +97,7 @@ describe('Escalamientos', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ver intervenciones' }))
     expect(await screen.findByText('Intervención relacionada')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Finalizar escalamiento' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
     expect(await screen.findByText('Finalizado')).toBeInTheDocument()
     expect(screen.getByText('Pedro → Ángel · N3')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Finalizar escalamiento' })).not.toBeInTheDocument()
@@ -122,9 +131,76 @@ it('muestra snapshots históricos sin inventar solicitante ni usar el puesto act
 it('permite destinatario sin puesto configurado', async () => {
   const mock = mockApi(); await open()
   fireEvent.change(screen.getByLabelText(/Descripción de la solicitud/), { target: { value: 'Solicitar colaboración' } })
-  await select('Destinatario', 'Pedro'); await select('Motivo', 'Apoyo técnico')
+  await select('Destinatario (opcional)', 'Pedro'); await select('Motivo', 'Apoyo técnico')
   fireEvent.submit(screen.getByRole('form', { name: 'Registrar escalamiento' }))
   await screen.findByText('Escalamiento registrado. La responsabilidad principal no cambia.')
   const write = mock.mock.calls.find(([, init]) => init?.method === 'POST')!
-  expect(JSON.parse(String(write[1]?.body))).toEqual({ recipient_id: 1, reason_id: 3, description: 'Solicitar colaboración' })
+  expect(JSON.parse(String(write[1]?.body))).toMatchObject({ recipient_id: 1, department_id: 1, started_at: expect.any(String), reason_id: 3, description: 'Solicitar colaboración' })
+})
+
+it('registra destino sin técnico y permite ajustar el inicio operativo', async () => {
+  const mock = mockApi(); await open()
+  fireEvent.change(screen.getByLabelText(/Descripción de la solicitud/), { target: { value: 'Apoyo al departamento' } })
+  await select('Departamento de destino', 'NOC'); await select('Motivo', 'Apoyo técnico')
+  fireEvent.change(screen.getByLabelText(/Inicio operativo/), { target: { value: '2026-10-12T08:00' } })
+  fireEvent.submit(screen.getByRole('form', { name: 'Registrar escalamiento' }))
+  await screen.findByText('Escalamiento registrado. La responsabilidad principal no cambia.')
+  const write = mock.mock.calls.find(([, init]) => init?.method === 'POST')!
+  expect(JSON.parse(String(write[1]?.body))).toMatchObject({ department_id: 1, recipient_id: null, started_at: '2026-10-12T14:00:00.000Z' })
+})
+it('muestra pendiente de asignación y metadatos sin atribuir un técnico', async () => {
+  mockApi([{ ...escalation, recipient_id: null, recipient: null, recipient_department_name: 'NOC', recipient_level: null }])
+  render(<TicketEscalations ticketId={1} />)
+  expect(await screen.findByText(/Pendiente de asignación — NOC/)).toBeInTheDocument()
+  expect(await screen.findByText('METADATOS')).toBeInTheDocument()
+  expect(screen.getByText('Fecha de creación')).toBeInTheDocument()
+  expect(screen.getByText('Última actualización')).toBeInTheDocument()
+})
+
+it('corrige fechas sin reenviar metadatos ni alterar la precisión de fechas sin cambios', async () => {
+  const mock = mockApi([{ ...escalation, status: 'FINISHED', finished_at: '2026-10-09T13:00:37Z', started_at: '2026-10-09T12:00:37Z' }])
+  render(<TicketEscalations ticketId={1} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Editar escalamiento' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled())
+  fireEvent.change(screen.getByLabelText(/Inicio operativo/), { target: { value: '2026-10-09T05:30' } })
+  fireEvent.submit(screen.getByRole('form', { name: 'Registrar escalamiento' }))
+  await screen.findByText('Escalamiento actualizado. La responsabilidad principal no cambia.')
+  const write = mock.mock.calls.find(([, init]) => init?.method === 'PATCH')!
+  expect(JSON.parse(String(write[1]?.body))).toEqual({ started_at: '2026-10-09T11:30:00.000Z' })
+  const metadata = screen.getByRole('region', { name: 'Metadatos del escalamiento' })
+  await waitFor(() => expect(within(metadata).getByText(formatDate('2026-10-12T18:00:00Z', ticketynTimezone))).toBeInTheDocument())
+  expect(within(metadata).getByText(formatDate(escalation.created_at, ticketynTimezone))).toBeInTheDocument()
+
+})
+it('rechaza finalización anterior al inicio sin enviar la petición y conserva el modal', async () => {
+  const mock = mockApi([escalation]); render(<TicketEscalations ticketId={1} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Finalizar escalamiento' }))
+  fireEvent.change(screen.getByLabelText('Finalización operativa'), { target: { value: '2026-10-08T08:00' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+  expect(await screen.findAllByText('La finalización no puede ser anterior al inicio.')).not.toHaveLength(0)
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  expect(mock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+})
+
+it('muestra metadatos administrativos independientes en varios escalamientos sin desplegarlos', async () => {
+  const rows: Escalation[] = [
+    escalation,
+    { ...escalation, id: 9, status: 'FINISHED', started_at: '2020-01-01T12:00:00Z', finished_at: '2020-01-01T13:00:00Z', created_at: '2026-10-10T15:00:00Z', updated_at: '2026-10-11T16:00:00Z' },
+  ]
+  const mock = mockApi(rows)
+  render(<TicketEscalations ticketId={1} />)
+  await screen.findByText('Finalizado')
+  const items = within(screen.getByRole('list', { name: 'Historial de escalamientos' })).getAllByRole('listitem')
+  expect(items).toHaveLength(2)
+  items.forEach((item, index) => {
+    const metadata = within(item).getByRole('region', { name: 'Metadatos del escalamiento' })
+    expect(within(metadata).getByText('METADATOS')).toBeInTheDocument()
+    expect(within(metadata).getByText('Fecha de creación')).toBeInTheDocument()
+    expect(within(metadata).getByText('Última actualización')).toBeInTheDocument()
+    expect(metadata).toHaveTextContent(formatDate(rows[index].created_at, ticketynTimezone))
+    expect(metadata).toHaveTextContent(formatDate(rows[index].updated_at, ticketynTimezone))
+    expect(within(metadata).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(within(item).getByRole('button', { name: 'Ver intervenciones' })).toHaveAttribute('aria-expanded', 'false')
+  })
+  expect(mock.mock.calls.some(([url]) => url.includes('/audit') || url.includes('escalation_id='))).toBe(false)
 })

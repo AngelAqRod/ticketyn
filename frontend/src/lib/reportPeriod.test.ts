@@ -55,3 +55,14 @@ it('Todos omite los límites y conserva contexto y destinatario separado', () =>
   expect(result.from).toBe('')
   expect(result.to).toBe('')
 })
+
+it('Hoy/Ayer utilizan Guatemala incluso cuando el instante UTC pertenece al día siguiente', () => {
+  const instant = new Date('2026-10-13T05:59:00Z')
+  const current = reportPeriod(new URLSearchParams('period=1'), instant)
+  expect(current.query.timezone).toBe('America/Guatemala')
+  expect(current.query.from).toBe('2026-10-12T06:00:00.000Z')
+  expect(current.query.to).toBe('2026-10-13T06:00:00.000Z')
+  const yesterday = reportPeriod(new URLSearchParams('period=yesterday'), instant)
+  expect(yesterday.query.from).toBe('2026-10-11T06:00:00.000Z')
+  expect(yesterday.query.to).toBe(current.query.from)
+})

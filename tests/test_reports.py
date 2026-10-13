@@ -165,7 +165,7 @@ def test_report_query_count_is_constant(api_client, ticket_payload, db_session):
         assert summary(api_client)['kpis']['started'] == 5
     finally:
         event.remove(connection, 'before_cursor_execute', record)
-    assert len(statements) == 19  # 15 consultas existentes + 4 agregaciones de escalamientos; sin N+1.
+    assert len(statements) == 20  # 15 existentes + 5 agregaciones; cobertura/denominador comparten consulta, departamentos sin N+1.
 
 
 def test_snapshot_uses_repeatable_read_in_isolated_engine(postgres_engine):

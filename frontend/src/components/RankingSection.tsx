@@ -4,8 +4,8 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { RankingChart } from './ReportCharts'
 import type { ReportRanking } from '../types/report'
 
-export function RankingSection({ title, rows, destination, onSelect, countLabel = 'Incidencias' }: {
-  title: string; rows: ReportRanking[]; destination?: (row: ReportRanking) => string; onSelect?: (row: ReportRanking) => void; countLabel?: string
+export function RankingSection<R extends Omit<ReportRanking, 'id'> & { id: number | null }>({ title, rows, destination, onSelect, countLabel = 'Incidencias' }: {
+  title: string; rows: R[]; destination?: (row: R) => string; onSelect?: (row: R) => void; countLabel?: string
 }) {
   const [expanded, setExpanded] = useState(false)
   const tableId = useId()
@@ -18,7 +18,7 @@ export function RankingSection({ title, rows, destination, onSelect, countLabel 
         {expanded ? `Ocultar ranking completo (${rows.length})` : `Ver ranking completo (${rows.length})`}
       </button>
       <div id={tableId} hidden={!expanded} className="table-surface mt-3 max-h-80 overflow-auto rounded-lg border border-slate-200">
-        {expanded && <table className="operation-table"><caption className="sr-only">{title}</caption><thead><tr><th scope="col">Nombre / código</th><th scope="col" className="text-right">{countLabel}</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}>
+        {expanded && <table className="operation-table"><caption className="sr-only">{title}</caption><thead><tr><th scope="col">Nombre / código</th><th scope="col" className="text-right">{countLabel}</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id ?? row.label}>
           <th scope="row" className="font-normal"><>{onSelect ? <button type="button" className="button-ghost" onClick={() => onSelect(row)}>{row.label}</button> : <Link className="text-primary hover:underline underline-offset-4" to={destination?.(row) ?? "/reports"}>{row.label}</Link>}</>{row.customer_code && <span className="block text-[11px] text-muted"><span className="font-mono">{row.customer_code}</span> — {row.customer_name}</span>}</th>
           <td className="text-right font-mono tabular-nums">{row.count}</td>
         </tr>)}</tbody></table>}
