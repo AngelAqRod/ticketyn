@@ -4,14 +4,14 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { RankingChart } from './ReportCharts'
 import type { ReportRanking } from '../types/report'
 
-export function RankingSection<R extends Omit<ReportRanking, 'id'> & { id: number | null }>({ title, rows, destination, onSelect, countLabel = 'Incidencias' }: {
-  title: string; rows: R[]; destination?: (row: R) => string; onSelect?: (row: R) => void; countLabel?: string
+export function RankingSection<R extends Omit<ReportRanking, 'id'> & { id: number | null }>({ title, rows, destination, onSelect, countLabel = 'Incidencias', emptyText }: {
+  title: string; rows: R[]; destination?: (row: R) => string; onSelect?: (row: R) => void; countLabel?: string; emptyText?: string
 }) {
   const [expanded, setExpanded] = useState(false)
   const tableId = useId()
   return <section className="ranking-section" aria-label={title}>
     <div className="mb-2 flex items-baseline justify-between gap-2"><h3 className="text-sm font-semibold">{title}</h3><span className="chip chip-primary shrink-0">Top 10</span></div>
-    {rows.length === 0 ? <p className="py-4 text-sm text-muted">{countLabel === 'Incidencias' ? 'Sin incidencias.' : 'Sin escalamientos.'}</p> : <>
+    {rows.length === 0 ? <p className="py-4 text-sm text-muted">{emptyText ?? (countLabel === 'Incidencias' ? 'Sin incidencias.' : 'Sin escalamientos.')}</p> : <>
       <RankingChart rows={rows} title={title} countLabel={countLabel} />
       <button type="button" className="button-ghost ranking-toggle" aria-expanded={expanded} aria-controls={tableId} onClick={() => setExpanded(!expanded)}>
         {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}

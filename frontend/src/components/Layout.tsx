@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
-import { LayoutDashboard, Ticket, Users, Network, Layers3, ChartNoAxesCombined, Settings, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Ticket, Users, Network, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power } from 'lucide-react'
 import { getHealth } from '../api'
 import { identityFor, moduleIdentity } from './moduleIdentity'
 
-const icons = [LayoutDashboard, Ticket, Users, Network, ChartNoAxesCombined, Layers3, Settings]
+const icons = [LayoutDashboard, Ticket, Users, Network, ChartNoAxesCombined, Layers3, Settings, Zap, Gauge, Power, ChartNoAxesCombined, ChartNoAxesCombined, ChartNoAxesCombined]
 const navigation = moduleIdentity.map((item, index) => ({ ...item, icon: icons[index] }))
 
 

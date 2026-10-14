@@ -7,6 +7,7 @@ export interface TicketStats {
 }
 
 export interface TicketCreateInput {
+  node_id?: number
   resolution?: string | null
   customer_description?: string | null
   customer_resolution?: string | null
@@ -15,7 +16,7 @@ export interface TicketCreateInput {
   description: string
   customer_id: number
   circuit_id: number
-  sector_id: number
+  sector_id?: number
   department_id: number
   incident_type_id: number
   start_at: string
@@ -40,6 +41,7 @@ export interface TicketQuery {
 }
 
 export interface Ticket {
+  node_id?: number | null
   resolution?: string | null
   customer_description?: string | null
   customer_resolution?: string | null

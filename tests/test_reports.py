@@ -48,6 +48,7 @@ def test_temporal_universes_kpis_rankings_and_boundaries(api_client, ticket_payl
 def test_sector_and_historical_catalogs(api_client, ticket_payload):
     create_ticket(api_client, ticket_payload)
     second_sector = api_client.post('/api/sectors', json={'name': 'Otro sector'}).json()
+    assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': second_sector['id']}).status_code == 200
     create_ticket(api_client, {**ticket_payload, 'sector_id': second_sector['id']})
     for field, path in RELATED_PATHS.items():
         api_client.patch(f'{path}/{ticket_payload[field]}', json={'active': False})
@@ -100,6 +101,7 @@ def test_xlsx_all_rows_period_sector_styles_and_safe_strings(api_client, ticket_
         create_ticket(api_client, {**ticket_payload, 'title': '=1+1'})
     create_ticket(api_client, {**ticket_payload, 'start_at': BASE['to']})
     other_sector = api_client.post('/api/sectors', json={'name': 'Otro'}).json()['id']
+    assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': other_sector}).status_code == 200
     create_ticket(api_client, {**ticket_payload, 'sector_id': other_sector})
     filters = {**BASE, **({'sector_id': ticket_payload['sector_id']} if sector_view else {})}
     response = api_client.get('/api/reports/export/xlsx', params=filters)
@@ -139,6 +141,7 @@ def test_pdf_all_rows_respects_period_sector(api_client, ticket_payload, sector_
     included = [create_ticket(api_client, ticket_payload)['reference'] for _ in range(51)]
     excluded = create_ticket(api_client, {**ticket_payload, 'start_at': BASE['to']})['reference']
     sector = api_client.post('/api/sectors', json={'name': 'Otro'}).json()['id']
+    assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': sector}).status_code == 200
     other = create_ticket(api_client, {**ticket_payload, 'sector_id': sector})['reference']
     response = api_client.get('/api/reports/export/pdf', params={**BASE, **({'sector_id': ticket_payload['sector_id']} if sector_view else {})})
     assert response.status_code == 200, response.text
@@ -180,6 +183,7 @@ def test_snapshot_uses_repeatable_read_in_isolated_engine(postgres_engine):
 def test_ranking_full_data_and_deterministic_order(api_client, ticket_payload):
     for index in range(12):
         sector = api_client.post('/api/sectors', json={'name': f'Sector {index:02}'}).json()['id']
+        assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': sector}).status_code == 200
         for _ in range(2 if index == 11 else 1):
             create_ticket(api_client, {**ticket_payload, 'sector_id': sector})
     rows = summary(api_client)['sectors']

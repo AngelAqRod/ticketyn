@@ -37,12 +37,12 @@ def normalized_ddl(statements):
 def historical_metadata():
     metadata = MetaData(naming_convention=Base.metadata.naming_convention)
     for table in Base.metadata.sorted_tables:
-        if table.name not in {'nodes', 'responsibles', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit'}:
+        if table.name not in {'nodes', 'responsibles', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit', 'activations', 'activation_interventions', 'activation_number_config', 'capacity_changes', 'circuit_lifecycle_operations', 'deactivation_reasons', 'service_types'}:
             table.to_metadata(metadata)
-    for table_name, field in [('circuits', 'node_id'), ('tickets', 'responsible_id'), *[('tickets', field) for field in ('resolution', 'customer_description', 'customer_resolution')]]:
+    for table_name, field in [('circuits', 'sector_id'), ('circuits', 'service_type_id'), ('circuits', 'initial_capacity'), ('circuits', 'initial_capacity_unit'), ('circuits', 'node_id'), ('tickets', 'node_id'), ('tickets', 'responsible_id'), *[('tickets', field) for field in ('resolution', 'customer_description', 'customer_resolution')]]:
         table = metadata.tables[table_name]
         for constraint in list(table.constraints):
-            if field in constraint.columns or constraint.name == f"ck_tickets_{field}_content":
+            if constraint.name == "ck_circuits_initial_capacity_valid" or field in constraint.columns or constraint.name == f"ck_tickets_{field}_content":
                 table.constraints.remove(constraint)
         for index in list(table.indexes):
             if field in index.columns:

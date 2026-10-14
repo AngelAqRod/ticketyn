@@ -29,10 +29,10 @@ def fonts():
     pdfmetrics.registerFontFamily(FONT, normal=FONT, bold=BOLD, italic=FONT, boldItalic=BOLD)
 
 
-def paragraph(value, *, size=8, color=NAVY, bold=False, keep=False, space_after=5):
+def paragraph(value, *, size=8, color=NAVY, bold=False, keep=False, space_after=5, word_wrap='CJK'):
     style = ParagraphStyle('ticketyn', fontName=BOLD if bold else FONT, fontSize=size,
         leading=size * 1.4, textColor=color, spaceAfter=space_after, keepWithNext=keep,
-        splitLongWords=True, wordWrap='CJK')
+        splitLongWords=True, wordWrap=word_wrap)
     return Paragraph(escape(str(value if value is not None else '—')).replace('\n', '<br/>'), style)
 
 
@@ -58,11 +58,12 @@ def analytical_block(heading, graphic, table, width):
 
 
 class NumberedCanvas(Canvas):
-    def __init__(self, *args, document_title, zone, issued_at=None, **kwargs):
+    def __init__(self, *args, document_title, zone, issued_at=None, subtitle='GESTIÓN DE INCIDENCIAS', **kwargs):
         super().__init__(*args, **kwargs)
         self.states = []
         self.document_title, self.zone = document_title, zone
         self.issued_at = issued_at
+        self.subtitle = subtitle
         self.setTitle(f'Ticketyn — {document_title}')
         self.setAuthor('Ticketyn')
 
@@ -89,7 +90,7 @@ class NumberedCanvas(Canvas):
         self.setFont(BOLD, 17)
         self.drawString(30, height - 29, 'Ticketyn')
         self.setFont(FONT, 7)
-        self.drawString(30, height - 44, 'GESTIÓN DE INCIDENCIAS')
+        self.drawString(30, height - 44, self.subtitle)
         self.setFont(BOLD, 10)
         self.drawRightString(width - 30, height - 30, self.document_title)
         self.setFont(FONT, 7)
@@ -103,18 +104,18 @@ class NumberedCanvas(Canvas):
         self.restoreState()
 
 
-def build_pdf(output, title, zone, story, *, issued_at=None):
+def build_pdf(output, title, zone, story, *, issued_at=None, subtitle='GESTIÓN DE INCIDENCIAS'):
     fonts()
     document = SimpleDocTemplate(output, pagesize=landscape(A4), rightMargin=30,
         leftMargin=30, topMargin=90, bottomMargin=43, pageCompression=1)
-    document.build(story, canvasmaker=partial(NumberedCanvas, document_title=title, zone=zone, issued_at=issued_at))
+    document.build(story, canvasmaker=partial(NumberedCanvas, document_title=title, zone=zone, issued_at=issued_at, subtitle=subtitle))
 
 
-def modern_table(headers, rows, widths, *, reference=False, compact=False):
-    data = [[paragraph(value, color=colors.white, bold=True, size=7, space_after=0 if compact else 5) for value in headers]]
+def modern_table(headers, rows, widths, *, reference=False, compact=False, word_wrap='CJK'):
+    data = [[paragraph(value, color=colors.white, bold=True, size=7, space_after=0 if compact else 5, word_wrap=word_wrap) for value in headers]]
     for row in rows:
         data.append([paragraph(value, size=7, bold=reference and index == 0,
-                               color=BLUE if reference and index == 0 else NAVY, space_after=0 if compact else 5)
+                               color=BLUE if reference and index == 0 else NAVY, space_after=0 if compact else 5, word_wrap=word_wrap)
                      for index, value in enumerate(row)])
     if len(data) == 1:
         data.append([paragraph('Sin resultados.' if index == 0 else '') for index in range(len(headers))])
@@ -173,7 +174,7 @@ def ticket_pdf_table(rows, zone, width):
         for ticket, customer, circuit, sector, department, kind in rows:
             date = lambda value: value.astimezone(zone).strftime('%d/%m/%Y\n%H:%M') if value else '—'
             yield [ticket.reference, 'Abierto' if ticket.status == 'OPEN' else 'Cerrado', ticket.title,
-                   f'{customer.customer_code}\n{customer.name}', circuit.circuit_code, circuit.node.name if circuit.node else "Sin asignar", ticket.responsible.name if ticket.responsible else "Sin asignar", sector.name,
+                   f'{customer.customer_code}\n{customer.name}', circuit.circuit_code, ticket.node.name if ticket.node else "Sin asignar", ticket.responsible.name if ticket.responsible else "Sin asignar", sector.name,
                    kind.name, date(ticket.start_at), f'{date(ticket.end_at)}\n{duration_text(ticket.duration_seconds) if ticket.duration_seconds is not None else "En curso"}']
     return modern_table(['Referencia', 'Estado', 'Título', 'Cliente', 'Circuito', 'Nodo', 'Responsable', 'Sector', 'Tipo', 'Inicio', 'Fin / Duración'],
         values(), [width * fraction for fraction in [.10, .06, .115, .115, .105, .075, .085, .07, .075, .10, .10]], reference=True)
@@ -218,6 +219,10 @@ class BarsGraphic(Flowable):
 
 
 class ActivityGraphic(TrendGraphic):
+    def __init__(self, *args, labels=('Iniciadas', 'Cerradas'), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.labels = labels
+
     def draw(self):
         canvas = self.canv
         left, right, base, top = 28, self.width - 10, 25, 108
@@ -227,7 +232,7 @@ class ActivityGraphic(TrendGraphic):
             y = base + (top - base) * index / 4
             canvas.setStrokeColor(BORDER); canvas.setLineWidth(.4); canvas.line(left, y, right, y)
             canvas.setFillColor(MUTED); canvas.drawRightString(left - 5, y - 2, f'{maximum * index / 4:g}')
-        for field, color, label, x in [('started', BLUE, 'Iniciadas', left), ('closed', MUTED, 'Cerradas', left + 95)]:
+        for field, color, label, x in [('started', BLUE, self.labels[0], left), ('closed', MUTED, self.labels[1], left + (95 if self.labels == ('Iniciadas', 'Cerradas') else 120))]:
             canvas.setFillColor(color); canvas.drawString(x, 115, label)
             points = [(left + index * (right - left) / max(1, len(self.buckets) - 1), base + getattr(row, field) * (top - base) / maximum) for index, row in enumerate(self.buckets)]
             canvas.setStrokeColor(color); canvas.setLineWidth(1.5)

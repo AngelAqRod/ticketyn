@@ -1,10 +1,13 @@
+import { circuitLabel } from '../lib/circuitLabel'
+import { CircuitAssignmentField } from './CircuitAssignmentField'
+import { CircuitSectorField } from './CircuitSectorField'
 import { RequestState } from './RequestState'
 import { FeedbackMessage } from './FeedbackMessage'
 import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { createTicket, updateTicket, getTicketCatalogs, listCircuits, listCustomers, listDepartments, listIncidentTypes, listSectors, listResponsibles } from '../api'
+import { createTicket, updateTicket, getTicketCatalogs, listCircuits, listCustomers, listDepartments, listIncidentTypes, listSectors, listResponsibles, listNodes } from '../api'
 import type { Circuit, Customer, Department, IncidentType, Sector, Responsible } from '../types/catalog'
 import type { Ticket, TicketStatus } from '../types/ticket'
 import { localDateTimeToIso, localDateTimeValue } from '../lib/datetime'
@@ -14,7 +17,7 @@ import { SearchableSelect } from './SearchableSelect'
 import { PageHeading } from '../components/PageHeading'
 
 interface Catalogs {
-  responsibles: Responsible[]; customers: Customer[]; sectors: Sector[]; departments: Department[]; incidentTypes: IncidentType[]
+  nodes: Pick<Sector, 'id' | 'name' | 'active'>[]; responsibles: Responsible[]; customers: Customer[]; sectors: Sector[]; departments: Department[]; incidentTypes: IncidentType[]
 }
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Ocurrió un error inesperado.'
@@ -29,7 +32,8 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   const [customerId, setCustomerId] = useState(ticket ? String(ticket.customer_id) : '')
   const [circuitId, setCircuitId] = useState(ticket ? String(ticket.circuit_id) : '')
   const [responsibleId, setResponsibleId] = useState(ticket?.responsible_id ? String(ticket.responsible_id) : '')
-  const [sectorId, setSectorId] = useState(ticket ? String(ticket.sector_id) : '')
+  const [nodeId, setNodeId] = useState('')
+  const [sectorId, setSectorId] = useState('')
   const [departmentId, setDepartmentId] = useState(ticket ? String(ticket.department_id) : '')
   const [incidentTypeId, setIncidentTypeId] = useState(ticket ? String(ticket.incident_type_id) : '')
   const [startAt, setStartAt] = useState(() => localDateTimeValue(ticket ? new Date(ticket.start_at) : undefined))
@@ -49,6 +53,10 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   const [historical, setHistorical] = useState<Awaited<ReturnType<typeof getTicketCatalogs>> | null>(null)
   const [quickCreate, setQuickCreate] = useState<'customer' | 'circuit' | null>(null)
   const [quickNotice, setQuickNotice] = useState<string | null>(null)
+  const selectedCircuit = circuits.find(item => String(item.id) === circuitId)
+  const effectiveNodeId = selectedCircuit?.node_id ? String(selectedCircuit.node_id) : nodeId
+  const effectiveSectorId = selectedCircuit?.sector_id ? String(selectedCircuit.sector_id) : sectorId
+  function chooseCircuit(value: string) { if (value !== circuitId) { setSectorId(''); setNodeId('') }; setCircuitId(value) }
   const selectedCustomer = catalogs?.customers.find((item) => String(item.id) === customerId)
   const sending = useRef(false)
   const submitController = useRef<AbortController | null>(null)
@@ -62,13 +70,13 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
     Promise.all([
       listCustomers(controller.signal), listSectors(controller.signal),
       listDepartments(controller.signal), listIncidentTypes(controller.signal),
-      listResponsibles(controller.signal),
+      listResponsibles(controller.signal), listNodes(controller.signal),
       ticket ? getTicketCatalogs(ticket, controller.signal) : Promise.resolve(null),
-    ]).then(([customers, sectors, departments, incidentTypes, responsibles, history]) => {
+    ]).then(([customers, sectors, departments, incidentTypes, responsibles, nodes, history]) => {
       if (!controller.signal.aborted) {
         const merge = <T extends { id: number }>(items: T[], current?: T): T[] => current && !items.some((item) => item.id === current.id) ? [...items, current] : items
         setHistorical(history)
-        setCatalogs({ responsibles: merge(responsibles, history?.responsible ?? undefined), customers: merge(customers, history?.customer), sectors: merge(sectors, history?.sector), departments: merge(departments, history?.department), incidentTypes: merge(incidentTypes, history?.incidentType) })
+        setCatalogs({ nodes: merge(nodes, history?.node ?? undefined), responsibles: merge(responsibles, history?.responsible ?? undefined), customers: merge(customers, history?.customer), sectors: merge(sectors, history?.sector), departments: merge(departments, history?.department), incidentTypes: merge(incidentTypes, history?.incidentType) })
         setCatalogLoading(false)
       }
     }).catch((error: unknown) => {
@@ -96,7 +104,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
   function changeCustomer(value: string) {
     if (value === customerId) return
     setCustomerId(value)
-    setCircuitId('')
+    chooseCircuit('')
     setCircuits([])
     setCircuitError(null)
     setCircuitLoading(Boolean(value))
@@ -111,7 +119,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
 
   function circuitCreated(circuit: Circuit) {
     setCircuits((current) => [...current.filter((item) => item.id !== circuit.id), circuit])
-    setCircuitId(String(circuit.id))
+    chooseCircuit(String(circuit.id))
     setQuickCreate(null)
     setQuickNotice(`Circuito ${circuit.circuit_code} creado y seleccionado.`)
   }
@@ -124,7 +132,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
       setSubmitError('Espera a que se carguen los catálogos o reintenta su carga.')
       return
     }
-    if (!title.trim() || !description.trim() || !customerId || !circuitId || !sectorId || !departmentId || !incidentTypeId || !startAt) {
+    if (!title.trim() || !description.trim() || !customerId || !circuitId || !effectiveSectorId || !effectiveNodeId || !departmentId || !incidentTypeId || !startAt) {
       setSubmitError('Completa los campos obligatorios antes de guardar.')
       return
     }
@@ -145,7 +153,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
       const payload = {
         ...changedTexts,
         title: title.trim(), description: description.trim(), customer_id: Number(customerId),
-        circuit_id: Number(circuitId), sector_id: Number(sectorId), department_id: Number(departmentId),
+        circuit_id: Number(circuitId), ...(!ticket || ticket.circuit_id !== Number(circuitId) || !selectedCircuit?.node_id ? { node_id: Number(effectiveNodeId) } : {}), ...(ticket && ticket.circuit_id === Number(circuitId) && selectedCircuit?.sector_id ? {} : { sector_id: Number(effectiveSectorId) }), department_id: Number(departmentId),
         responsible_id: responsibleId ? Number(responsibleId) : null, incident_type_id: Number(incidentTypeId), start_at: start, end_at: end, status,
       }
       const created = ticket ? await updateTicket(ticket.id, payload, controller.signal) : await createTicket(payload, controller.signal)
@@ -177,15 +185,15 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !customerId.trim()) || apiInvalidFields.includes("customer_id")} id="customer" label="Cliente" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="customer" label="Cliente" required disabled={submitting || catalogLoading || Boolean(catalogError)} value={customerId} onChange={changeCustomer}
               options={(catalogs?.customers ?? []).map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}`, disabled: !item.active }))}
               placeholder="Selecciona un cliente" emptyMessage="No se encontraron clientes." noMatchMessage="No se encontraron clientes." /></div><button type="button" className="button-secondary shrink-0" aria-label="Nuevo cliente" title="Nuevo cliente" disabled={submitting || catalogLoading || Boolean(catalogError)} onClick={() => setQuickCreate('customer')}>+</button></div></FormField>
-            <FormField describedBy={[submitError ? "ticket-submit-error" : "", circuitError ? "ticket-circuit-error" : ""].filter(Boolean).join(" ") || undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !circuitId.trim()) || apiInvalidFields.includes("circuit_id")} id="circuit" label="Circuito" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="circuit" label="Circuito" required disabled={submitting || !customerId || circuitLoading || Boolean(circuitError)} value={circuitId} onChange={setCircuitId}
-              options={circuits.map((item) => ({ value: String(item.id), label: `${item.circuit_code} — ${item.description}`, disabled: !item.active }))}
+            <FormField describedBy={[submitError ? "ticket-submit-error" : "", circuitError ? "ticket-circuit-error" : ""].filter(Boolean).join(" ") || undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !circuitId.trim()) || apiInvalidFields.includes("circuit_id")} id="circuit" label="Circuito" required><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="circuit" label="Circuito" required disabled={submitting || !customerId || circuitLoading || Boolean(circuitError)} value={circuitId} onChange={chooseCircuit}
+              options={circuits.map((item) => ({ value: String(item.id), label: circuitLabel(item), disabled: !item.active }))}
               placeholder={!customerId ? 'Selecciona primero un cliente.' : circuitLoading ? 'Cargando circuitos...' : 'Selecciona un circuito'} emptyMessage="Este cliente no tiene circuitos activos." noMatchMessage="No se encontraron circuitos." /></div><button type="button" className="button-secondary shrink-0" aria-label="Nuevo circuito" title="Nuevo circuito" disabled={submitting || !selectedCustomer || catalogLoading || Boolean(catalogError) || circuitLoading || Boolean(circuitError)} onClick={() => setQuickCreate('circuit')}>+</button></div>
               {customerId && !circuitLoading && !circuitError && !circuits.some((item) => item.active) && !circuitId && <p className="mt-2 text-xs text-slate-600">Este cliente no tiene circuitos activos.</p>}
               {circuitError && <RequestState id="ticket-circuit-error" compact error={`Error al cargar circuitos: ${circuitError}`} errorTitle="" retryText="Reintentar circuitos" onRetry={() => setCircuitRetry(circuitRetry + 1)} className="mt-2" />}
             </FormField>
-            <div className="text-sm text-muted"><span className="block text-xs font-semibold">Nodo de distribución</span>{circuits.find((item) => String(item.id) === circuitId)?.node?.name ?? 'Sin asignar'}</div>
+            <CircuitAssignmentField field="node" id="ticket-node" circuit={selectedCircuit} options={catalogs?.nodes ?? []} value={nodeId} onChange={setNodeId} disabled={catalogLoading || Boolean(catalogError) || submitting} describedBy={submitError ? "ticket-submit-error" : undefined} invalid={Boolean(submitError && !effectiveNodeId) || apiInvalidFields.includes("node_id")} />
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={apiInvalidFields.includes("responsible_id")} id="responsible" label="Responsable"><SearchableSelect id="responsible" label="Responsable" value={responsibleId} onChange={setResponsibleId} disabled={catalogLoading || Boolean(catalogError)} options={(catalogs?.responsibles ?? []).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="No se encontraron responsables." /></FormField>
-            <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !sectorId.trim()) || apiInvalidFields.includes("sector_id")} id="sector" label="Sector" required><select id="sector" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={sectorId} onChange={(e) => setSectorId(e.target.value)}><option value="">Selecciona un sector</option>{catalogs?.sectors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+            <CircuitSectorField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={Boolean(submitError && !effectiveSectorId) || apiInvalidFields.includes("sector_id")} id="sector" circuit={selectedCircuit} sectors={catalogs?.sectors ?? []} value={sectorId} onChange={setSectorId} disabled={catalogLoading || Boolean(catalogError) || submitting} />
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !departmentId.trim()) || apiInvalidFields.includes("department_id")} id="department" label="Departamento" required><select id="department" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="">Selecciona un departamento</option>{catalogs?.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !incidentTypeId.trim()) || apiInvalidFields.includes("incident_type_id")} id="incident-type" label="Tipo de incidencia" required><select id="incident-type" className="form-input" required disabled={catalogLoading || Boolean(catalogError)} value={incidentTypeId} onChange={(e) => setIncidentTypeId(e.target.value)}><option value="">Selecciona un tipo de incidencia</option>{catalogs?.incidentTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={apiInvalidFields.includes("status")} id="status" label="Estado" required><select id="status" className="form-input" value={status} onChange={(e) => setStatus(e.target.value === 'CLOSED' ? 'CLOSED' : 'OPEN')}><option value="OPEN">Abierto</option><option value="CLOSED">Cerrado</option></select></FormField>

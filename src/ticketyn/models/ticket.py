@@ -28,6 +28,8 @@ class Ticket(Base):
     customer_resolution: Mapped[str | None] = mapped_column(Text)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     circuit_id: Mapped[int] = mapped_column(ForeignKey("circuits.id"), index=True)
+    node_id: Mapped[int | None] = mapped_column(ForeignKey("nodes.id"), index=True)
+    node: Mapped["Node | None"] = relationship(lazy="joined")
     sector_id: Mapped[int] = mapped_column(ForeignKey("sectors.id"), index=True)
     department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), index=True)
     incident_type_id: Mapped[int] = mapped_column(ForeignKey("incident_types.id"), index=True)
@@ -43,10 +45,6 @@ class Ticket(Base):
     )
 
     updates: Mapped[list["TicketUpdate"]] = relationship(back_populates="ticket", lazy="raise", passive_deletes="all")
-
-    @property
-    def node(self):
-        return self.circuit.node
 
     @property
     def duration_seconds(self) -> float | None:

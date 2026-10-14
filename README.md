@@ -4,11 +4,11 @@ Ticketyn es un producto web de gestión de incidencias: tickets, clientes,
 circuitos/servicios contratados, catálogos, filtros operativos y reportería.
 Licencia **GNU AGPL v3, AGPL-3.0-only**; texto completo en [LICENSE](LICENSE).
 
-Candidata estable **v0.3.0**, preparada para validación y publicación.
-La versión declarada de backend y frontend es `0.3.0`.
+Versión **v0.4.0** en preparación para revisión y validación en laboratorio.
+La versión declarada de backend y frontend es `0.4.0`.
 
-Notas: [CHANGELOG](CHANGELOG.md), [release v0.3.0](docs/releases/v0.3.0.md) y
-[actualización desde v0.2.0](docs/upgrading-v0.3.0.md).
+Notas: [CHANGELOG](CHANGELOG.md) y [gestión operativa v0.4.0](#gestión-operativa-de-circuitos--v040).
+La documentación de versiones anteriores permanece disponible en `docs/`.
 
 > **Seguridad:** Ticketyn actualmente NO implementa autenticación ni autorización.
 > No expongas el servicio directamente a Internet. Para pruebas internas utiliza
@@ -693,7 +693,7 @@ Las nuevas instalaciones publican `/usr/local/sbin/ticketyn-update`. Puede
 invocarse como root desde cualquier directorio, sin checkout externo:
 
 ```bash
-ticketyn-update v0.3.0
+ticketyn-update v0.4.0
 ticketyn-update --recover v0.2.1
 ```
 
@@ -727,7 +727,7 @@ Ejecutar como root, o mediante sudo, indicando **un tag explícito** del reposit
 oficial `https://github.com/AngelAqRod/ticketyn.git`:
 
 ```bash
-./update.sh v0.3.0
+./update.sh v0.4.0
 # También se admiten prereleases SemVer:
 ./update.sh v0.1.1-test.1
 ```
@@ -1063,7 +1063,7 @@ responsables y un motivo; registrar un ticket, solicitar apoyo, asociar una
 intervención y finalizar el escalamiento. Verificar que el responsable principal,
 estado y fechas del ticket no cambian, y consultar Reportería → Estadísticas de
 escalamientos. La preparación de v0.3.0 no ejecuta migraciones en DEV/producción.
-`frontend/dist` contiene el build precompilado de la candidata v0.3.0.
+`frontend/dist` contiene el build precompilado de la candidata v0.4.0.
 
 ### Reportes internos y unicidad de catálogos (v0.3.0)
 
@@ -1102,3 +1102,206 @@ la base ya está en 0011; desde v0.2.0 se conserva la cadena 0009→0010→0011�
 ### Escalamientos v0.3.1
 
 Fechas operativas, destinos por departamento y semántica del período: [documentación](docs/escalations-v0.3.1.md). La auditoría conserva actor desconocido mientras Ticketyn no tenga autenticación.
+
+### Gestión operativa de circuitos — v0.4.0
+
+Ticketyn incorpora **Activaciones**, **Cambios de capacidad** y **Bajas y Reactivaciones**. Son registros FMS independientes: no crean tickets, no consumen su numeración y no cambian automáticamente el estado administrativo del circuito. Los nuevos circuitos siguen creándose activos.
+
+El código del circuito abre su ficha. La capacidad inicial es opcional y editable en los formularios habituales, incluida la creación rápida. La capacidad actual usa el último cambio efectivo (fecha e ID, sin incluir cambios futuros); en su ausencia utiliza la inicial o muestra «Sin registrar». Editar la inicial nunca modifica operaciones anteriores. Capacidades positivas de hasta seis decimales, exclusivamente Mbps/Gbps, se comparan con aritmética decimal (1 Gbps = 1000 Mbps).
+
+Las activaciones tienen referencias independientes, configurables en **Configuración → Numeración de activaciones**. No necesitan intervenciones; su bitácora se registra posteriormente y admite fechas manuales. Los decrementos requieren capacidad anterior conocida; los incrementos permiten anterior desconocida. Los valores declarados son históricos y no se recalculan al editar el circuito.
+
+Los motivos de baja se administran en **Configuración → Motivos de baja**. Desactivarlos conserva el historial; «Baja definitiva» no impide registrar una reactivación. Ninguna operación elimina historial ni cambia la disponibilidad administrativa para tickets. Un circuito con tickets o historial FMS no puede eliminarse.
+
+Los listados operativos usan páginas de 50 registros, filtros de cliente y fechas efectivas. «Último mes» conserva los últimos 30 días calendario, incluido hoy. Los límites son inicio inclusivo y fin exclusivo en `America/Guatemala`. Las dos pestañas de la ficha tienen paginación independiente de 10 registros, de más reciente a más antiguo. La activación inicial se identifica por la fecha efectiva más antigua y el ID menor en caso de empate.
+
+#### Actualización desde v0.3.1
+
+Preparar/publicar la release por el procedimiento existente y, después de la revisión y prueba en laboratorio, ejecutar `ticketyn-update v0.4.0`. El actualizador realiza backup, prepara dependencias/frontend, aplica Alembic y verifica servicios conservando sus garantías. No se requieren Node/npm en producción.
+
+La migración `0014_circuit_operations` parte de `0013_escalation_operations`: añade columnas nullable y tablas nuevas, cinco motivos iniciales y un contador independiente. No cambia circuitos/tickets históricos, estados ni referencias. Mantiene el requisito previo de collation `C.utf8`. No ejecutar migraciones manuales en paralelo al updater ni restaurar/downgradear automáticamente ante un fallo. Un downgrade con información FMS se rechaza para evitar pérdida de datos; utilizar el procedimiento documentado de recuperación.
+
+Para desarrollo, sobre una **base descartable o DEV identificada y autorizada**, configurar `DATABASE_URL` y ejecutar `.venv/bin/alembic upgrade head`. La preparación de esta versión solo utiliza PostgreSQL temporal para las pruebas, sin aplicar migraciones en bases operativas.
+
+Ticketyn continúa sin autenticación: restringir la aplicación y sus operaciones FMS a redes/control de acceso confiables. No se han incorporado permisos ficticios.
+
+#### Primera revisión funcional de FMS
+
+En activaciones, primero se selecciona un cliente; el selector de circuitos muestra únicamente sus circuitos y se limpia al cambiar de cliente. «Nuevo circuito» está junto a ese selector y reutiliza la creación rápida, incluido el tipo de servicio opcional. La API comprueba la pertenencia cuando recibe el contexto de cliente, conservando compatibilidad con consumidores que envían solo el circuito.
+
+Los formularios de capacidad sugieren la capacidad vigente desde la ficha operativa, con fallback a la inicial. La sugerencia no altera el historial y puede editarse; las consultas tardías no sobrescriben datos manuales. El detalle de activación incluye descripción y cliente, y la acción «Nueva intervención» está en la bitácora. Los tres listados incluyen una columna independiente de descripción del circuito.
+
+La ficha del circuito utiliza las mismas acciones, formulario y confirmación de eliminación que el listado. El historial FMS continúa impidiendo su eliminación. **Administración → Catálogos** permite gestionar **Tipos de servicio** y **Motivos de baja**; estos últimos reutilizan el catálogo existente, también accesible desde Configuración.
+
+La migración adicional `0015_circuit_service_types` parte de `0014_circuit_operations`, crea el catálogo editable de tipos de servicio y añade `circuits.service_type_id` nullable con FK e índice. No asigna tipos ficticios ni modifica registros históricos. `0014` permanece intacta. Esta migración se conserva íntegra; el HEAD actual es `0017_historical_nodes`; la actualización se realiza mediante el mismo procedimiento DevOps, sin cambios en backup/restore/recovery.
+
+
+### Sector del circuito y Sector histórico (v0.4.0)
+
+El Sector actual se administra en el circuito y es obligatorio al crear o guardar
+su edición. Los tickets y las operaciones FMS nuevos toman ese Sector; si falta en
+un circuito antiguo, el mismo formulario exige asignarlo. La asignación y el
+registro se confirman en una única transacción y se serializan por circuito. Una
+solicitud con un Sector distinto al ya asignado se rechaza; para cambiarlo se usa
+Editar circuito.
+
+Cada ticket/operación conserva su referencia histórica a Sector. Editar el Sector
+del circuito no cambia registros anteriores. Editar un ticket manteniendo su
+circuito conserva su Sector histórico; cambiar de circuito toma el Sector del
+nuevo circuito. Los filtros y exportaciones de tickets siguen utilizando su Sector
+histórico. Los historiales FMS antiguos sin evidencia muestran «Sin registrar».
+
+`0016_circuit_sectors` parte de `0015_circuit_service_types`. Añade claves foráneas
+nullable e índices en circuitos y operaciones FMS. Solo infiere el Sector actual
+cuando todos los tickets de un circuito con Sector válido coinciden. Los circuitos
+sin tickets o con Sectores contradictorios permanecen NULL hasta su asignación
+manual; no modifica tickets ni inventa el Sector histórico de FMS. Antes de una
+actualización revisar estos pendientes; no es necesario resolverlos para consultar
+la aplicación. No hay cascadas ni cambios de numeración, capacidad o estado.
+
+En DEV, tras revisar el respaldo y el destino de DATABASE_URL, aplicar manualmente
+`alembic upgrade head`. Esta preparación no aplica migraciones a bases operativas.
+En producción usar el procedimiento del updater documentado, con backup previo;
+no ejecutar Alembic en paralelo. El downgrade se rechaza si eliminaría referencias
+de Sector ya almacenadas.
+
+
+### Nodo actual e histórico (v0.4.0)
+
+Nodo y Sector son catálogos independientes; no hay relación jerárquica entre ellos.
+El Nodo actual ya reside en `circuits.node_id` desde `0004`. Ahora es obligatorio
+al crear o guardar la edición de un circuito. Los formularios de tickets y FMS
+muestran el Nodo asignado como solo lectura; para un circuito histórico sin Nodo,
+exigen seleccionarlo. Nodo y Sector se asignan bajo el mismo bloqueo de circuito,
+junto con el registro, y una solicitud concurrente no puede sobrescribirlos.
+
+`0017_historical_nodes`, dependiente de `0016_circuit_sectors`, agrega `node_id`
+nullable con FK e índice a tickets, activaciones, cambios de capacidad y bajas /
+reactivaciones. No modifica ni duplica la columna del circuito. Antes de esta
+migración `Ticket.node` se calculaba desde el circuito: no existía un Nodo histórico
+persistido. Por eso los tickets y FMS anteriores permanecen con Nodo histórico NULL;
+no se puede inferir de forma fiable ni reconstruir conflictos entre sus tickets.
+Los Nodos actuales de circuitos se conservan, incluidos NULL. No copiar el Nodo
+actual a registros antiguos como si demostrara dónde estaban al registrarse.
+
+Los registros nuevos conservan su Nodo aunque cambie el del circuito. Editar un
+ticket manteniendo su circuito conserva también NULL histórico; cambiar el circuito
+toma el Nodo del nuevo circuito. Listados, filtros, rankings y exportaciones de
+tickets utilizan el Nodo histórico, por lo que los tickets antiguos sin evidencia
+no se atribuyen a un Nodo actual. El circuito continúa mostrando su Nodo actual.
+No se añaden reportes FMS ni se modifica el Sector histórico.
+
+Aplicar posteriormente `alembic upgrade head` solo tras revisar respaldo y destino
+DEV; para producción utilizar el updater administrado con su backup obligatorio.
+El downgrade se rechaza si eliminaría referencias históricas de Nodo. Esta fase no
+ejecuta migraciones en bases operativas ni introduce permisos/autenticación nuevos.
+
+### Exportaciones de operaciones FMS (v0.4.0)
+
+Activaciones, Cambios de capacidad y Bajas/Reactivaciones ofrecen PDF y Excel en
+su cabecera. Exportan todos los resultados del backend, independientemente de la
+página visible, con el mismo orden por fecha efectiva descendente e ID descendente.
+Los filtros disponibles son Cliente, período efectivo y tipo (cuando corresponde);
+la API también admite Circuito. No existen filtros FMS de Nodo/Sector: los documentos
+muestran sus referencias históricas, sin sustituirlas por datos actuales del circuito.
+
+Endpoints: `/api/activations/export/{pdf|xlsx}`,
+`/api/capacity-changes/export/{pdf|xlsx}` y
+`/api/circuit-lifecycle/export/{pdf|xlsx}`. Admiten `customer_id`, `circuit_id`,
+`from_at` inclusivo, `to_at` exclusivo y zona IANA `timezone` (predeterminada
+`America/Guatemala`). Los dos últimos módulos también admiten su `operation_type`.
+No aplican `limit` ni `offset`. Sin resultados se genera un documento vacío válido.
+
+PDF reutiliza A4 horizontal, encabezados/pies y tablas de Tickets. Excel contiene
+una fila por operación y una hoja Resumen con fecha, zona y filtros. Las capacidades
+se muestran en Mbps/Gbps con redondeo decimal a tres posiciones; columnas adicionales
+conservan el valor registrado exacto como texto y su unidad, evitando la pérdida de
+precisión numérica de Excel. No se exportan intervenciones de bitácora.
+
+Las exportaciones mantienen el acceso actual, sin autenticación: restringir Ticketyn
+a redes confiables según la documentación de despliegue. El PDF se materializa en
+memoria como las exportaciones existentes; con volúmenes extremos puede requerir
+más memoria/tiempo. Excel usa escritura incremental y la consulta carga relaciones
+sin consultas por registro. Los temporales se cierran al completar o fallar la descarga.
+
+### PDF individual de activación
+
+En la ficha de activación, **Exportar PDF** descarga únicamente ese registro y
+su bitácora completa, sin los límites de paginación de la interfaz. El endpoint
+`GET /api/activations/{id}/reports/pdf` admite `timezone` IANA (predeterminada
+`America/Guatemala`). Mantiene el acceso actual de Ticketyn.
+
+El documento muestra referencia, cliente, código y descripción del circuito,
+Nodo/Sector históricos, fecha efectiva, responsable y creación administrativa.
+El tipo de servicio se identifica como dato actual del circuito, pues no existe
+un snapshot histórico de ese atributo. No se inventa una última actualización:
+la activación no dispone de ese campo. Las intervenciones se ordenan por fecha
+operativa e ID, con saltos de página para contenido extenso y un mensaje cuando
+la bitácora está vacía. Las exportaciones de listados FMS permanecen independientes.
+
+### Análisis de operaciones FMS (v0.4.0)
+
+Análisis conserva **Reportería de tickets** (`/reports`) y añade **Reportería de
+activaciones** (`/activation-reports`), **Reportería de cambios de capacidad**
+(`/capacity-reports`) y **Reportería de bajas y reactivaciones**
+(`/lifecycle-reports`). Las tres utilizan el selector compartido de Tickets:
+Todos, Hoy, Ayer, 7D, 15D, 30D y Personalizado, en `America/Guatemala`.
+Desde es inclusivo y Hasta incluye el día completo mediante un límite final
+exclusivo al inicio del día siguiente. Todos no restringe fechas. La evolución
+se agrupa diariamente hasta 120 días y mensualmente para períodos mayores.
+
+Cada reporte tiene General, Por Sector, Por Nodo y Por Responsable. Las vistas
+individuales requieren seleccionar un elemento y aplican el mismo filtro a
+indicadores, evolución y detalle paginado (50 operaciones). Sector y Nodo se
+consultan desde la operación histórica, no desde el circuito actual. Los
+registros antiguos sin estas referencias cuentan en General, pero no se
+atribuyen a un Sector o Nodo seleccionado. Los catálogos incluyen elementos
+inactivos para poder consultar su historial.
+
+- Activaciones: eventos, clientes distintos y circuitos distintos. General
+  incluye los diez clientes con más circuitos distintos activados; varias
+  activaciones de un circuito no lo duplican en ese conteo.
+- Capacidad: eventos de incremento/decremento y variaciones conocidas calculadas
+  con decimales en Mbps (`1 Gbps = 1000 Mbps`). Una capacidad anterior desconocida
+  cuenta como evento, pero no aporta una variación. Los acumulados se presentan
+  con el formato compartido Mbps/Gbps; la variación neta puede ser negativa.
+- Bajas/reactivaciones: eventos, circuitos distintos de cada tipo y motivos solo
+  de bajas. Los motivos inactivos conservan su representación histórica. La
+  diferencia entre bajas y reactivaciones no representa un estado actual.
+
+API de consulta: `GET /api/fms/reports/{kind}/summary` y
+`GET /api/fms/reports/{kind}/details`, donde `kind` es `activations`,
+`capacity-changes` o `circuit-lifecycle`. Admiten `from`, `to`, `timezone`,
+`granularity=auto|day|month`, `sector_id`, `node_id` y `responsible_id`;
+el detalle añade `limit` y `offset`. No modifican registros ni numeraciones y
+no requieren migraciones adicionales. Como los módulos existentes, deben
+mantenerse en redes confiables: Ticketyn todavía no implementa autenticación.
+Las exportaciones operativas existentes y el PDF individual de activación
+conservan sus rutas y comportamiento. Los nuevos análisis disponen de una
+exportación PDF estadística independiente, descrita a continuación.
+
+#### PDF estadístico de Análisis FMS
+
+Cada reportería FMS permite **Exportar PDF** desde su encabezado, en General o
+con un Sector, Nodo o Responsable seleccionado. Utiliza el mismo período y
+filtros que el resumen visible; no exporta la página cargada del listado.
+`GET /api/fms/reports/{kind}/export/pdf` admite los parámetros del resumen
+(`from`, `to`, `timezone`, `granularity`, `sector_id`, `node_id`,
+`responsible_id`). El documento incluye contexto, indicadores, gráficas
+vectoriales, Top 10 de clientes solo en General de activaciones, motivos solo
+para bajas y detalle completo ordenado por fecha efectiva descendente e ID.
+Sector y Nodo proceden del registro histórico. Las capacidades conservan el
+formato decimal compartido y las variaciones desconocidas se excluyen solo de
+los acumulados, nunca del conteo de operaciones.
+
+El resumen y detalle se obtienen dentro de un snapshot de lectura consistente.
+El PDF horizontal usa paginación y encabezados repetidos; el archivo temporal
+se elimina al completar la respuesta o ante un error. Para proteger recursos,
+se rechazan explícitamente con HTTP 413 reportes de más de **2.000 operaciones**
+o **2 millones de caracteres en el detalle**. No se entrega un PDF parcial ni
+se truncan registros: reduce el período o selecciona un elemento. Estos
+límites no afectan las exportaciones PDF/XLSX de listados operativos.
+
+Este PDF es interno y conserva el modelo de acceso actual de Ticketyn, sin
+nuevo sistema de autenticación. Restringe los endpoints a redes confiables.
+No sustituye los PDF de listados FMS ni el PDF individual de activación.

@@ -76,7 +76,7 @@ def test_internal_fields_responsible_and_both_visibilities(api_client, ticket_pa
     responsible = api_client.post('/api/responsibles', json={'name': 'Técnico histórico'}).json()
     node = api_client.post('/api/nodes', json={'name': 'Nodo histórico'}).json()
     api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'node_id': node['id']})
-    item = ticket(api_client, ticket_payload, responsible_id=responsible['id'], description='DESCRIPCION-INTERNA', resolution='RESOLUCION-INTERNA')
+    item = ticket(api_client, ticket_payload, node_id=node['id'], responsible_id=responsible['id'], description='DESCRIPCION-INTERNA', resolution='RESOLUCION-INTERNA')
     create(api_client, item, content='INTERNA', responsible_id=responsible['id'])
     create(api_client, item, content='PUBLICA', visibility='PUBLIC')
     api_client.patch(f"/api/responsibles/{responsible['id']}", json={'active': False})

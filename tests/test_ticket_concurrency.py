@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ticketyn.api.ticket_data import create_ticket
 from ticketyn.db.base import Base
-from ticketyn.models import Circuit, Customer, Department, IncidentType, Sector, Ticket, TicketNumberConfig
+from ticketyn.models import Circuit, Customer, Department, IncidentType, Sector, Node, Ticket, TicketNumberConfig
 
 
 @pytest.fixture
@@ -23,14 +23,14 @@ def concurrent_database(postgres_engine):
     try:
         with Session(scoped_engine) as session:
             customer = Customer(customer_code="CONCURRENT", name="Cliente de prueba")
-            circuit = Circuit(customer=customer, circuit_code="MANUAL", description="Enlace de prueba")
+            circuit = Circuit(node=Node(name="Nodo de prueba"), customer=customer, circuit_code="MANUAL", description="Enlace de prueba")
             sector = Sector(name="Sector de prueba")
             department = Department(name="Departamento de prueba")
             incident = IncidentType(name="Tipo de prueba")
             session.add_all([circuit, sector, department, incident])
             session.commit()
             payload = {
-                "customer_id": customer.id, "circuit_id": circuit.id, "sector_id": sector.id,
+                "node_id": circuit.node_id, "customer_id": customer.id, "circuit_id": circuit.id, "sector_id": sector.id,
                 "department_id": department.id, "incident_type_id": incident.id,
                 "title": "Prueba concurrente", "description": "Transacciones independientes",
                 "start_at": datetime(2020, 1, 1, tzinfo=timezone.utc), "end_at": None, "status": "OPEN",

@@ -1,3 +1,5 @@
+from sector_fixtures import create_test_node
+from sector_fixtures import create_test_sector
 from datetime import datetime, timezone
 
 import pytest
@@ -72,7 +74,7 @@ def test_circuit_combined_filters_and_compatibility(api_client):
     other = api_client.post('/api/customers', json={'customer_code': 'D', 'name': 'Other'}).json()
     rows = []
     for code, active, owner in [('ABC-1', True, customer), ('ABC-2', False, customer), ('DEF', True, other)]:
-        response = api_client.post('/api/circuits', json={'customer_id': owner['id'], 'circuit_code': code, 'description': 'Internet principal', 'active': active})
+        response = api_client.post('/api/circuits', json={'node_id': create_test_node(api_client), 'sector_id': create_test_sector(api_client), 'customer_id': owner['id'], 'circuit_code': code, 'description': 'Internet principal', 'active': active})
         assert response.status_code == 201
         rows.append(response.json())
     assert ids(api_client.get('/api/circuits')) == [rows[0]['id'], rows[2]['id']]

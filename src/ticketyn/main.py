@@ -1,4 +1,7 @@
+from ticketyn.api.fms_reports import router as fms_reports_router
 from fastapi import FastAPI
+from ticketyn.api.service_types import router as service_types_router
+from ticketyn.api.fms import router as fms_router
 from ticketyn.api.nodes import router as nodes_router
 from ticketyn.api.responsibles import router as responsibles_router
 from ticketyn.api.positions import router as positions_router
@@ -22,7 +25,10 @@ from ticketyn.core.config import get_settings
 
 def create_app() -> FastAPI:
     get_settings()
-    app = FastAPI(title="Ticketyn", version="0.3.1")
+    app = FastAPI(title="Ticketyn", version="0.4.0")
+    app.include_router(service_types_router)
+    app.include_router(fms_router)
+    app.include_router(fms_reports_router)
     app.include_router(escalations_router)
     app.include_router(escalation_reasons_router)
     app.include_router(escalation_stats_router)

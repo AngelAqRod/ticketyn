@@ -8,12 +8,14 @@ import type { CatalogKind } from '../types/catalog'
 const created_at = '2026-01-01T12:00:00Z'
 const customer = { id: 1, customer_code: 'CUS-A', name: 'Empresa Alfa', active: true, created_at }
 const inactiveCustomer = { id: 2, customer_code: 'CUS-B', name: 'Empresa Beta', active: false, created_at }
-const circuit = { id: 1, customer_id: 2, circuit_code: 'LINK-A', description: 'Internet principal', active: true, created_at }
+const circuit = { node_id: 1, node: { id: 1, name: 'Nodo actual', active: true }, sector_id: 1, sector: { id: 1, name: 'Sector actual', active: true }, id: 1, customer_id: 2, circuit_code: 'LINK-A', description: 'Internet principal', active: true, created_at }
 const named = { id: 1, name: 'Nombre inicial', active: true, created_at }
 type Row = typeof customer | typeof circuit | typeof named
 interface Options { empty?: boolean; fail?: boolean; write?: (path: string, options: RequestInit) => Promise<Response> }
 function mockApi(options: Options = {}) {
   const rows: Record<CatalogKind, Row[]> = {
+    'service-types': [],
+    'deactivation-reasons': [],
     positions: [{ ...named, name: 'Consultor de redes', department_id: 1, department: named } as Row, { ...named, id: 2, name: 'Otro departamento', department_id: 2, department: inactiveCustomer } as Row],
     'escalation-reasons': [],
     nodes: [named, { ...named, id: 2, name: 'Nombre inactivo', active: false }], responsibles: [named, { ...named, id: 2, name: 'Nombre inactivo', active: false }],
@@ -85,14 +87,14 @@ describe('administración de catálogos', () => {
     expect(mock).toHaveBeenCalledWith(`/api/${resource}?include_inactive=true&limit=200&offset=0`, expect.any(Object))
     fireEvent.click(screen.getByRole('button', { name: `Nuevo ${singular}` }))
     if (resource === 'customers' || resource === 'circuits') fireEvent.change(field(resource === 'customers' ? 'Código de cliente' : 'Código de circuito'), { target: { value: 'MANUAL-NEW' } })
-    if (resource === 'circuits') fireEvent.change(field('Cliente'), { target: { value: '2' } })
+    if (resource === 'circuits') { fireEvent.click(screen.getByRole('combobox', { name: 'Nodo' })); fireEvent.click(screen.getByRole('listbox', { name: 'Nodo' }).querySelector('[role=option]')!); fireEvent.change(field('Cliente'), { target: { value: '2' } }); fireEvent.change(field('Sector'), { target: { value: '1' } }) }
     fireEvent.change(field(resource === 'circuits' ? 'Descripción' : 'Nombre'), { target: { value: 'Nuevo registro' } })
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     await screen.findByText('Registro creado correctamente.')
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
-    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: null } : { name: 'Nuevo registro', active: true }
-    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null } : expected)
+    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: 1 } : { name: 'Nuevo registro', active: true }
+    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null } : resource === 'circuits' ? { ...expected, sector_id: 1, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
     fireEvent.change(field(resource === 'circuits' ? 'Descripción' : 'Nombre'), { target: { value: 'Corregido' } })
@@ -217,17 +219,20 @@ describe('Nodo en administración de Circuitos', () => {
   it('asigna y quita Nodo usando PATCH y permite NULL', async () => {
     const mock = mockApi(); open('/circuits'); await screen.findByRole('table')
     fireEvent.click(screen.getByRole('button', { name: 'Editar LINK-A' }))
-    const selector = screen.getByRole('combobox', { name: 'Nodo de distribución' })
-    fireEvent.click(selector); fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
+    const selector = screen.getByRole('combobox', { name: 'Nodo' })
+    fireEvent.click(selector); fireEvent.click(screen.getByRole('listbox', { name: 'Nodo' }).querySelector('[role=option]')!)
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     await screen.findByText('Cambios guardados correctamente.')
     expect(JSON.parse(String(writes(mock)[0][1]?.body))).toMatchObject({ node_id: 1 })
     fireEvent.click(screen.getByRole('button', { name: 'Editar LINK-A' }))
-    expect(screen.getByRole('combobox', { name: 'Nodo de distribución' })).toHaveValue('Nombre inicial')
-    fireEvent.click(screen.getByRole('button', { name: 'Limpiar Nodo de distribución' }))
+    expect(screen.getByRole('combobox', { name: 'Nodo' })).toHaveValue('Nombre inicial')
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar Nodo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Selecciona un Nodo')
+    fireEvent.click(screen.getByRole('combobox', { name: 'Nodo' })); fireEvent.click(screen.getByRole('listbox', { name: 'Nodo' }).querySelector('[role=option]')!)
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     await screen.findByText('Cambios guardados correctamente.')
-    expect(JSON.parse(String(writes(mock)[1][1]?.body))).toMatchObject({ node_id: null })
+    expect(JSON.parse(String(writes(mock)[1][1]?.body))).toMatchObject({ node_id: 1 })
   })
 })
 
@@ -241,7 +246,7 @@ it('crea Nodo desde CircuitForm sin guardar Circuito ni perder sus datos', async
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
     fireEvent.change(field('Código de circuito'), { target: { value: 'MANUAL' } })
     fireEvent.change(field('Descripción'), { target: { value: 'Escrito antes del nodo' } })
-    fireEvent.change(field('Cliente'), { target: { value: '1' } })
+    fireEvent.change(field('Cliente'), { target: { value: '1' } }); fireEvent.change(field('Sector'), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo nodo' }))
     fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: 'Nodo creado' } })
     const form = screen.getByRole('form', { name: 'Crear nodo rápido' })
@@ -250,7 +255,7 @@ it('crea Nodo desde CircuitForm sin guardar Circuito ni perder sus datos', async
     expect(field('Código de circuito')).toHaveValue('MANUAL')
     expect(field('Descripción')).toHaveValue('Escrito antes del nodo')
     expect(field('Cliente')).toHaveValue('1')
-    expect(screen.getByRole('combobox', { name: 'Nodo de distribución' })).toHaveValue('Nodo creado')
+    expect(screen.getByRole('combobox', { name: 'Nodo' })).toHaveValue('Nodo creado')
     expect(writes(mock)).toHaveLength(1)
     expect(writes(mock)[0][0]).toBe('/api/nodes')
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))

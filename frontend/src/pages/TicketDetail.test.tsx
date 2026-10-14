@@ -7,7 +7,7 @@ import type { Ticket } from '../types/ticket'
 import { localDateTimeValue } from '../lib/datetime'
 
 const customer = { id: 1, customer_code: 'C-1', name: 'Cliente histórico', active: false, created_at: ticket.created_at }
-const circuit = { id: 1, customer_id: 1, circuit_code: 'C-1.01', description: 'Enlace principal', active: false, created_at: ticket.created_at }
+const circuit = { node_id: 1, node: { id: 1, name: 'Nodo actual', active: true }, sector_id: 1, sector: { id: 1, name: 'Sector actual', active: true }, id: 1, customer_id: 1, circuit_code: 'C-1.01', description: 'Enlace principal', active: false, created_at: ticket.created_at }
 const sector = { id: 1, name: 'Sector histórico', active: false, created_at: ticket.created_at }
 const department = { ...sector, name: 'Departamento histórico' }
 const incidentType = { ...sector, name: 'Tipo histórico' }
@@ -130,7 +130,7 @@ describe('edición de tickets', () => {
     expect(await screen.findByText('Cambios guardados correctamente.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Título corregido' })).toBeInTheDocument()
     const payload = JSON.parse(String(mock.mock.calls.find(([, options]) => options?.method === 'PATCH')?.[1]?.body))
-    expect(payload).toEqual({ title: 'Título corregido', description: ticket.description, customer_id: 1, circuit_id: 1, sector_id: 1, department_id: 1, incident_type_id: 1, responsible_id: null, start_at: new Date(2025, 9, 2, 16, 20).toISOString(), end_at: null, status: 'OPEN' })
+    expect(payload).toEqual({ title: 'Título corregido', description: ticket.description, customer_id: 1, circuit_id: 1, department_id: 1, incident_type_id: 1, responsible_id: null, start_at: new Date(2025, 9, 2, 16, 20).toISOString(), end_at: null, status: 'OPEN' })
   })
   it('mantiene segundos originales cuando las fechas no se cambian', async () => {
     const initial = { ...ticket, start_at: '2026-01-01T12:00:37Z', end_at: '2026-01-01T13:10:42Z' }

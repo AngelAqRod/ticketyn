@@ -1,3 +1,5 @@
+from sector_fixtures import create_test_node
+from sector_fixtures import create_test_sector
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from uuid import uuid4
@@ -114,7 +116,7 @@ def test_business_codes_keep_their_existing_case_sensitive_semantics(api_client)
     b = api_client.post('/api/customers', json={'name': 'Cliente Dos', 'customer_code': 'code'})
     assert a.status_code == b.status_code == 201
     for code in ('Circuit', 'circuit'):
-        response = api_client.post('/api/circuits', json={'customer_id': a.json()['id'], 'circuit_code': code, 'description': 'Descripción compartida'})
+        response = api_client.post('/api/circuits', json={'node_id': create_test_node(api_client), 'sector_id': create_test_sector(api_client), 'customer_id': a.json()['id'], 'circuit_code': code, 'description': 'Descripción compartida'})
         assert response.status_code == 201
 
 

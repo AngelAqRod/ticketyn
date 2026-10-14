@@ -89,13 +89,16 @@ def ticket_payload(api_client):
         return response.json()["id"]
 
     customer_id = create("/api/customers", {"customer_code": "TEST-CUSTOMER", "name": "Cliente de prueba"})
+    node_id = create("/api/nodes", {"name": "Nodo de prueba"})
+    sector_id = create("/api/sectors", {"name": "Sector de prueba"})
     circuit_id = create("/api/circuits", {
-        "customer_id": customer_id, "circuit_code": "MANUAL-CIRCUIT", "description": "Enlace de prueba"
+        "node_id": node_id, "sector_id": sector_id, "customer_id": customer_id, "circuit_code": "MANUAL-CIRCUIT", "description": "Enlace de prueba"
     })
     return {
         "customer_id": customer_id,
         "circuit_id": circuit_id,
-        "sector_id": create("/api/sectors", {"name": "Sector de prueba"}),
+        "sector_id": sector_id,
+        "node_id": node_id,
         "department_id": create("/api/departments", {"name": "Departamento de prueba"}),
         "incident_type_id": create("/api/incident-types", {"name": "Tipo de prueba"}),
         "title": "Caída de servicio",

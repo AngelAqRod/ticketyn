@@ -12,6 +12,7 @@ DBSession = Annotated[Session, Depends(get_session)]
 Model = TypeVar("Model", bound=Base)
 
 UNIQUE_ERRORS = {
+    "uq_service_types_name": "Ya existe un tipo de servicio con ese nombre",
     "uq_positions_department_name": "Ya existe un puesto con ese nombre en el departamento",
     "uq_escalation_reasons_name": "Ya existe un motivo con ese name",
     "uq_nodes_name": "Ya existe un nodo con ese name",
@@ -27,9 +28,9 @@ UNIQUE_ERRORS = {
 
 
 CATALOG_NAMES = {
-    'customers': 'cliente', 'sectors': 'sector', 'departments': 'departamento',
+    'service_types': 'tipo de servicio', 'customers': 'cliente', 'sectors': 'sector', 'departments': 'departamento',
     'incident_types': 'tipo de incidencia', 'nodes': 'nodo', 'responsibles': 'responsable',
-    'escalation_reasons': 'motivo', 'positions': 'puesto en este departamento',
+    'deactivation_reasons': 'motivo de baja', 'escalation_reasons': 'motivo', 'positions': 'puesto en este departamento',
 }
 for table, label in CATALOG_NAMES.items():
     UNIQUE_ERRORS[f'uq_{table}_name_normalized'] = f'Ya existe un {label} con ese nombre (sin distinguir mayúsculas ni espacios externos)'

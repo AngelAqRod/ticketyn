@@ -30,7 +30,8 @@ def test_pdf_distributions_and_small_rankings(api_client, ticket_payload, monkey
     node = api_client.post('/api/nodes', json={'name': 'Nodo composición'}).json()
     responsible = api_client.post('/api/responsibles', json={'name': 'Responsable composición'}).json()
     api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'node_id': node['id']})
-    api_client.post('/api/tickets', json={**ticket_payload, 'responsible_id': responsible['id']})
+    created = api_client.post('/api/tickets', json={**ticket_payload, 'node_id': node['id'], 'responsible_id': responsible['id']})
+    assert created.status_code == 201, created.text
     params = {'from': '2020-01-01T00:00:00Z', 'to': '2020-01-02T00:00:00Z'}
     summary = api_client.get('/api/reports/summary', params=params).json()
     assert len(summary['hours']) == 24

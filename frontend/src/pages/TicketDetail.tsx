@@ -44,7 +44,7 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
   const classification = [
     ['Cliente', `${catalogs.customer.customer_code} — ${catalogs.customer.name}`],
     ['Circuito', `${catalogs.circuit.circuit_code} — ${catalogs.circuit.description}`],
-    ['Nodo de distribución', catalogs.node?.name ?? 'Sin asignar'], ['Responsable', catalogs.responsible?.name ?? 'Sin asignar'],
+    ['Nodo', catalogs.node?.name ?? 'Sin asignar'], ['Responsable', catalogs.responsible?.name ?? 'Sin asignar'],
     ['Sector', catalogs.sector.name], ['Departamento', catalogs.department.name],
     ['Tipo de incidencia', catalogs.incidentType.name],
   ]

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0 — En preparación
+
+### Funcionalidades
+- Activaciones con numeración independiente y bitácora técnica opcional.
+- Incrementos/decrementos con valores decimales y unidades Mbps/Gbps.
+- Bajas/reactivaciones independientes del estado administrativo y motivos configurables.
+- Ficha operativa de circuitos, capacidad inicial opcional y capacidad actual derivada del historial.
+
+### Integridad y compatibilidad
+- Migración incremental `0014_circuit_operations`, preservando los registros existentes.
+- Protección contra eliminación de circuitos con historial FMS y referencias concurrentes únicas.
+- Formularios reutilizados en módulos/ficha; listados de 50 y pestañas independientes de 10 registros.
+- Sin cambios en tickets, su numeración, backups ni mecanismos de actualización/recuperación.
+
+### Revisión funcional de v0.4.0
+- Filtrado cliente–circuito en activaciones y precarga editable de capacidad vigente.
+- Acciones compartidas en la ficha del circuito y descripciones en detalles/listados FMS.
+- Intervenciones reubicadas en la bitácora y creación contextual de circuitos junto al selector.
+- Tipos de servicio configurables y motivos de baja accesibles desde Catálogos.
+- Migración incremental `0015_circuit_service_types`, sin modificar `0014` ni asignar tipos a circuitos históricos.
+
 ## 0.3.1 — En desarrollo
 
 - Corrección integral del período y poblaciones de los reportes de escalamientos.
@@ -45,3 +66,20 @@ Consultar [actualización a v0.3.0](docs/upgrading-v0.3.0.md).
 - Seguimiento interno/público, resolución documentada y PDF de ticket interno/cliente.
 - Eliminación protegida de clientes y circuitos sin dependencias.
 - Migraciones `0008_ticket_updates` y `0009_ticket_resolution`.
+
+
+### Sector centralizado en circuitos — preparación v0.4.0
+
+- Sector obligatorio en circuitos nuevos y sus formularios principales/rápidos.
+- Tickets y operaciones FMS heredan Sector del circuito; asignación pendiente
+  transaccional desde el formulario cuando falta en un circuito histórico.
+- Sector histórico independiente en tickets, activaciones, capacidad y bajas/reactivaciones.
+- Migración `0016_circuit_sectors`: inferencia conservadora desde tickets,
+  conservación de conflictos y operaciones antiguas sin Sector comprobable.
+
+### Nodo actual e histórico — preparación v0.4.0
+
+- Nodo obligatorio en circuitos nuevos y en tickets/operaciones FMS nuevos.
+- Asignación pendiente transaccional desde formularios operativos, reutilizando Sector.
+- Nodo histórico independiente del circuito en tickets y FMS; filtros y exportaciones coherentes.
+- Migración `0017_historical_nodes`, sin inferir datos históricos que no existían en el esquema anterior.

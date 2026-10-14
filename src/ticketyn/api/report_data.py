@@ -67,10 +67,7 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
         label = (model.customer_code + ' — ' + model.name) if model is Customer else model.circuit_code if model is Circuit else model.name
         count = func.count().label('count')
         statement = select(model.id, label.label('label'), count).select_from(started)
-        if model is Node:
-            statement = statement.join(Circuit, started.c.circuit_id == Circuit.id).join(Node, Circuit.node_id == Node.id)
-        else:
-            statement = statement.join(model, getattr(started.c, field) == model.id)
+        statement = statement.join(model, getattr(started.c, field) == model.id)
         groups = [model.id, label]
         if model is Circuit:
             statement = statement.join(Customer, model.customer_id == Customer.id).add_columns(Customer.id.label('customer_id'), Customer.customer_code, Customer.name.label('customer_name'))

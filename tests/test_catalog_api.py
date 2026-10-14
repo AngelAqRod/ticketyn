@@ -1,3 +1,5 @@
+from sector_fixtures import create_test_node
+from sector_fixtures import create_test_sector
 from datetime import datetime
 
 import pytest
@@ -24,6 +26,8 @@ def resource(request, api_client):
             "customer_code": "CUSTOMER-MANUAL", "name": "Cliente de circuitos"
         })
         assert customer.status_code == 201
+        payload["node_id"] = create_test_node(api_client)
+        payload["sector_id"] = create_test_sector(api_client)
         payload["customer_id"] = customer.json()["id"]
     return f"/api/{name}", unique_field, payload
 
@@ -37,7 +41,7 @@ def create(api_client, path, payload):
 def test_create_and_get(api_client, resource):
     path, _, payload = resource
     item = create(api_client, path, payload)
-    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"node", "node_id"} if path == "/api/circuits" else {"attention_level", "department_id", "position_id", "department", "position"} if path == "/api/responsibles" else {"description"} if path == "/api/escalation-reasons" else set())
+    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"node", "node_id", "initial_capacity", "initial_capacity_unit", "service_type_id", "service_type", "sector"} if path == "/api/circuits" else {"attention_level", "department_id", "position_id", "department", "position"} if path == "/api/responsibles" else {"description"} if path == "/api/escalation-reasons" else set())
     assert item["id"] > 0
     assert item["active"] is True
     assert datetime.fromisoformat(item["created_at"]).tzinfo is not None
@@ -202,10 +206,10 @@ def test_circuit_customer_filter_and_reassignment(api_client):
     first = create(api_client, "/api/customers", {"customer_code": "FIRST", "name": "Primero"})
     second = create(api_client, "/api/customers", {"customer_code": "SECOND", "name": "Segundo"})
     # El código no determina el cliente: se respeta exclusivamente customer_id.
-    circuit = create(api_client, "/api/circuits", {
+    circuit = create(api_client, "/api/circuits", {'node_id': create_test_node(api_client), 'sector_id': create_test_sector(api_client),
         "customer_id": first["id"], "circuit_code": "SECOND.00000", "description": "Internet principal"
     })
-    other = create(api_client, "/api/circuits", {
+    other = create(api_client, "/api/circuits", {'node_id': create_test_node(api_client), 'sector_id': create_test_sector(api_client),
         "customer_id": second["id"], "circuit_code": "SECOND.00001", "description": "Otro enlace"
     })
     assert api_client.get("/api/circuits", params={"customer_id": first["id"]}).json() == [circuit]
@@ -225,12 +229,12 @@ def test_circuit_customer_filter_and_reassignment(api_client):
 
 
 def test_circuit_missing_customer(api_client):
-    payload = {"customer_id": 999999, "circuit_code": "MANUAL", "description": "Enlace"}
+    payload = {"node_id": create_test_node(api_client), "sector_id": create_test_sector(api_client), "customer_id": 999999, "circuit_code": "MANUAL", "description": "Enlace"}
     response = api_client.post("/api/circuits", json=payload)
     assert response.status_code == 404
     assert "Customer" in response.json()["detail"]
     customer = create(api_client, "/api/customers", {"customer_code": "REAL", "name": "Real"})
-    circuit = create(api_client, "/api/circuits", {**payload, "customer_id": customer["id"]})
+    circuit = create(api_client, "/api/circuits", {'node_id': create_test_node(api_client), 'sector_id': create_test_sector(api_client), **payload, "customer_id": customer["id"]})
     response = api_client.patch(f"/api/circuits/{circuit['id']}", json={
         "customer_id": 999999, "description": "No debe persistir"
     })
@@ -240,7 +244,7 @@ def test_circuit_missing_customer(api_client):
 
 @pytest.mark.parametrize("customer_id", [0, -1, None, "invalid"])
 def test_invalid_customer_id(api_client, customer_id):
-    assert api_client.post("/api/circuits", json={
+    assert api_client.post("/api/circuits", json={'node_id': create_test_node(api_client), 'sector_id': create_test_sector(api_client),
         "customer_id": customer_id, "circuit_code": "MANUAL", "description": "Enlace"
     }).status_code == 422
     if customer_id is not None:

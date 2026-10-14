@@ -9,7 +9,7 @@ const customers = [
   { id: 1, customer_code: 'SGgt-00000', name: 'Cliente de prueba', active: true, created_at: ticket.created_at },
   { id: 2, customer_code: 'OTHER', name: 'Otro cliente', active: true, created_at: ticket.created_at },
 ]
-const circuit = { id: 5, customer_id: 1, circuit_code: 'SGgt-00000.00000', description: 'Internet principal', active: true, created_at: ticket.created_at }
+const circuit = { node_id: 1, node: { id: 1, name: 'Nodo actual', active: true }, id: 5, customer_id: 1, circuit_code: 'SGgt-00000.00000', description: 'Internet principal', active: true, created_at: ticket.created_at }
 const named = [{ id: 1, name: 'Catálogo de prueba', active: true, created_at: ticket.created_at }]
 
 function mockApi(post?: (options: RequestInit) => Promise<Response>) {
@@ -111,7 +111,7 @@ describe('creación de tickets', () => {
     expect(screen.getByRole('heading', { name: 'Tickets', level: 1 })).toBeInTheDocument()
     expect(payload).toEqual({
       title: 'Incidencia retroactiva', description: 'Sin conexión', customer_id: 1, circuit_id: 5,
-      sector_id: 1, department_id: 1, incident_type_id: 1, responsible_id: null,
+      node_id: 1, sector_id: 1, department_id: 1, incident_type_id: 1, responsible_id: null,
       start_at: new Date(2026, 9, 2, 16, 20).toISOString(), end_at: null, status: 'OPEN',
     })
   })
@@ -250,4 +250,55 @@ describe('creación de tickets', () => {
     expect(screen.getByRole('heading', { name: 'Tickets', level: 1 })).toBeInTheDocument()
     await screen.findByText('TEST-003')
   })
+})
+
+it('toma automáticamente el Sector del circuito sin selector independiente', async () => {
+  const mock = mockApi(), original = mock.getMockImplementation()!
+  mock.mockImplementation((path, options) => path.startsWith('/api/circuits') && options?.method !== 'POST' ? Promise.resolve(jsonResponse([{ ...circuit, sector_id: 1, sector: named[0] }])) : original(path, options))
+  renderNewTicket()
+  await waitFor(() => expect(screen.getByLabelText(/^Cliente\s*\*?$/)).toBeEnabled())
+  fireEvent.change(screen.getByLabelText(/^Título/), { target: { value: 'Título' } })
+  fireEvent.change(screen.getByLabelText(/^Descripción\s*\*?$/), { target: { value: 'Descripción' } })
+  fireEvent.click(screen.getByLabelText(/^Cliente\s*\*?$/)); fireEvent.click(await screen.findByRole('option', { name: 'SGgt-00000 — Cliente de prueba' }))
+  await waitFor(() => expect(screen.getByLabelText(/^Circuito/)).toBeEnabled())
+  fireEvent.click(screen.getByLabelText(/^Circuito/)); fireEvent.click(await screen.findByRole('option', { name: 'SGgt-00000.00000 — Internet principal' }))
+  expect(screen.getByLabelText(/^Sector/)).toHaveValue(named[0].name)
+  expect(screen.getByLabelText(/^Sector/)).toHaveAttribute('readonly')
+  for (const label of ['Departamento', 'Tipo de incidencia']) fireEvent.change(screen.getByLabelText(new RegExp('^' + label)), { target: { value: '1' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+  await waitFor(() => expect(mock.mock.calls.some(([path, options]) => path === '/api/tickets' && options?.method === 'POST')).toBe(true))
+  const write = mock.mock.calls.find(([path, options]) => path === '/api/tickets' && options?.method === 'POST')!
+  expect(JSON.parse(String(write[1]?.body)).sector_id).toBe(1)
+})
+
+it('limpia la asignación pendiente de Sector al cambiar el circuito', async () => {
+  mockApi(); renderNewTicket(); await fillRequired()
+  expect(screen.getByLabelText(/^Sector/)).toHaveValue('1')
+  fireEvent.click(screen.getByLabelText(/^Cliente\s*\*?$/)); fireEvent.click(screen.getByRole('option', { name: 'OTHER — Otro cliente' }))
+  await waitFor(() => expect(screen.getByLabelText(/^Circuito/)).toBeEnabled())
+  fireEvent.click(screen.getByLabelText(/^Circuito/)); fireEvent.click(await screen.findByRole('option', { name: 'OTHER-CIRCUIT — Internet principal' }))
+  expect(screen.getByLabelText(/^Sector/)).toHaveValue('')
+  expect(screen.getByLabelText(/^Sector/)).toBeRequired()
+})
+
+it('exige Nodo pendiente y lo limpia al cambiar de circuito', async () => {
+  const mock = mockApi(), original = mock.getMockImplementation()!
+  mock.mockImplementation((path, options) => path.startsWith('/api/circuits') && options?.method !== 'POST' ? Promise.resolve(jsonResponse([{ ...circuit, node_id: null, node: null }, { ...circuit, id: 6, customer_id: 2, circuit_code: 'OTHER-CIRCUIT', node_id: null, node: null }])) : original(path, options))
+  renderNewTicket(); await fillRequired()
+  expect(screen.getByLabelText(/^Nodo\s*\*?$/)).toBeRequired()
+  expect(screen.getByLabelText(/^Nodo\s*\*?$/)).toHaveValue('')
+  fireEvent.submit(screen.getByRole('form', { name: 'Crear ticket' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Completa los campos obligatorios')
+  expect(mock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  fireEvent.change(screen.getByLabelText(/^Nodo\s*\*?$/), { target: { value: '1' } })
+  fireEvent.click(screen.getByLabelText(/^Cliente\s*\*?$/)); fireEvent.click(screen.getByRole('option', { name: 'OTHER — Otro cliente' }))
+  await waitFor(() => expect(screen.getByLabelText(/^Circuito\s*\*?$/)).toBeEnabled())
+  fireEvent.click(screen.getByLabelText(/^Circuito\s*\*?$/)); fireEvent.click(await screen.findByRole('option', { name: 'OTHER-CIRCUIT — Internet principal' }))
+  expect(screen.getByLabelText(/^Nodo\s*\*?$/)).toHaveValue('')
+  fireEvent.change(screen.getByLabelText(/^Nodo\s*\*?$/), { target: { value: '1' } })
+  fireEvent.change(screen.getByLabelText(/^Sector/), { target: { value: '1' } })
+  fireEvent.submit(screen.getByRole('form', { name: 'Crear ticket' }))
+  await waitFor(() => expect(mock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(true))
+  const write = mock.mock.calls.find(([, options]) => options?.method === 'POST')!
+  expect(JSON.parse(String(write[1]?.body))).toMatchObject({ circuit_id: 6, node_id: 1 })
 })

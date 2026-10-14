@@ -5,6 +5,7 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, contains_eager
 
 from ticketyn.api.crud import save_item
+from ticketyn.api.circuit_sector import locked_circuit, resolve_sector, validate_sector, resolve_node, validate_node
 from ticketyn.api.ticket_numbers import format_reference, locked_number_config
 from ticketyn.models import Circuit, Customer, Department, IncidentType, Sector, Ticket, Node, Responsible, TicketUpdate
 from ticketyn.schemas.ticket import TicketListResponse, TicketResponse
@@ -57,6 +58,10 @@ def validate_ticket_values(session: Session, values: dict, changed_relations: se
 
 def create_ticket(session: Session, values: dict) -> Ticket:
     try:
+        values = dict(values)
+        circuit = locked_circuit(session, values['circuit_id'])
+        values['node_id'] = resolve_node(session, circuit, values.get('node_id'))
+        values['sector_id'] = resolve_sector(session, circuit, values.get('sector_id'))
         config = locked_number_config(session)
         validate_ticket_values(session, values, set(RELATED_MODELS) | {"responsible_id"})
         if config.next_number >= 2147483647:
@@ -80,6 +85,25 @@ def patch_ticket(session: Session, id: int, changes: dict) -> Ticket:
         ticket = session.scalar(select(Ticket).where(Ticket.id == id).with_for_update(of=Ticket))
         if ticket is None:
             raise HTTPException(status_code=404, detail=f"Ticket con id {id} no encontrado")
+        changes = dict(changes)
+        circuit = locked_circuit(session, changes.get('circuit_id', ticket.circuit_id))
+        if circuit.id != ticket.circuit_id:
+            changes['node_id'] = resolve_node(session, circuit, changes.get('node_id'))
+            changes['sector_id'] = resolve_sector(session, circuit, changes.get('sector_id'))
+        else:
+            supplied = changes.pop('sector_id', None)
+            if circuit.sector_id is None:
+                resolve_sector(session, circuit, supplied)
+            elif supplied is not None and supplied not in (ticket.sector_id, circuit.sector_id):
+                validate_sector(session, supplied)
+                raise HTTPException(409, 'El Sector histórico del ticket no se modifica desde el ticket.')
+        if circuit.id == ticket.circuit_id:
+            supplied_node = changes.pop('node_id', None)
+            if circuit.node_id is None:
+                resolve_node(session, circuit, supplied_node)
+            elif supplied_node is not None and supplied_node not in (ticket.node_id, circuit.node_id):
+                validate_node(session, supplied_node)
+                raise HTTPException(409, 'El Nodo histórico del ticket no se modifica desde el ticket.')
         current = {field: getattr(ticket, field) for field in (
             "title", "description", "responsible_id", *RELATED_MODELS, "start_at", "end_at", "status"
         )}
@@ -107,7 +131,7 @@ def ticket_statement(filters: dict, *, time_field: str = "start_at"):
         if filters.get(field) is not None:
             statement = statement.where(getattr(Ticket, field) == filters[field])
     if filters.get("node_id") is not None:
-        statement = statement.where(Ticket.circuit_id.in_(select(Circuit.id).where(Circuit.node_id == filters["node_id"])))
+        statement = statement.where(Ticket.node_id == filters["node_id"])
     if filters.get("search"):
         statement = statement.where(or_(
             *(getattr(Ticket, field).icontains(filters["search"], autoescape=True)
@@ -127,11 +151,11 @@ def joined_ticket_statement(filters: dict):
         statement = statement.join(model, getattr(Ticket, field) == model.id)
     # Reutilizar los joins existentes también para las relaciones ORM evita
     # consultas lazy y joins duplicados durante schemas/exportaciones.
-    return statement.outerjoin(Node, Circuit.node_id == Node.id).outerjoin(
+    return statement.outerjoin(Node, Ticket.node_id == Node.id).outerjoin(
         Responsible, Ticket.responsible_id == Responsible.id
     ).options(
-        contains_eager(Ticket.circuit).contains_eager(Circuit.node),
-        contains_eager(Ticket.responsible), contains_eager(Circuit.node),
+        contains_eager(Ticket.circuit),
+        contains_eager(Ticket.responsible), contains_eager(Ticket.node),
     )
 
 

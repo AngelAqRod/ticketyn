@@ -205,7 +205,7 @@ def test_incompatible_customer_circuit(api_client, ticket_payload):
     item = create_ticket(api_client, ticket_payload)
     assert api_client.patch(f"/api/tickets/{item['id']}", json={"customer_id": customer["id"]}).status_code == 422
     assert api_client.get(f"/api/tickets/{item['id']}").json() == item
-    circuit = api_client.post("/api/circuits", json={
+    circuit = api_client.post("/api/circuits", json={'node_id': ticket_payload['node_id'], 'sector_id': ticket_payload['sector_id'],
         "customer_id": customer["id"], "circuit_code": "NO-PREFIX-RELATION", "description": "Otro"
     }).json()
     response = api_client.patch(f"/api/tickets/{item['id']}", json={"customer_id": customer["id"], "circuit_id": circuit["id"]})
@@ -231,7 +231,7 @@ def test_reassign_to_inactive_resource_rejected(api_client, ticket_payload, fiel
     if field == "customer_id":
         body = {"customer_code": "INACTIVE", "name": "Otro cliente"}
     elif field == "circuit_id":
-        body = {"customer_id": ticket_payload["customer_id"], "circuit_code": "INACTIVE", "description": "Otro enlace"}
+        body = {"node_id": ticket_payload["node_id"], "sector_id": ticket_payload["sector_id"], "customer_id": ticket_payload["customer_id"], "circuit_code": "INACTIVE", "description": "Otro enlace"}
     else:
         body = {"name": "Registro inactivo"}
     created = api_client.post(RELATED_PATHS[field], json=body)
@@ -248,14 +248,18 @@ def test_reassign_to_inactive_resource_rejected(api_client, ticket_payload, fiel
 def test_reassign_to_active_resource(api_client, ticket_payload, field):
     item = create_ticket(api_client, ticket_payload)
     if field == "circuit_id":
-        body = {"customer_id": ticket_payload["customer_id"], "circuit_code": "NEW", "description": "Nuevo enlace"}
+        body = {"node_id": ticket_payload["node_id"], "sector_id": ticket_payload["sector_id"], "customer_id": ticket_payload["customer_id"], "circuit_code": "NEW", "description": "Nuevo enlace"}
     else:
         body = {"name": "Nuevo registro"}
     new = api_client.post(RELATED_PATHS[field], json=body)
     assert new.status_code == 201
     response = api_client.patch(f"/api/tickets/{item['id']}", json={field: new.json()["id"]})
-    assert response.status_code == 200
-    assert response.json()[field] == new.json()["id"]
+    if field == "sector_id":
+        assert response.status_code == 409
+        assert api_client.get(f"/api/tickets/{item['id']}").json()["sector_id"] == item["sector_id"]
+    else:
+        assert response.status_code == 200
+        assert response.json()[field] == new.json()["id"]
 
 
 @pytest.mark.parametrize("status", ["OPEN", "CLOSED"])
@@ -314,7 +318,7 @@ def test_ticket_input_validation(api_client, ticket_payload, changes):
 def test_ticket_required_fields(api_client, ticket_payload, field):
     payload = ticket_payload.copy()
     payload.pop(field)
-    assert api_client.post("/api/tickets", json=payload).status_code == 422
+    assert api_client.post("/api/tickets", json=payload).status_code == (201 if field == "sector_id" else 422)
 
 
 def test_ticket_not_found_and_empty_patch(api_client, ticket_payload):

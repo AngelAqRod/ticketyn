@@ -5,9 +5,9 @@ import App from '../App'
 import { jsonResponse, ticket } from '../test/fixtures'
 
 const customer = { id: 1, customer_code: 'OLD', name: 'Cliente actual', active: true, created_at: ticket.created_at }
-const circuit = { id: 1, customer_id: 1, circuit_code: 'OLD.01', description: 'Circuito actual', active: true, created_at: ticket.created_at }
+const circuit = { node_id: 1, node: { id: 1, name: 'Nodo actual', active: true }, id: 1, customer_id: 1, circuit_code: 'OLD.01', description: 'Circuito actual', active: true, created_at: ticket.created_at }
 const createdCustomer = { ...customer, id: 9, customer_code: 'NEW', name: 'Nuevo cliente' }
-const createdCircuit = { ...circuit, id: 10, circuit_code: 'MANUAL.02', description: 'Nuevo enlace' }
+const createdCircuit = { ...circuit, sector_id: 1, sector: { id: 1, name: 'Clasificación existente', active: true }, id: 10, circuit_code: 'MANUAL.02', description: 'Nuevo enlace' }
 const named = { id: 1, name: 'Clasificación existente', active: true, created_at: ticket.created_at }
 
 // jsdom no implementa el ciclo nativo de dialog. Simulamos solo abrir/cerrar;
@@ -30,7 +30,10 @@ function mockApi(write?: (path: string, init: RequestInit) => Promise<Response>)
       if (write) return write(path, init)
       return Promise.resolve(jsonResponse(path === '/api/customers' ? createdCustomer : path === '/api/circuits' ? { ...createdCircuit, customer_id: Number(JSON.parse(String(init.body)).customer_id) } : ticket, 201))
     }
+    if (path.startsWith('/api/service-types')) return Promise.resolve(jsonResponse([named]))
     if (path === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
+    if (path.startsWith('/api/tickets/1/escalations')) return Promise.resolve(jsonResponse([]))
+    if (path.startsWith('/api/tickets/1/updates')) return Promise.resolve(jsonResponse({ items: [], next_cursor: null }))
     if (path === '/api/tickets/1') return Promise.resolve(jsonResponse(ticket))
     if (path === '/api/customers/1') return Promise.resolve(jsonResponse(customer))
     if (path === '/api/circuits/1') return Promise.resolve(jsonResponse(circuit))
@@ -63,15 +66,18 @@ function expectPreserved() {
   const form = within(screen.getByRole('form', { name: /^(Crear|Editar) ticket$/ }))
   expect(form.getByLabelText(/^Título/)).toHaveValue('Título escrito')
   expect(form.getByLabelText(/^Descripción\s*\*?$/)).toHaveValue('Descripción escrita')
-  for (const label of ['Sector', 'Departamento', 'Tipo de incidencia']) expect(combo(label)).toHaveValue('1')
+  for (const label of ['Departamento', 'Tipo de incidencia']) expect(form.getByLabelText(new RegExp('^' + label + '\\s*\\*?$'))).toHaveValue('1')
+  const sectorField = form.getByLabelText(/^Sector/)
+  expect(sectorField).toHaveValue(sectorField.tagName === 'INPUT' ? 'Clasificación existente' : (combo('Circuito') as HTMLInputElement).value ? '1' : '')
   expect(form.getByLabelText(/^Inicio\s*\*?$/)).toHaveValue('2026-01-01T10:00')
   expect(form.getByLabelText('Fin')).toHaveValue('2026-01-01T11:00')
   expect(combo('Estado')).toHaveValue('CLOSED')
 }
-function fillQuick(kind: 'cliente' | 'circuito') {
+async function fillQuick(kind: 'cliente' | 'circuito') {
   const modal = within(screen.getByRole('dialog'))
   fireEvent.change(modal.getByLabelText(new RegExp(`^Código de ${kind}`)), { target: { value: kind === 'cliente' ? 'NEW' : 'MANUAL.02' } })
   fireEvent.change(modal.getByLabelText(kind === 'cliente' ? /^Nombre/ : /^Descripción/), { target: { value: kind === 'cliente' ? 'Nuevo cliente' : 'Nuevo enlace' } })
+  if (kind === 'circuito') { await waitFor(() => expect(modal.getByRole('option', { name: named.name })).toBeInTheDocument()); fireEvent.change(modal.getByLabelText(/^Sector/), { target: { value: '1' } }); const node = modal.getByRole('combobox', { name: 'Nodo' }); await waitFor(() => expect(node).toBeEnabled()); fireEvent.click(node); fireEvent.click(within(screen.getByRole('listbox', { name: 'Nodo' })).getByRole('option', { name: named.name })) }
   return modal
 }
 const writes = (mock: ReturnType<typeof mockApi>) => mock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PATCH')
@@ -101,14 +107,14 @@ describe('creación contextual de catálogos en TicketForm', () => {
     expect(writes(mock)).toHaveLength(0)
   })
   it('cancelación nativa de Escape cierra sin enviar ni resetear', async () => {
-    const mock = mockApi(); open(); await ready(); setTicketValues()
+    const mock = mockApi(); open(); await ready(); await selectExisting(); setTicketValues()
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' }))
     fireEvent(screen.getByRole('dialog'), new Event('cancel', { bubbles: false, cancelable: true }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expectPreserved(); expect(writes(mock)).toHaveLength(0)
   })
   it('crea cliente activo, lo selecciona, limpia Circuito y preserva el ticket', async () => {
     const mock = mockApi(); open(); await ready(); await selectExisting(); setTicketValues()
-    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' })); const modal = fillQuick('cliente')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' })); const modal = (await fillQuick('cliente'))
     fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
     await screen.findByText('Cliente NEW creado y seleccionado.')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expectPreserved()
@@ -125,18 +131,18 @@ describe('creación contextual de catálogos en TicketForm', () => {
     const mock = mockApi(); open(); await ready(); await selectExisting(); setTicketValues()
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
     expect(within(screen.getByRole('dialog')).getByText('OLD — Cliente actual', { exact: false })).toBeInTheDocument()
-    expect(within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Nodo de distribución' })).toBeInTheDocument()
-    const modal = fillQuick('circuito'); fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
+    expect(within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Nodo' })).toBeInTheDocument()
+    const modal = (await fillQuick('circuito')); fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
     await screen.findByText('Circuito MANUAL.02 creado y seleccionado.')
     expectPreserved(); expect(combo('Cliente')).toHaveValue('OLD — Cliente actual'); expect(combo('Circuito')).toHaveValue('MANUAL.02 — Nuevo enlace')
     expect(writes(mock)).toHaveLength(1); expect(writes(mock)[0][0]).toBe('/api/circuits')
-    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ customer_id: 1, circuit_code: 'MANUAL.02', description: 'Nuevo enlace', active: true, node_id: null })
+    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ sector_id: 1, customer_id: 1, circuit_code: 'MANUAL.02', description: 'Nuevo enlace', active: true, node_id: 1 })
     fireEvent.click(combo('Circuito')); expect(screen.getByRole('option', { name: 'MANUAL.02 — Nuevo enlace' })).toBeInTheDocument()
   })
   it.each(['cliente', 'circuito'] as const)('409 de %s mantiene diálogo y valores, permitiendo corregir', async (kind) => {
     const mock = mockApi(async () => jsonResponse({ detail: `Código de ${kind} duplicado` }, 409))
     open(); await ready(); await selectExisting()
-    fireEvent.click(screen.getByRole('button', { name: `Nuevo ${kind}` })); const modal = fillQuick(kind)
+    fireEvent.click(screen.getByRole('button', { name: `Nuevo ${kind}` })); const modal = (await fillQuick(kind))
     fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
     expect(await modal.findByRole('alert')).toHaveTextContent(`Código de ${kind} duplicado`)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -148,7 +154,7 @@ describe('creación contextual de catálogos en TicketForm', () => {
     let finish: (response: Response) => void = () => {}
     const pending = new Promise<Response>((resolve) => { finish = resolve })
     const mock = mockApi(() => pending); open(); await ready(); await selectExisting()
-    fireEvent.click(screen.getByRole('button', { name: `Nuevo ${kind}` })); const modal = fillQuick(kind)
+    fireEvent.click(screen.getByRole('button', { name: `Nuevo ${kind}` })); const modal = (await fillQuick(kind))
     fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
     expect(modal.getByRole('button', { name: 'Creando...' })).toBeDisabled()
     expect(screen.getByRole('form', { name: 'Crear ticket' })).toHaveAttribute('aria-busy', 'false')
@@ -160,7 +166,7 @@ describe('creación contextual de catálogos en TicketForm', () => {
   })
   it.each(['cliente', 'circuito'] as const)('creación de %s también funciona en edición sin PATCH automático', async (kind) => {
     const mock = mockApi(); open(true); await ready(true); setTicketValues()
-    fireEvent.click(screen.getByRole('button', { name: `Nuevo ${kind}` })); const modal = fillQuick(kind)
+    fireEvent.click(screen.getByRole('button', { name: `Nuevo ${kind}` })); const modal = (await fillQuick(kind))
     fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expectPreserved(); expect(screen.getByRole('heading', { name: `Editar ${ticket.reference}` })).toBeInTheDocument()
@@ -171,12 +177,12 @@ describe('creación contextual de catálogos en TicketForm', () => {
   it.each([false, true])('tras crear ambos catálogos, el ticket se guarda únicamente al pedirlo (edición=%s)', async (edit) => {
     const mock = mockApi(); open(edit); await ready(edit); setTicketValues()
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' }))
-    fireEvent.click(fillQuick('cliente').getByRole('button', { name: 'Guardar' }))
+    fireEvent.click((await fillQuick('cliente')).getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo circuito' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
     expect(within(screen.getByRole('dialog')).getByText('NEW — Nuevo cliente', { exact: false })).toBeInTheDocument()
-    fireEvent.click(fillQuick('circuito').getByRole('button', { name: 'Guardar' }))
+    fireEvent.click((await fillQuick('circuito')).getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expectPreserved()
     expect(writes(mock)).toHaveLength(2)
@@ -192,7 +198,7 @@ describe('creación contextual de catálogos en TicketForm', () => {
   })
   it.each([[422, [{ loc: ['body', 'customer_code'], msg: 'Field required' }], 'Código de cliente: Campo obligatorio'], [500, {}, 'HTTP 500']])('normaliza error %s sin cerrar ni mostrar objetos', async (status, detail, expected) => {
     mockApi(async () => jsonResponse({ detail }, Number(status))); open(); await ready()
-    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' })); const modal = fillQuick('cliente')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' })); const modal = (await fillQuick('cliente'))
     fireEvent.click(modal.getByRole('button', { name: 'Guardar' }))
     expect(await modal.findByRole('alert')).toHaveTextContent(String(expected))
     expect(modal.getByRole('form')).toHaveAttribute('aria-describedby', modal.getByRole('alert').id)
@@ -233,7 +239,7 @@ describe('Nodo y Responsable en el flujo contextual', () => {
     fireEvent.click(combo('Responsable')); fireEvent.click(within(screen.getByRole('listbox', { name: 'Responsable' })).getByRole('option', { name: named.name }))
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
     const circuitDialog = screen.getByRole('dialog', { name: 'Nuevo circuito' })
-    const circuitForm = fillQuick('circuito')
+    const circuitForm = (await fillQuick('circuito'))
     fireEvent.click(circuitForm.getByRole('button', { name: 'Nuevo nodo' }))
     const nodeDialog = within(screen.getByRole('dialog', { name: 'Nuevo nodo' }))
     expect(nodeDialog.getByLabelText(/^Nombre/)).toHaveFocus()
@@ -243,15 +249,16 @@ describe('Nodo y Responsable en el flujo contextual', () => {
     expect(circuitDialog).toBeInTheDocument()
     expect(circuitForm.getByLabelText(/^Código de circuito/)).toHaveValue('MANUAL.02')
     expect(circuitForm.getByLabelText(/^Descripción\s*\*?$/)).toHaveValue('Nuevo enlace')
-    expect(circuitForm.getByRole('combobox', { name: 'Nodo de distribución' })).toHaveValue('Nodo nuevo')
+    expect(circuitForm.getByRole('combobox', { name: 'Nodo' })).toHaveValue('Nodo nuevo')
     expectPreserved(); expect(combo('Responsable')).toHaveValue(named.name)
     expect(writes(mock)).toHaveLength(1)
     expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ name: 'Nodo nuevo', active: true })
+    fireEvent.change(circuitForm.getByLabelText(/^Sector/), { target: { value: '1' } })
     fireEvent.click(circuitForm.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expectPreserved(); expect(combo('Responsable')).toHaveValue(named.name)
     expect(combo('Circuito')).toHaveValue('MANUAL.02 — Nuevo enlace')
-    expect(screen.getByText('Nodo nuevo')).toBeInTheDocument()
+    expect(screen.getByLabelText(/^Nodo\s*\*?$/)).toHaveValue('Nodo nuevo')
     expect(JSON.parse(String(writes(mock)[1][1]?.body))).toMatchObject({ customer_id: 1, node_id: 20 })
     expect(writes(mock).some(([path]) => path.startsWith('/api/tickets'))).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: edit ? 'Guardar cambios' : 'Guardar' }))
@@ -261,9 +268,9 @@ describe('Nodo y Responsable en el flujo contextual', () => {
   it('selecciona Nodo existente sin guardar automáticamente Ticket', async () => {
     const mock = mockApi(); open(); await ready(); await selectExisting()
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
-    const form = fillQuick('circuito'), node = form.getByRole('combobox', { name: 'Nodo de distribución' })
+    const form = (await fillQuick('circuito')), node = form.getByRole('combobox', { name: 'Nodo' })
     await waitFor(() => expect(node).toBeEnabled())
-    fireEvent.click(node); fireEvent.click(within(screen.getByRole('listbox', { name: 'Nodo de distribución' })).getByRole('option', { name: named.name }))
+    fireEvent.click(node); fireEvent.click(within(screen.getByRole('listbox', { name: 'Nodo' })).getByRole('option', { name: named.name }))
     fireEvent.click(form.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(JSON.parse(String(writes(mock)[0][1]?.body))).toMatchObject({ node_id: 1 })
@@ -272,7 +279,7 @@ describe('Nodo y Responsable en el flujo contextual', () => {
   it('Escape del Nodo vuelve al Circuito sin perder valores', async () => {
     const mock = mockApi(); open(); await ready(); await selectExisting(); setTicketValues()
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
-    const parent = fillQuick('circuito')
+    const parent = (await fillQuick('circuito'))
     fireEvent.click(parent.getByRole('button', { name: 'Nuevo nodo' }))
     fireEvent(screen.getByRole('dialog', { name: 'Nuevo nodo' }), new Event('cancel', { bubbles: true, cancelable: true }))
     expect(screen.queryByRole('dialog', { name: 'Nuevo nodo' })).not.toBeInTheDocument()
@@ -283,7 +290,7 @@ describe('Nodo y Responsable en el flujo contextual', () => {
   it('409 al crear Nodo conserva ambos formularios y sus valores', async () => {
     const mock = mockApi(async () => jsonResponse({ detail: 'El nodo ya existe' }, 409))
     open(); await ready(); await selectExisting(); setTicketValues()
-    fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' })); const parent = fillQuick('circuito')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' })); const parent = (await fillQuick('circuito'))
     fireEvent.click(parent.getByRole('button', { name: 'Nuevo nodo' }))
     const child = within(screen.getByRole('dialog', { name: 'Nuevo nodo' }))
     fireEvent.change(child.getByLabelText(/^Nombre/), { target: { value: 'Duplicado' } })
@@ -312,4 +319,33 @@ describe('Nodo y Responsable en el flujo contextual', () => {
     fireEvent.click(combo('Responsable'))
     expect(screen.getByRole('option', { name: /Asignado histórico/ })).toHaveAttribute('aria-disabled', 'true')
   })
+})
+
+
+it('rechaza la creación rápida de circuito sin Sector sin enviar una solicitud', async () => {
+  const mock = mockApi(); open(); await ready(); await selectExisting()
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
+  const modal = within(screen.getByRole('dialog', { name: 'Nuevo circuito' }))
+  fireEvent.change(modal.getByLabelText(/^Código de circuito/), { target: { value: 'SIN-SECTOR' } })
+  fireEvent.change(modal.getByLabelText(/^Descripción/), { target: { value: 'Enlace' } })
+  const node = modal.getByRole('combobox', { name: 'Nodo' }); await waitFor(() => expect(node).toBeEnabled()); fireEvent.click(node); fireEvent.click(within(screen.getByRole('listbox', { name: 'Nodo' })).getByRole('option', { name: named.name }))
+  fireEvent.submit(modal.getByRole('form'))
+  expect(await modal.findByRole('alert')).toHaveTextContent('Selecciona un Sector')
+  expect(modal.getByLabelText(/^Sector/)).toBeRequired()
+  expect(modal.getByLabelText(/^Sector/)).toHaveAttribute('aria-invalid', 'true')
+  expect(writes(mock)).toHaveLength(0)
+})
+
+
+it('rechaza creación rápida sin Nodo aunque tenga Sector', async () => {
+  const mock = mockApi(); open(); await ready(); await selectExisting()
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
+  const modal = within(screen.getByRole('dialog', { name: 'Nuevo circuito' }))
+  await waitFor(() => expect(modal.getByRole('option', { name: named.name })).toBeInTheDocument())
+  fireEvent.change(modal.getByLabelText(/^Código de circuito/), { target: { value: 'SIN-NODO' } })
+  fireEvent.change(modal.getByLabelText(/^Descripción/), { target: { value: 'Enlace' } })
+  fireEvent.change(modal.getByLabelText(/^Sector/), { target: { value: '1' } })
+  fireEvent.submit(modal.getByRole('form'))
+  expect(await modal.findByRole('alert')).toHaveTextContent('Selecciona un Nodo')
+  expect(writes(mock)).toHaveLength(0)
 })

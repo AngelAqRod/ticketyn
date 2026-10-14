@@ -1,6 +1,6 @@
 import { getJson, postJson, patchJson, deleteResource, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
-import type { Position, PositionInput, ResponsibleInput, EscalationReason, Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
+import type { ServiceType, Position, PositionInput, ResponsibleInput, EscalationReason, Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
 
 async function catalogList<T>(path: string, signal?: AbortSignal, filters: Record<string, string> = {}, includeInactive = false): Promise<T[]> {
   const items: T[] = []
@@ -55,7 +55,7 @@ export async function getTicketCatalogs(ticket: Ticket, signal?: AbortSignal) {
     getJson<IncidentType>(`/api/incident-types/${ticket.incident_type_id}`, signal),
   ])
   const responsible = ticket.responsible_id ? await getJson<Responsible>(`/api/responsibles/${ticket.responsible_id}`, signal) : null
-  return { customer, circuit, sector, department, incidentType, responsible, node: circuit.node ?? null }
+  return { customer, circuit, sector, department, incidentType, responsible, node: ticket.node ?? null }
 }
 
 export const createCustomer = (payload: CustomerInput, signal?: AbortSignal) => postJson<Customer>('/api/customers', payload, signal)
@@ -90,3 +90,11 @@ export const updateEscalationReason = (id: number, payload: Partial<NamedCatalog
 export const listPositions = (signal?: AbortSignal, includeInactive = false, departmentId?: number) => catalogList<Position>('/api/positions', signal, departmentId === undefined ? {} : { department_id: String(departmentId) }, includeInactive)
 export const createPosition = (payload: PositionInput, signal?: AbortSignal) => postJson<Position>('/api/positions', payload, signal)
 export const updatePosition = (id: number, payload: Partial<PositionInput>, signal?: AbortSignal) => patchJson<Position>(`/api/positions/${id}`, payload, signal)
+
+export const listDeactivationReasons = (signal?: AbortSignal, includeInactive = false) => catalogList<EscalationReason>('/api/deactivation-reasons', signal, {}, includeInactive)
+export const createDeactivationReason = (payload: NamedCatalogInput) => postJson<EscalationReason>('/api/deactivation-reasons', payload)
+export const updateDeactivationReason = (id: number, payload: Partial<NamedCatalogInput>) => patchJson<EscalationReason>(`/api/deactivation-reasons/${id}`, payload)
+
+export const listServiceTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<ServiceType>('/api/service-types', signal, {}, includeInactive)
+export const createServiceType = (payload: NamedCatalogInput) => postJson<ServiceType>('/api/service-types', payload)
+export const updateServiceType = (id: number, payload: Partial<NamedCatalogInput>) => patchJson<ServiceType>(`/api/service-types/${id}`, payload)

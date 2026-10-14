@@ -197,9 +197,9 @@ describe('reportería operativa', () => {
   })
   it('sidebar abre /reports con lazy loading', async () => {
     setup('/customers', { app: true })
-    fireEvent.click(screen.getByRole('link', { name: 'Reportería' }))
-    expect(await screen.findByRole('heading', { name: 'Reportería', level: 1 })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Reportería' })).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(screen.getByRole('link', { name: 'Reportería de tickets' }))
+    expect(await screen.findByRole('heading', { name: 'Reportería de tickets', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Reportería de tickets' })).toHaveAttribute('aria-current', 'page')
   })
 })
 

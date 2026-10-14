@@ -84,7 +84,7 @@ def export_ticket_xlsx(session, filters, output):
         values = [ticket.reference, 'Abierto' if ticket.status == 'OPEN' else 'Cerrado', customer.name,
             customer.customer_code, circuit.description, circuit.circuit_code, sector.name, department.name,
             kind.name, ticket.title, ticket.description, date(ticket.start_at), date(ticket.end_at),
-            'En curso' if ticket.duration_seconds is None else duration_text(ticket.duration_seconds), ticket.duration_seconds, circuit.node.name if circuit.node else None, ticket.responsible.name if ticket.responsible else None]
+            'En curso' if ticket.duration_seconds is None else duration_text(ticket.duration_seconds), ticket.duration_seconds, ticket.node.name if ticket.node else None, ticket.responsible.name if ticket.responsible else None]
         cells = []
         for value in values:
             cell = WriteOnlyCell(sheet, value=value)

@@ -16,3 +16,10 @@ from ticketyn.models.position import Position
 from ticketyn.models.escalation import EscalationReason, TicketEscalation, EscalationAudit
 
 __all__ = ["EscalationAudit", "Position", "EscalationReason", "TicketEscalation", "Customer", "Circuit", "Sector", "Department", "IncidentType", "TicketNumberConfig", "Ticket", "Node", "Responsible", "TicketUpdate"]
+
+from ticketyn.models.fms import Activation, ActivationNumberConfig, ActivationIntervention, CapacityChange, CircuitLifecycleOperation, DeactivationReason
+
+__all__ += ["Activation", "ActivationNumberConfig", "ActivationIntervention", "CapacityChange", "CircuitLifecycleOperation", "DeactivationReason"]
+
+from ticketyn.models.service_type import ServiceType
+__all__ += ["ServiceType"]

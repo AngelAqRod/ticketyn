@@ -9,7 +9,15 @@ export interface Customer extends NamedCatalog {
   customer_code: string
 }
 
+export type ServiceType = NamedCatalog
+
 export interface Circuit {
+  sector_id?: number | null
+  sector?: Pick<NamedCatalog, 'id' | 'name' | 'active'> | null
+  service_type_id?: number | null
+  service_type?: Pick<NamedCatalog, 'id' | 'name' | 'active'> | null
+  initial_capacity?: string | null
+  initial_capacity_unit?: string | null
   node_id?: number | null
   node?: { id: number; name: string; active: boolean } | null
   id: number
@@ -36,5 +44,5 @@ export type IncidentType = NamedCatalog
 
 export interface NamedCatalogInput { name: string; active: boolean; description?: string | null }
 export interface CustomerInput extends NamedCatalogInput { customer_code: string }
-export interface CircuitInput { node_id?: number | null; customer_id: number; circuit_code: string; description: string; active: boolean }
-export type CatalogKind = 'customers' | 'circuits' | 'sectors' | 'departments' | 'incident-types' | 'nodes' | 'responsibles' | 'escalation-reasons' | 'positions'
+export interface CircuitInput { sector_id: number; service_type_id?: number | null; initial_capacity?: string | null; initial_capacity_unit?: string | null; node_id: number; customer_id: number; circuit_code: string; description: string; active: boolean }
+export type CatalogKind = 'customers' | 'circuits' | 'sectors' | 'departments' | 'incident-types' | 'nodes' | 'responsibles' | 'escalation-reasons' | 'positions' | 'deactivation-reasons' | 'service-types'

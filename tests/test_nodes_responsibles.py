@@ -40,6 +40,7 @@ def setup_relations(client, payload):
     responsible = client.post('/api/responsibles', json={'name': 'Operador Uno'}).json()
     circuit = client.patch(f'/api/circuits/{payload["circuit_id"]}', json={'node_id': node['id']}).json()
     assert circuit['node_id'] == node['id'] and circuit['node']['name'] == node['name']
+    payload['node_id'] = node['id']
     return node, responsible
 
 
@@ -50,7 +51,7 @@ def test_invalid_assignment(api_client, ticket_payload, resource, field, path, i
     if inactive:
         id = api_client.post(f'/api/{resource}', json={'name': 'Inactivo', 'active': False}).json()['id']
     if path == 'circuits':
-        response = api_client.post('/api/circuits', json={'customer_id': ticket_payload['customer_id'], 'circuit_code': 'NEW', 'description': 'Nuevo', field: id})
+        response = api_client.post('/api/circuits', json={'node_id': ticket_payload['node_id'], 'sector_id': ticket_payload['sector_id'], 'customer_id': ticket_payload['customer_id'], 'circuit_code': 'NEW', 'description': 'Nuevo', field: id})
     else:
         response = api_client.post('/api/tickets', json={**ticket_payload, field: id})
     assert response.status_code == (422 if inactive else 404)
@@ -71,9 +72,9 @@ def test_assign_reassign_unassign_and_history(api_client, ticket_payload):
     assert api_client.patch(f'/api/tickets/{created["id"]}', json={'responsible_id': None}).json()['responsible'] is None
     new_node = api_client.post('/api/nodes', json={'name': 'Nodo Dos'}).json()
     assert api_client.patch(f'/api/circuits/{ticket_payload["circuit_id"]}', json={'node_id': new_node['id']}).status_code == 200
-    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node']['id'] == new_node['id']
-    assert api_client.patch(f'/api/circuits/{ticket_payload["circuit_id"]}', json={'node_id': None}).json()['node'] is None
-    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node'] is None
+    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node']['id'] == node['id']
+    assert api_client.patch(f'/api/circuits/{ticket_payload["circuit_id"]}', json={'node_id': None}).status_code == 422
+    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node']['id'] == node['id']
 
 
 @pytest.mark.parametrize('filters', ['node', 'responsible', 'combined', 'all'])
@@ -139,8 +140,8 @@ def test_circuit_filters_and_null(api_client, ticket_payload):
     api_client.patch(f'/api/circuits/{circuit["id"]}', json={'active': False})
     assert not api_client.get('/api/circuits', params={'node_id': node['id']}).json()
     assert len(api_client.get('/api/circuits', params={**query, 'active': False}).json()) == 1
-    plain = api_client.post('/api/circuits', json={'customer_id': ticket_payload['customer_id'], 'circuit_code': 'PLAIN', 'description': 'Sin nodo'}).json()
-    assert plain['node_id'] is None and plain['node'] is None
+    plain = api_client.post('/api/circuits', json={'node_id': ticket_payload['node_id'], 'sector_id': ticket_payload['sector_id'], 'customer_id': ticket_payload['customer_id'], 'circuit_code': 'PLAIN', 'description': 'Sin nodo'}).json()
+    assert plain['node_id'] == ticket_payload['node_id']
 
 
 def test_list_query_count_no_n_plus_one(api_client, ticket_payload, db_session):
@@ -176,13 +177,13 @@ def test_new_migration_roundtrip(postgres_engine):
             with Operations.context(context): revision['upgrade']()
             inspector = inspect(connection)
             # This historical roundtrip stops at 0004, before follow-up in 0008.
-            assert set(inspector.get_table_names(schema=schema)) == set(Base.metadata.tables) - {'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit'}
+            assert set(inspector.get_table_names(schema=schema)) == set(Base.metadata.tables) - {'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit', 'activations', 'activation_interventions', 'activation_number_config', 'capacity_changes', 'circuit_lifecycle_operations', 'deactivation_reasons', 'service_types'}
             assert connection.scalar(text('SELECT node_id FROM circuits')) is None
             for table, column, target in [('circuits','node_id','nodes'),('tickets','responsible_id','responsibles')]:
                 assert next(c for c in inspector.get_columns(table, schema=schema) if c['name'] == column)['nullable']
                 assert any(fk['constrained_columns'] == [column] and fk['referred_table'] == target for fk in inspector.get_foreign_keys(table,schema=schema))
                 assert any(index['name'] == f'ix_{table}_{column}' for index in inspector.get_indexes(table,schema=schema))
-            assert 'node_id' not in Base.metadata.tables['tickets'].c
+            assert 'node_id' in Base.metadata.tables['tickets'].c
             assert 'responsible_id' not in Base.metadata.tables['circuits'].c
             assert 'responsible_id' not in Base.metadata.tables['nodes'].c
             assert not any('hub' in name for name in Base.metadata.tables)
@@ -196,7 +197,7 @@ def test_new_migration_roundtrip(postgres_engine):
         finally:
             transaction.rollback()
 
-@pytest.mark.parametrize('field,value', [('responsible_id', -1), ('responsible_id', 0), ('node_id', 1)])
+@pytest.mark.parametrize('field,value', [('responsible_id', -1), ('responsible_id', 0), ('node_id', 0)])
 def test_ticket_assignment_input_contract(api_client, ticket_payload, field, value):
     assert api_client.post('/api/tickets', json={**ticket_payload, field: value}).status_code == 422
 
@@ -266,9 +267,12 @@ def test_new_distributions_respect_timezone(api_client, ticket_payload, timezone
     assert data['kpis']['total_duration_seconds'] == 3600
 
 
-def test_unassigned_exports_and_pdf_friendly_names(api_client, ticket_payload, monkeypatch):
+def test_unassigned_exports_and_pdf_friendly_names(api_client, ticket_payload, monkeypatch, db_session):
     from reportlab.pdfgen.textobject import PDFTextObject
-    api_client.post('/api/tickets', json=ticket_payload)
+    from ticketyn.models import Ticket
+    historical = api_client.post('/api/tickets', json=ticket_payload).json()
+    db_session.get(Ticket, historical['id']).node_id = None
+    db_session.commit()
     response = api_client.get('/api/tickets/export/xlsx')
     rows = list(load_workbook(BytesIO(response.content))['Tickets'].values)
     assert rows[1][-2:] == (None, None)

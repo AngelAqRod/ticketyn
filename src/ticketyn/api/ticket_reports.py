@@ -124,7 +124,7 @@ def internal_pdf(session, ticket_id, output, zone, issued):
         paragraph(ticket.title, size=12, color=MUTED), section('Identificación y tiempos'),
         modern_table(['Dato', 'Valor'], [
             ['Cliente', f'{ticket.customer.name} · {ticket.customer.customer_code}'],
-            ['Circuito', ticket.circuit.circuit_code], ['Nodo de distribución', ticket.node.name if ticket.node else 'Sin asignar'],
+            ['Circuito', ticket.circuit.circuit_code], ['Nodo', ticket.node.name if ticket.node else 'Sin asignar'],
             ['Sector', ticket.sector.name], ['Departamento', ticket.department.name],
             ['Responsable', ticket.responsible.name if ticket.responsible else 'Sin asignar'],
             ['Tipo de incidencia', ticket.incident_type.name], *timing_rows(ticket, zone, issued)], [250, 530], compact=True),

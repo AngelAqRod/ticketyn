@@ -24,6 +24,7 @@ class TicketInput(BaseModel):
 
 
 class TicketCreate(TicketInput):
+    node_id: PositiveId | None = None
     resolution: OptionalTicketText | None = None
     customer_description: OptionalTicketText | None = None
     customer_resolution: OptionalTicketText | None = None
@@ -32,7 +33,7 @@ class TicketCreate(TicketInput):
     description: NonEmptyString
     customer_id: PositiveId
     circuit_id: PositiveId
-    sector_id: PositiveId
+    sector_id: PositiveId | None = None
     department_id: PositiveId
     incident_type_id: PositiveId
     start_at: AwareDatetime
@@ -41,6 +42,7 @@ class TicketCreate(TicketInput):
 
 
 class TicketUpdate(TicketInput):
+    node_id: PositiveId | None = None
     resolution: OptionalTicketText | None = None
     customer_description: OptionalTicketText | None = None
     customer_resolution: OptionalTicketText | None = None
@@ -58,6 +60,7 @@ class TicketUpdate(TicketInput):
 
 
 class TicketResponse(BaseModel):
+    node_id: int | None
     resolution: str | None
     customer_description: str | None
     customer_resolution: str | None

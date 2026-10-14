@@ -41,7 +41,7 @@ def test_alembic_cli_from_empty_database(postgres_engine, tmp_path):
                 assert result.returncode == 0, result.stderr
                 return result.stdout
             alembic('upgrade', 'head')
-            assert '0013_escalation_operations (head)' in alembic('current')
+            assert '0017_historical_nodes (head)' in alembic('current')
             inspector = inspect(engine)
             assert set(inspector.get_table_names()) == set(Base.metadata.tables) | {'alembic_version'}
             probe = next(item for item in inspector.get_columns('tickets') if item['name'] == '_ticketyn_e2e_update_probe')
@@ -57,9 +57,9 @@ def test_alembic_cli_from_empty_database(postgres_engine, tmp_path):
                 assert next(item for item in inspector.get_columns(table) if item['name'] == column)['nullable']
                 assert any(item['constrained_columns'] == [column] and item['referred_table'] == target for item in inspector.get_foreign_keys(table))
             with engine.connect() as connection:
-                assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0013_escalation_operations'
+                assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0017_historical_nodes'
                 for table in Base.metadata.tables:
-                    assert connection.scalar(text(f'SELECT count(*) FROM "{table}"')) == 0
+                    assert connection.scalar(text(f'SELECT count(*) FROM "{table}"')) == (5 if table == "deactivation_reasons" else 1 if table == "activation_number_config" else 0)
         finally:
             if engine is not None:
                 engine.dispose()

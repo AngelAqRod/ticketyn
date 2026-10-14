@@ -72,10 +72,12 @@ def test_every_filter_matches_list_semantics(api_client, ticket_payload, field):
     other = dict(ticket_payload, title='Segundo registro', start_at='2020-01-02T12:00:00Z', status='CLOSED')
     if field in ('customer_id', 'circuit_id'):
         customer = api_client.post('/api/customers', json={'customer_code': 'OTHER', 'name': 'Otro'}).json()['id']
-        circuit = api_client.post('/api/circuits', json={'customer_id': customer, 'circuit_code': 'OTHER.C', 'description': 'Otro'}).json()['id']
+        circuit = api_client.post('/api/circuits', json={'node_id': ticket_payload['node_id'], 'sector_id': ticket_payload['sector_id'], 'customer_id': customer, 'circuit_code': 'OTHER.C', 'description': 'Otro'}).json()['id']
         other.update(customer_id=customer, circuit_id=circuit)
     elif field in RELATED_PATHS:
         other[field] = api_client.post(RELATED_PATHS[field], json={'name': 'Otro'}).json()['id']
+    if field == 'sector_id':
+        assert api_client.patch(f"/api/circuits/{other['circuit_id']}", json={'sector_id': other['sector_id']}).status_code == 200
     created_other = create_ticket(api_client, other)
     value = wanted.get(field)
     if field == 'search': value = 'objetivo'
