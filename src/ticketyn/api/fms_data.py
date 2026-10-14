@@ -38,6 +38,18 @@ def create_operation(session: Session, model, values: dict):
         if values.get('reason_id') is not None:
             validate_active(session, DeactivationReason, values['reason_id'])
         if model is Activation:
+            if circuit.service_type_id is not None:
+                from ticketyn.models import ServiceType
+                service = session.scalar(select(ServiceType).where(ServiceType.id == circuit.service_type_id).with_for_update(read=True, of=ServiceType).execution_options(populate_existing=True))
+            else:
+                service = None
+            from ticketyn.models import CpeModel
+            if circuit.cpe_model_id is not None:
+                cpe = session.scalar(select(CpeModel).where(CpeModel.id == circuit.cpe_model_id)
+                    .with_for_update(read=True, of=CpeModel).execution_options(populate_existing=True))
+            else:
+                cpe = None
+            values.update(cpe_activation=cpe.name if cpe else None, service_type_name=service.name if service else None, initial_capacity=circuit.initial_capacity, initial_capacity_unit=circuit.initial_capacity_unit)
             config = locked_activation_config(session)
             if config.next_number > 2147483647:
                 raise HTTPException(409, 'Se agotó el contador de activaciones')

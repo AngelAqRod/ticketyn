@@ -62,3 +62,22 @@ describe('PDF individual de activación', () => {
     expect(screen.getByRole('button', { name: 'Exportar PDF' })).toBeEnabled()
   })
 })
+
+it('muestra condiciones históricas sin completar desde el circuito actual', async () => {
+  const mock=vi.fn((path:string)=>Promise.resolve(jsonResponse(path==='/api/activations/42'?{ ...activation, cpe_activation:'MikroTik original', service_type_name:'Internet original', initial_capacity:'1758.5', initial_capacity_unit:'Mbps', circuit:{...circuit, cpe_model:{name:'NO MOSTRAR CPE ACTUAL'}, service_type:{name:'NO MOSTRAR ACTUAL'}, initial_capacity:'9', initial_capacity_unit:'Gbps'} }:path.includes('/interventions')?[]:path.includes('/customers/3')?{id:3,name:'Cliente'}:[person])))
+  vi.stubGlobal('fetch',mock)
+  render(<MemoryRouter initialEntries={['/activations/42']}><Routes><Route path="/activations/:id" element={<ActivationDetail />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText('Internet original')).toBeInTheDocument()
+  expect(screen.getByText('MikroTik original')).toBeInTheDocument()
+  expect(screen.queryByText('NO MOSTRAR CPE ACTUAL')).not.toBeInTheDocument()
+  expect(screen.getByText('1.759 Gbps')).toBeInTheDocument()
+  expect(screen.queryByText('NO MOSTRAR ACTUAL')).not.toBeInTheDocument()
+  expect(screen.queryByText('9 Gbps')).not.toBeInTheDocument()
+})
+
+
+it('muestra Sin registrar para el CPE histórico ausente', async () => {
+  setup()
+  const label = await screen.findByText('CPE de activación')
+  expect(label.nextElementSibling).toHaveTextContent('Sin registrar')
+})

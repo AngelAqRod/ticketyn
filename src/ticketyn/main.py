@@ -1,3 +1,4 @@
+from ticketyn.api.cpe_models import router as cpe_models_router
 from ticketyn.api.fms_reports import router as fms_reports_router
 from fastapi import FastAPI
 from ticketyn.api.service_types import router as service_types_router
@@ -25,7 +26,8 @@ from ticketyn.core.config import get_settings
 
 def create_app() -> FastAPI:
     get_settings()
-    app = FastAPI(title="Ticketyn", version="0.4.1")
+    app = FastAPI(title="Ticketyn", version="0.4.2")
+    app.include_router(cpe_models_router)
     app.include_router(service_types_router)
     app.include_router(fms_router)
     app.include_router(fms_reports_router)

@@ -48,11 +48,15 @@ class OperationFields:
 
 class Activation(OperationFields, Base):
     __tablename__ = 'activations'
+    cpe_activation: Mapped[str | None] = mapped_column(Text)
+    service_type_name: Mapped[str | None] = mapped_column(String)
+    initial_capacity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    initial_capacity_unit: Mapped[str | None] = mapped_column(String(4))
     activation_number: Mapped[int] = mapped_column(unique=True)
     reference: Mapped[str] = mapped_column(String, unique=True)
     circuit: Mapped['Circuit'] = relationship(lazy='joined')
     responsible: Mapped['Responsible'] = relationship(lazy='joined')
-    __table_args__ = (CheckConstraint('activation_number > 0', name='positive_number'), Index('ix_activations_chronology', 'circuit_id', 'effective_at', 'id'))
+    __table_args__ = (CheckConstraint("(initial_capacity IS NULL AND initial_capacity_unit IS NULL) OR (initial_capacity IS NOT NULL AND initial_capacity > 0 AND initial_capacity <> 'NaN'::numeric AND initial_capacity_unit IS NOT NULL AND initial_capacity_unit IN ('Mbps','Gbps'))", name='initial_capacity_valid'), CheckConstraint('activation_number > 0', name='positive_number'), Index('ix_activations_chronology', 'circuit_id', 'effective_at', 'id'))
 
 
 class ActivationIntervention(Base):

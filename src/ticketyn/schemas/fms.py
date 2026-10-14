@@ -81,6 +81,10 @@ class OperationResponse(BaseModel):
 
 
 class ActivationResponse(OperationResponse):
+    cpe_activation: str | None
+    service_type_name: str | None
+    initial_capacity: Decimal | None
+    initial_capacity_unit: str | None
     activation_number: int
     reference: str
 

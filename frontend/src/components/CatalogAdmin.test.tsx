@@ -13,7 +13,7 @@ const named = { id: 1, name: 'Nombre inicial', active: true, created_at }
 type Row = typeof customer | typeof circuit | typeof named
 interface Options { empty?: boolean; fail?: boolean; write?: (path: string, options: RequestInit) => Promise<Response> }
 function mockApi(options: Options = {}) {
-  const rows: Record<CatalogKind, Row[]> = {
+  const rows: Record<CatalogKind, Row[]> = { 'cpe-models': [named, { ...named, id: 2, name: 'Modelo inactivo', active: false }],
     'service-types': [],
     'deactivation-reasons': [],
     positions: [{ ...named, name: 'Consultor de redes', department_id: 1, department: named } as Row, { ...named, id: 2, name: 'Otro departamento', department_id: 2, department: inactiveCustomer } as Row],
@@ -48,6 +48,7 @@ function mockApi(options: Options = {}) {
 const settings = [
   ['customers', '/customers', 'cliente', 'Clientes', 'CUS-A'],
   ['circuits', '/circuits', 'circuito', 'Circuitos', 'LINK-A'],
+  ['cpe-models', '/catalogs', 'modelo', 'Modelos de CPE', 'Nombre inicial'],
   ['sectors', '/catalogs', 'sector', 'Sectores', 'Nombre inicial'],
   ['departments', '/catalogs', 'departamento', 'Departamentos', 'Nombre inicial'],
   ['nodes', '/catalogs', 'nodo', 'Nodos', 'Nombre inicial'],
@@ -56,7 +57,7 @@ const settings = [
 ] as const
 function open(path: string) { render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>) }
 async function selectCatalog(title: string) {
-  if (['Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
+  if (['Modelos de CPE', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
   await screen.findByRole('table', { name: title })
 }
 const field = (label: string) => screen.getByLabelText(new RegExp(`^${label}\\s*\\*?$`))
@@ -94,7 +95,7 @@ describe('administración de catálogos', () => {
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
     const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: 1 } : { name: 'Nuevo registro', active: true }
-    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null } : resource === 'circuits' ? { ...expected, sector_id: 1, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
+    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null } : resource === 'circuits' ? { ...expected, sector_id: 1, cpe_model_id: null, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
     fireEvent.change(field(resource === 'circuits' ? 'Descripción' : 'Nombre'), { target: { value: 'Corregido' } })
@@ -191,7 +192,7 @@ describe('administración de catálogos', () => {
   })
   it.each(settings)('%s muestra estado vacío', async (_resource, path, _singular, title) => {
     mockApi({ empty: true }); open(path)
-    if (['Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
+    if (['Modelos de CPE', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
     expect(await screen.findByText(/^No hay .+ registrados\.$/)).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })

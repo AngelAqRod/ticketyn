@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { LayoutDashboard, Ticket, Users, Network, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power } from 'lucide-react'
-import { getHealth } from '../api'
+import { getHealth, getSystemVersion } from '../api'
 import { identityFor, moduleIdentity } from './moduleIdentity'
 
 const icons = [LayoutDashboard, Ticket, Users, Network, ChartNoAxesCombined, Layers3, Settings, Zap, Gauge, Power, ChartNoAxesCombined, ChartNoAxesCombined, ChartNoAxesCombined]
@@ -13,9 +13,11 @@ export function Layout() {
   const ContextIcon = navigation.find((item) => item.path === context?.path)?.icon ?? Ticket
   const [menuOpen, setMenuOpen] = useState(false)
   const [health, setHealth] = useState<'loading' | 'connected' | 'unavailable'>('loading')
+  const [version, setVersion] = useState<string | null>(null)
   const [healthError, setHealthError] = useState<string | undefined>()
   useEffect(() => {
     const controller = new AbortController()
+    getSystemVersion(controller.signal).then((data) => { if (!controller.signal.aborted && typeof data?.version === 'string' && data.version.length <= 64 && /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(data.version)) setVersion(data.version) }).catch(() => { if (!controller.signal.aborted) setVersion(null) })
     getHealth(controller.signal).then(() => {
       if (!controller.signal.aborted) setHealth('connected')
     }).catch((error: unknown) => {
@@ -38,12 +40,15 @@ export function Layout() {
         <span className="header-context-icon" aria-hidden="true"><ContextIcon size={18} /></span>
         <div><p className="text-[10px] text-muted">Gestión de incidencias / {context?.group}</p><p className="text-sm font-semibold text-ink">{context?.title}</p></div>
       </div>
-      <div className="flex items-center gap-3 px-4">
+      <div className="flex min-w-0 items-center gap-2 px-2 sm:px-4">
+        <div className="flex min-w-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+        <span className="chip chip-neutral max-w-full whitespace-normal [overflow-wrap:anywhere] text-[10px] leading-tight" aria-label="Versión de Ticketyn">{version ? `Ticketyn v${version}` : 'versión no disponible'}</span>
         <span role="status" title={healthError} className={`chip ${health === 'connected' ? 'chip-success' : health === 'unavailable' ? 'chip-danger' : 'chip-neutral'}`}>
           <span aria-hidden="true" className={`h-2 w-2 rounded-full ${health === 'connected' ? 'bg-emerald-600' : health === 'unavailable' ? 'bg-red-600' : 'bg-slate-400'}`} />
           <span className="sr-only sm:not-sr-only">{health === 'connected' ? 'API conectada' : health === 'unavailable' ? 'API no disponible' : 'Comprobando API...'}</span>
         </span>
-        <button className="button-secondary md:hidden" aria-label={menuOpen ? 'Cerrar navegación' : 'Abrir navegación'} aria-expanded={menuOpen} aria-controls="main-navigation" onClick={() => setMenuOpen(!menuOpen)}>
+        </div>
+        <button className="button-secondary shrink-0 md:hidden" aria-label={menuOpen ? 'Cerrar navegación' : 'Abrir navegación'} aria-expanded={menuOpen} aria-controls="main-navigation" onClick={() => setMenuOpen(!menuOpen)}>
           {menuOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
       </div>

@@ -3,13 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, Query, Response
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_items, save_item, update_item
-from ticketyn.models import Circuit, Customer, Node, Ticket, ServiceType
+from ticketyn.models import Circuit, Customer, Node, Ticket, ServiceType, CpeModel
 from ticketyn.api.fms_data import validate_active, validate_initial_capacity
 from ticketyn.models.fms import Activation, CapacityChange, CircuitLifecycleOperation
-from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate
+from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate, CpeConfigurationInput, CpeConfigurationResponse
 
 from ticketyn.api.circuit_sector import locked_circuit, validate_sector, validate_node
 
@@ -24,6 +25,8 @@ def create_circuit(payload: CircuitCreate, session: DBSession):
     validate_node(session, payload.node_id)
     if payload.service_type_id is not None:
         validate_active(session, ServiceType, payload.service_type_id)
+    if payload.cpe_model_id is not None:
+        validate_active(session, CpeModel, payload.cpe_model_id)
     return save_item(session, Circuit(**payload.model_dump()))
 
 
@@ -69,6 +72,8 @@ def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, sessio
         validate_node(session, node_id)
     if values.get('service_type_id') is not None and values['service_type_id'] != item.service_type_id:
         validate_active(session, ServiceType, values['service_type_id'])
+    if values.get('cpe_model_id') is not None and values['cpe_model_id'] != item.cpe_model_id:
+        validate_active(session, CpeModel, values['cpe_model_id'])
     return update_item(session, item, values)
 
 
@@ -78,3 +83,26 @@ def delete_circuit(id: Annotated[int, Path(gt=0)], session: DBSession):
     delete_unreferenced(session, Circuit, id, dependent_columns=(Ticket.circuit_id, Activation.circuit_id, CapacityChange.circuit_id, CircuitLifecycleOperation.circuit_id),
         conflict_detail="No se puede eliminar el circuito porque tiene tickets o historial operativo asociados. Puedes desactivarlo en lugar de eliminarlo.")
     return Response(status_code=204)
+
+
+@router.get('/{id}/cpe-configuration', response_model=CpeConfigurationResponse)
+def get_configuration(id: Annotated[int, Path(gt=0)], session: DBSession, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return {'configuration': get_or_404(session, Circuit, id).cpe_configuration}
+
+
+@router.patch('/{id}/cpe-configuration', response_model=CpeConfigurationResponse)
+def patch_configuration(id: Annotated[int, Path(gt=0)], payload: CpeConfigurationInput, session: DBSession, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        item = locked_circuit(session, id)
+        # A dedicated response never serializes configuration through general Circuit DTOs.
+        item = update_item(session, item, {'cpe_configuration': payload.configuration})
+        return {'configuration': item.cpe_configuration}
+    except SQLAlchemyError:
+        try:
+            session.rollback()
+        except SQLAlchemyError:
+            pass
+        # DB exceptions may embed SQL parameters: never propagate configuration.
+        raise HTTPException(503, 'No se pudo guardar la configuración del CPE. Reintenta la operación.') from None

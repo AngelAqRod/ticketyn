@@ -1,3 +1,4 @@
+from ticketyn.models.cpe_model import CpeModel
 """Registro de modelos para SQLAlchemy y Alembic."""
 
 from ticketyn.models.circuit import Circuit
@@ -22,4 +23,4 @@ from ticketyn.models.fms import Activation, ActivationNumberConfig, ActivationIn
 __all__ += ["Activation", "ActivationNumberConfig", "ActivationIntervention", "CapacityChange", "CircuitLifecycleOperation", "DeactivationReason"]
 
 from ticketyn.models.service_type import ServiceType
-__all__ += ["ServiceType"]
+__all__ += ["ServiceType", "CpeModel"]

@@ -16,7 +16,7 @@ describe('aplicación', () => {
   it('renderiza el layout, la conexión y estadísticas globales independientes del listado', async () => {
     mockApi()
     render(<MemoryRouter><App /></MemoryRouter>)
-    expect(screen.getByText('Ticketyn', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('Ticketyn', { exact: true })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Navegación principal' })).toBeInTheDocument()
     expect(await screen.findByText('API conectada')).toBeInTheDocument()
     const summary = screen.getByRole('region', { name: 'Estadísticas globales de tickets' })

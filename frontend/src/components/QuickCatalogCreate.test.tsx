@@ -30,6 +30,7 @@ function mockApi(write?: (path: string, init: RequestInit) => Promise<Response>)
       if (write) return write(path, init)
       return Promise.resolve(jsonResponse(path === '/api/customers' ? createdCustomer : path === '/api/circuits' ? { ...createdCircuit, customer_id: Number(JSON.parse(String(init.body)).customer_id) } : ticket, 201))
     }
+    if (path.startsWith('/api/cpe-models')) return Promise.resolve(jsonResponse([]))
     if (path.startsWith('/api/service-types')) return Promise.resolve(jsonResponse([named]))
     if (path === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
     if (path.startsWith('/api/tickets/1/escalations')) return Promise.resolve(jsonResponse([]))

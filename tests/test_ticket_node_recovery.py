@@ -51,7 +51,7 @@ def test_recovery_preserves_everything_else_and_is_idempotent(legacy_nodes):
         fms = {table: db.execute(text(f'SELECT to_jsonb(a) FROM {table} a ORDER BY id')).scalars().all() for table in ('activations','capacity_changes','circuit_lifecycle_operations')}
         eligible = db.scalar(text('SELECT count(*) FROM tickets t JOIN circuits c ON c.id=t.circuit_id JOIN nodes n ON n.id=c.node_id WHERE t.node_id IS NULL'))
         assert eligible == 2
-    cli(engine.url, 'upgrade', 'head')
+    cli(engine.url, 'upgrade', '0018_recover_ticket_nodes')
     apply_again(engine)
     with engine.connect() as db:
         after = db.execute(text('SELECT to_jsonb(t) FROM tickets t ORDER BY id')).scalars().all()
@@ -135,9 +135,13 @@ def test_repaired_rows_are_used_by_real_api_and_exports(legacy_nodes, api_client
         with Session(engine) as db:
             yield db
     api_client.app.dependency_overrides[get_session] = session
+    # Runtime ORM uses the current schema; reproduce legacy NULLs on it.
+    cli(engine.url, 'upgrade', 'head')
+    with engine.begin() as db:
+        db.execute(text('UPDATE tickets SET node_id=NULL WHERE id IN (1,4)'))
     assert api_client.get('/api/tickets/1').json()['node'] is None
     assert api_client.get('/api/circuits/1').json()['node']['name'] == 'UFINET'
-    cli(engine.url, 'upgrade', 'head')
+    apply_again(engine)
     assert api_client.get('/api/tickets/1').json()['node']['name'] == 'UFINET'
     assert {x['id'] for x in api_client.get('/api/tickets', params={'node_id': 1}).json()} == {1,4}
     assert api_client.get('/api/tickets/2').json()['node_id'] == 2

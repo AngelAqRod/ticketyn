@@ -15,6 +15,10 @@ if TYPE_CHECKING:
 class Circuit(CommonFields, Base):
     __tablename__ = "circuits"
 
+    cpe_model_id: Mapped[int | None] = mapped_column(ForeignKey('cpe_models.id'), index=True)
+    cpe_model: Mapped['CpeModel | None'] = relationship(lazy='joined')
+    cpe_configuration: Mapped[str | None] = mapped_column(Text, deferred=True)
+
     __table_args__ = (CheckConstraint("(initial_capacity IS NULL AND initial_capacity_unit IS NULL) OR (initial_capacity IS NOT NULL AND initial_capacity > 0 AND initial_capacity <> 'NaN'::numeric AND initial_capacity_unit IS NOT NULL AND initial_capacity_unit IN ('Mbps','Gbps'))", name='initial_capacity_valid'),)
     initial_capacity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
     initial_capacity_unit: Mapped[str | None] = mapped_column(String(4))

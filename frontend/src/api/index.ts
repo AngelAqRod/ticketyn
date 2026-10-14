@@ -1,3 +1,4 @@
+import type { NamedCatalog } from '../types/catalog'
 import { getJson, postJson, patchJson, deleteResource, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
 import type { ServiceType, Position, PositionInput, ResponsibleInput, EscalationReason, Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
@@ -98,3 +99,8 @@ export const updateDeactivationReason = (id: number, payload: Partial<NamedCatal
 export const listServiceTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<ServiceType>('/api/service-types', signal, {}, includeInactive)
 export const createServiceType = (payload: NamedCatalogInput) => postJson<ServiceType>('/api/service-types', payload)
 export const updateServiceType = (id: number, payload: Partial<NamedCatalogInput>) => patchJson<ServiceType>(`/api/service-types/${id}`, payload)
+
+export const listCpeModels = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog>('/api/cpe-models', signal, {}, includeInactive).then((rows) => { if (!Array.isArray(rows) || rows.some((row) => typeof row?.name !== 'string')) throw new ApiError('Respuesta inválida del catálogo Modelos de CPE.'); return rows })
+export const createCpeModel = (payload: NamedCatalogInput) => postJson<NamedCatalog>('/api/cpe-models', payload)
+export const updateCpeModel = (id: number, payload: Partial<NamedCatalogInput>) => patchJson<NamedCatalog>(`/api/cpe-models/${id}`, payload)
+export const getSystemVersion = (signal?: AbortSignal) => getJson<{ version?: string }>('/api/system/version', signal)

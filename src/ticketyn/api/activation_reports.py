@@ -10,6 +10,7 @@ from sqlalchemy import select
 from starlette.background import BackgroundTask
 
 from ticketyn.api.documents import build_pdf, fonts, modern_table, paragraph, section, MUTED
+from ticketyn.api.fms_exports import capacity_text
 from ticketyn.api.fms_data import operation_query
 from ticketyn.api.reports import read_snapshot
 from ticketyn.api.ticket_reports import TicketReportOptions, date_text, intervention_block
@@ -35,7 +36,9 @@ def activation_pdf(session, activation_id, output, zone, issued):
                  ['Descripción del circuito', circuit.description or 'Sin descripción'],
                  ['Sector', activation.sector.name if activation.sector else 'Sin registrar'],
                  ['Nodo', activation.node.name if activation.node else 'Sin registrar'],
-                 ['Tipo de servicio (actual del circuito)', circuit.service_type.name if circuit.service_type else 'Sin registrar'],
+                 ['Tipo de servicio histórico', activation.service_type_name or 'Sin registrar'],
+                 ['CPE de activación', activation.cpe_activation or 'Sin registrar'],
+                 ['Capacidad inicial histórica', capacity_text(activation.initial_capacity, activation.initial_capacity_unit)],
                  ['Fecha y hora efectiva de activación', date_text(activation.effective_at, zone)],
                  ['Responsable', activation.responsible.name],
              ], [250, 530], compact=True)]
@@ -53,7 +56,7 @@ def activation_pdf(session, activation_id, output, zone, issued):
         heading.style.keepWithNext = True
         story.extend([heading, paragraph('Sin intervenciones registradas.', size=10)])
     story.extend([section('Metadatos'), paragraph(f'Fecha de creación: {date_text(activation.created_at, zone)}', size=9)])
-    build_pdf(output, f'Activación · {activation.reference}', str(zone), story, issued_at=date_text(issued, zone))
+    build_pdf(output, f'Activación · {activation.reference}', str(zone), story, issued_at=date_text(issued, zone), subtitle='GESTIÓN DE SERVICIOS · OPERACIONES FMS')
 
 
 def activation_report_response(session, activation_id, options):

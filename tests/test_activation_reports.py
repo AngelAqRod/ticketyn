@@ -31,8 +31,9 @@ def test_general_empty_log_and_historical_values(api_client, activation, ticket_
     assert response.headers['cache-control'] == 'no-store'
     assert f"ticketyn-activacion-{activation['id']}.pdf" in response.headers['content-disposition']
     content = ' '.join(pdf_strings)
-    for value in [activation['reference'], 'Cliente de prueba', 'MANUAL-CIRCUIT', 'Enlace de prueba', 'Sector de prueba', 'Nodo de prueba', 'Operador FMS', 'Servicio actual & especial', 'Tipo de servicio (actual del circuito)', '01/01/2020 06:00:00 -0600', 'Sin intervenciones registradas.', 'Fecha de creación:', 'Generado:', 'Página 1 / 1']:
+    for value in [activation['reference'], 'Cliente de prueba', 'MANUAL-CIRCUIT', 'Enlace de prueba', 'Sector de prueba', 'Nodo de prueba', 'Operador FMS', 'Tipo de servicio histórico', 'Capacidad inicial histórica', 'Sin registrar', '01/01/2020 06:00:00 -0600', 'Sin intervenciones registradas.', 'Fecha de creación:', 'Generado:', 'Página 1 / 1']:
         assert value in content
+    assert 'Servicio actual & especial' not in content
     assert 'NODO ACTUAL DIFERENTE' not in content and 'SECTOR ACTUAL DIFERENTE' not in content
     assert 'Última actualización' not in content  # This model has no such metadata.
     assert api_client.get(f"/api/activations/{activation['id']}").json() == before

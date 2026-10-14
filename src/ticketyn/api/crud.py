@@ -28,7 +28,7 @@ UNIQUE_ERRORS = {
 
 
 CATALOG_NAMES = {
-    'service_types': 'tipo de servicio', 'customers': 'cliente', 'sectors': 'sector', 'departments': 'departamento',
+    'cpe_models': 'modelo de CPE', 'service_types': 'tipo de servicio', 'customers': 'cliente', 'sectors': 'sector', 'departments': 'departamento',
     'incident_types': 'tipo de incidencia', 'nodes': 'nodo', 'responsibles': 'responsable',
     'deactivation_reasons': 'motivo de baja', 'escalation_reasons': 'motivo', 'positions': 'puesto en este departamento',
 }
@@ -41,7 +41,12 @@ def validate_catalog_name(session, item):
     if table not in CATALOG_NAMES:
         return
     model = type(item)
-    statement = select(model.id).where(func.lower(func.btrim(model.name).collate('C.utf8')) == func.lower(func.btrim(item.name).collate('C.utf8')))
+    def normalized(value):
+        value = func.btrim(value)
+        if table == 'cpe_models':
+            value = func.btrim(func.regexp_replace(value, '[[:space:]]+', ' ', 'g'))
+        return func.lower(value.collate('C.utf8'))
+    statement = select(model.id).where(normalized(model.name) == normalized(item.name))
     if item.id is not None:
         statement = statement.where(model.id != item.id)
     if table == 'positions':

@@ -6,6 +6,7 @@ import pytest
 
 
 RESOURCES = [
+    ("cpe-models", "name", {"name": "Modelo de prueba"}),
     ("escalation-reasons", "name", {"name": "Motivo de prueba"}),
     ("nodes", "name", {"name": "Nodo de prueba"}),
     ("responsibles", "name", {"name": "Persona de prueba"}),
@@ -41,7 +42,7 @@ def create(api_client, path, payload):
 def test_create_and_get(api_client, resource):
     path, _, payload = resource
     item = create(api_client, path, payload)
-    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"node", "node_id", "initial_capacity", "initial_capacity_unit", "service_type_id", "service_type", "sector"} if path == "/api/circuits" else {"attention_level", "department_id", "position_id", "department", "position"} if path == "/api/responsibles" else {"description"} if path == "/api/escalation-reasons" else set())
+    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"cpe_model", "cpe_model_id", "node", "node_id", "initial_capacity", "initial_capacity_unit", "service_type_id", "service_type", "sector"} if path == "/api/circuits" else {"attention_level", "department_id", "position_id", "department", "position"} if path == "/api/responsibles" else {"description"} if path == "/api/escalation-reasons" else set())
     assert item["id"] > 0
     assert item["active"] is True
     assert datetime.fromisoformat(item["created_at"]).tzinfo is not None

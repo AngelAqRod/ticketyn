@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.2 — En desarrollo
+
+- Catálogo administrable Modelos de CPE y asignación opcional en circuitos.
+- Configuración CPE literal con lectura/edición en una tercera pestaña; excluida de listados y exportaciones.
+- Condiciones históricas de servicio/capacidad inicial/CPE de activación en nuevas activaciones y su PDF individual.
+- Indicador de versión desde el backend, independiente de conectividad.
+- Migraciones aditivas 0019 y 0020; sin inferir datos históricos antiguos ni alterar numeraciones/estados.
+
+
 ## 0.4.1 — Corrección de Nodo histórico de tickets
 
 - Recupera Nodos faltantes desde circuitos con Nodo válido mediante `0018_recover_ticket_nodes`, bajo la confirmación de que esos Nodos no cambiaron.

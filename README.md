@@ -1357,3 +1357,51 @@ Comprueba que el inventario de Nodos preexistentes no cambió y que FMS sigue
 intacto. El `downgrade()` conserva los datos recuperados: no es posible
 identificarlos de forma inequívoca para deshacerlos sin destruir información.
 No existe rollback de datos automático ni una sincronización permanente.
+
+### v0.4.2 — CPE y condiciones de activación
+
+**Catálogos → Modelos de CPE** permite crear, editar, desactivar y reactivar
+modelos. Los nombres se comparan sin distinguir mayúsculas ni espacios
+redundantes y tienen protección de unicidad PostgreSQL. Circuitos puede tener
+un modelo actual opcional. Un modelo inactivo ya asignado se conserva; nuevas
+asignaciones requieren un modelo activo.
+
+La ficha del circuito añade **Configuración CPE**. Por defecto muestra texto
+literal monoespaciado, con scroll, sin ejecutar comandos ni interpretar HTML.
+Editar permite Guardar/Cancelar; un error conserva el borrador. La API dedicada
+`GET/PATCH /api/circuits/{id}/cpe-configuration` conserva el texto sin trim
+(incluidas indentación y líneas), con un límite de 500.000 caracteres. Las
+respuestas generales, reporterías y exportaciones no incluyen este contenido.
+No es un almacén seguro de credenciales: no hay cifrado específico, permisos
+por usuario ni historial. PostgreSQL y sus respaldos contienen el texto;
+restringe el acceso y evita guardar secretos cuando no sea apropiado.
+
+La migración `0019_cpe_activation_snapshots` depende de
+`0018_recover_ticket_nodes`. Es aditiva: agrega modelos/relación CPE,
+configuración y condiciones históricas de activación. **No rellena activaciones
+antiguas desde el circuito actual**: no hay evidencia para reconstruir su
+servicio o capacidad original de forma fiable. Esos valores muestran
+«Sin registrar»; cualquier recuperación futura necesita evidencia verificable.
+Las nuevas activaciones copian en backend, transaccionalmente, el nombre del
+tipo de servicio, la capacidad inicial/unidad y el nombre del modelo CPE del circuito, nunca la capacidad
+actual calculada. Renombrar el servicio o editar el circuito no modifica la
+activación. Detalle web y PDF individual utilizan exclusivamente esos campos.
+La bitácora, paginación y numeración permanecen intactas.
+
+La barra superior obtiene la versión de `GET /api/system/version`, desde
+`app.version` de FastAPI en ejecución. Si no hay versión válida, muestra un
+indicador neutro; `/health` y el estado de conectividad conservan su contrato.
+
+Para actualizar desde v0.4.1, verifica/respalda la instalación por el
+procedimiento oficial y comprueba HEAD `0018_recover_ticket_nodes`. Una vez
+revisada y publicada v0.4.2, usa `ticketyn-update v0.4.2` con sus comprobaciones
+habituales. Después verifica HEAD `0020_activation_cpe`, catálogo,
+configuración, creación de activación, snapshots, PDF y versión runtime.
+No omitas garantías del updater ni ejecutes SQL manual de recuperación. El
+downgrade de 0019 se niega si eliminaría datos CPE o condiciones históricas.
+
+La revisión incremental `0020_activation_cpe` agrega el snapshot opcional
+`cpe_activation` sin modificar 0019 ni rellenar registros anteriores. El detalle
+y PDF muestran «CPE de activación» o «Sin registrar», sin consultar el modelo
+actual. Cambiar, renombrar o desactivar el modelo no altera el snapshot. Su
+downgrade rechaza eliminar snapshots registrados.

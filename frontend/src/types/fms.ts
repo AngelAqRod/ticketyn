@@ -3,6 +3,7 @@ export type FmsKind = 'activations' | 'capacity-changes' | 'circuit-lifecycle'
 export interface Operation {
   node_id?: number | null; node?: Pick<NamedCatalog, 'id' | 'name' | 'active'> | null
   sector_id?: number | null; sector?: Pick<NamedCatalog, 'id' | 'name' | 'active'> | null
+  cpe_activation?: string | null; service_type_name?: string | null; initial_capacity?: string | null; initial_capacity_unit?: string | null
   id: number; circuit_id: number; circuit: Circuit; responsible_id: number; responsible: Pick<NamedCatalog, 'id' | 'name' | 'active'>
   effective_at: string; created_at: string; reference?: string; activation_number?: number
   operation_type?: 'INCREASE' | 'DECREASE' | 'DEACTIVATE' | 'REACTIVATE'
