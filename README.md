@@ -1305,3 +1305,55 @@ límites no afectan las exportaciones PDF/XLSX de listados operativos.
 Este PDF es interno y conserva el modelo de acceso actual de Ticketyn, sin
 nuevo sistema de autenticación. Restringe los endpoints a redes confiables.
 No sustituye los PDF de listados FMS ni el PDF individual de activación.
+
+### Actualización correctiva v0.4.0 → v0.4.1: Nodo de tickets
+
+`0017_historical_nodes` dejó los Nodos de tickets anteriores en NULL para no
+inferir historia sin evidencia. En estas instalaciones se ha confirmado que
+los Nodos de los circuitos no cambiaron desde v0.4.0. La migración
+`0018_recover_ticket_nodes` rellena exclusivamente `tickets.node_id IS NULL`
+desde su circuito y un Nodo existente. No modifica Nodos ya guardados,
+Sectores, circuitos ni operaciones FMS. La creación de tickets ya obtiene el
+Nodo del circuito en backend, con bloqueo de fila y asignación transaccional
+cuando falta; ese flujo se conserva y se verifica mediante regresiones.
+
+Antes de actualizar, confirma esta premisa para la instalación concreta,
+crea/verifica el respaldo oficial y comprueba `alembic current` (se espera
+`0017_historical_nodes`). Sobre una conexión administrativa de solo lectura:
+
+```sql
+BEGIN TRANSACTION READ ONLY;
+SELECT count(*) AS recuperables
+FROM tickets t JOIN circuits c ON c.id = t.circuit_id
+JOIN nodes n ON n.id = c.node_id WHERE t.node_id IS NULL;
+SELECT t.id, t.reference, t.circuit_id, t.node_id AS ticket_node_id,
+       c.node_id AS circuit_node_id
+FROM tickets t LEFT JOIN circuits c ON c.id = t.circuit_id
+LEFT JOIN nodes n ON n.id = c.node_id
+LEFT JOIN nodes recorded ON recorded.id = t.node_id
+WHERE (t.circuit_id IS NOT NULL AND c.id IS NULL)
+   OR (c.node_id IS NOT NULL AND n.id IS NULL)
+   OR (t.node_id IS NOT NULL AND recorded.id IS NULL);
+SELECT id, node_id FROM tickets WHERE node_id IS NOT NULL ORDER BY id;
+COMMIT;
+```
+
+Conserva la última consulta como evidencia de Nodos preexistentes. Si la
+segunda consulta devuelve filas, detén el procedimiento y revisa la integridad;
+la migración también rechazará esas inconsistencias antes de asignar nada.
+Tickets sin circuito o circuitos sin Nodo permanecen sin Nodo. No se emparejan
+nombres. Si hubo cambios de Nodo en otra instalación, no apliques esta
+recuperación sin una revisión histórica: el valor actual podría no representar
+el original.
+
+Aplica la actualización publicada mediante `ticketyn-update <tag-aprobado>`
+y sus respaldos y verificaciones normales. No uses SQL manual para reparar,
+ni omitas las garantías del updater. La migración toma bloqueos transaccionales
+sobre tickets, circuitos y Nodos para mantener estable la comprobación y la
+copia; debe ejecutarse durante la ventana oficial de actualización.
+Después verifica HEAD `0018_recover_ticket_nodes`, el conteo restante de NULL,
+una muestra en listado/detalle, filtros por Nodo, reportería y PDF/XLSX.
+Comprueba que el inventario de Nodos preexistentes no cambió y que FMS sigue
+intacto. El `downgrade()` conserva los datos recuperados: no es posible
+identificarlos de forma inequívoca para deshacerlos sin destruir información.
+No existe rollback de datos automático ni una sincronización permanente.

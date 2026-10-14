@@ -154,7 +154,7 @@ def test_migration_does_not_invent_nodes_or_change_current(postgres_engine):
             db.execute(text("INSERT INTO circuit_lifecycle_operations(circuit_id,responsible_id,effective_at,operation_type,reason_id) VALUES(1,1,'2020-01-01T00:00:00Z','DEACTIVATE',1)"))
             before = db.execute(text('SELECT * FROM tickets ORDER BY id')).all()
             operations_before = {table: db.execute(text(f'SELECT * FROM {table} ORDER BY id')).all() for table in ('activations', 'capacity_changes', 'circuit_lifecycle_operations')}
-        cli(engine.url, 'upgrade', 'head')
+        cli(engine.url, 'upgrade', '0017_historical_nodes')
         with engine.connect() as db:
             assert db.execute(text('SELECT node_id FROM circuits ORDER BY id')).scalars().all() == [1,None]
             rows = db.execute(text('SELECT * FROM tickets ORDER BY id')).all()

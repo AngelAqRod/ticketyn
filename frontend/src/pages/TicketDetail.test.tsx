@@ -45,6 +45,12 @@ async function ready() { await waitFor(() => expect(screen.getByRole('button', {
 afterEach(() => vi.useRealTimers())
 
 describe('detalle de tickets', () => {
+  it.each([true, false])('muestra el Nodo persistido y conserva NULL explícito (%s)', async (hasNode) => {
+    mockApi({ ...ticket, node_id: hasNode ? 7 : null, node: hasNode ? { id: 7, name: 'UFINET', active: true } : null }); open()
+    await screen.findByRole('heading', { name: ticket.reference })
+    expect(screen.getByText('Nodo').nextElementSibling).toHaveTextContent(hasNode ? 'UFINET' : 'Sin asignar')
+    expect(screen.queryByText('Nodo actual')).not.toBeInTheDocument()
+  })
   it('muestra referencia, datos operativos y nombres históricos inactivos', async () => {
     const mock = mockApi(); open()
     expect(await screen.findByRole('heading', { name: ticket.reference })).toBeInTheDocument()

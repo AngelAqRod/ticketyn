@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.4.0 — En preparación
+## v0.4.1 — Corrección de Nodo histórico de tickets
+
+- Recupera Nodos faltantes desde circuitos con Nodo válido mediante `0018_recover_ticket_nodes`, bajo la confirmación de que esos Nodos no cambiaron.
+- Preserva Nodos históricos existentes y registros FMS; aborta ante relaciones inconsistentes.
+- Verifica creación transaccional, listado/detalle, filtros, reportería y exportaciones sobre el Nodo persistido.
+- Sin sustituciones visuales ni sincronización permanente. El downgrade de la reparación conserva los datos.
+
+
+## 0.4.0 — Publicada
 
 ### Funcionalidades
 - Activaciones con numeración independiente y bitácora técnica opcional.
