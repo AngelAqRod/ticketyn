@@ -1,6 +1,13 @@
 # Changelog
 
-## v0.4.2 — En desarrollo
+## v0.4.3 — Corrección de compilación del frontend
+
+- Incorpora los archivos compilados del frontend correspondientes a las funcionalidades de CPE introducidas en v0.4.2.
+- Corrige la distribución de recursos JavaScript y CSS desactualizados en los despliegues.
+- Actualiza la versión de backend y frontend a 0.4.3.
+- No incorpora nuevas migraciones ni cambios en el esquema de la base de datos.
+
+## v0.4.2 — Publicado
 
 - Catálogo administrable Modelos de CPE y asignación opcional en circuitos.
 - Configuración CPE literal con lectura/edición en una tercera pestaña; excluida de listados y exportaciones.

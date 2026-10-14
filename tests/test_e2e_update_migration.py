@@ -130,7 +130,7 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     tracked = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'v0.1.6', 'alembic'], cwd=ROOT).decode().splitlines()
     for name in tracked:
         assert (ROOT/name).read_bytes() == subprocess.check_output(['git', 'show', f'v0.1.6:{name}'], cwd=ROOT)
-    assert updater.ri.project_version(ROOT) == '0.4.2'
+    assert updater.ri.project_version(ROOT) == '0.4.3'
     previous = tmp_path/'previous'; previous.mkdir()
     shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', previous/'alembic.ini')
@@ -157,7 +157,7 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
                 output.add(ROOT/name, arcname=name, recursive=False)
     candidate = tmp_path/'candidate'
     updater.extract_release(archive, candidate)
-    assert updater.ri.project_version(candidate) == '0.4.2'
+    assert updater.ri.project_version(candidate) == '0.4.3'
     assert updater.migration_plan(previous, candidate, HEAD) == '0020_activation_cpe'
     # Also demonstrate the exact stable production path v0.2.0 -> v0.3.0.
     stable = tmp_path/'stable020'; stable.mkdir()
@@ -173,13 +173,13 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     assert (candidate/'alembic/versions/0008_ticket_updates.py').is_file()
     assert (candidate/'alembic/versions/0009_ticket_resolution.py').is_file()
     assert (candidate/'alembic/versions/0010_ticket_escalations.py').is_file()
-    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.4.2'
+    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.4.3'
     lock = json.loads((ROOT/'frontend/package-lock.json').read_text())
-    assert lock['version'] == lock['packages']['']['version'] == '0.4.2'
+    assert lock['version'] == lock['packages']['']['version'] == '0.4.3'
     assert (candidate/'frontend/dist/index.html').is_file()
     installation = subprocess.run(['bash', '-c', 'source "$1/install.sh"; SOURCE="$2"; check_project; validate_release_source "$SOURCE"; project_version "$SOURCE"', 'release-check', str(ROOT), str(candidate)], capture_output=True, text=True)
     assert installation.returncode == 0, installation.stderr
-    assert installation.stdout.strip() == '0.4.2'
+    assert installation.stdout.strip() == '0.4.3'
 
     assert (candidate/'update.sh').read_bytes() == (ROOT/'update.sh').read_bytes()
     assert (candidate/'deploy/update_support.py').read_bytes() == (ROOT/'deploy/update_support.py').read_bytes()

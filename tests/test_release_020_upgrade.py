@@ -53,7 +53,7 @@ def test_016_to_020_preserves_domain_and_supports_followup(postgres_engine, monk
                 yield db
         app.dependency_overrides[get_session] = session
         with TestClient(app) as client:
-            assert app.version == '0.4.2'
+            assert app.version == '0.4.3'
             assert client.get('/health').json() == {'status': 'ok'}
             for id in [1, 2]:
                 before_ticket = client.get(f'/api/tickets/{id}').json()
