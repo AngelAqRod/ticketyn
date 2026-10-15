@@ -48,8 +48,8 @@ export function TicketFollowUp({ ticketId }: { ticketId: number }) {
     finally { if (!controller.signal.aborted) { setMoreLoading(false); moreRequest.current = null } }
   }
 
-  return <section className="panel mt-5 p-4 lg:p-5" aria-labelledby="follow-up-heading">
-    <div className="section-heading flex-wrap gap-3"><div className="flex items-center gap-2.5"><span className="icon-surface" aria-hidden="true"><MessageSquare size={16} /></span><h2 id="follow-up-heading">Seguimiento</h2></div>
+  return <section className="panel noc-panel ticket-noc-followup mt-5 p-4 lg:p-5" aria-labelledby="follow-up-heading">
+    <div className="section-heading flex-wrap gap-3"><div className="noc-section-title flex items-center gap-2.5"><span className="icon-surface" aria-hidden="true"><MessageSquare size={16} /></span><h2 id="follow-up-heading">Seguimiento</h2></div>
       <button type="button" className="button-primary" onClick={() => { setSuccess(false); setModal(true) }}><Plus size={16} aria-hidden="true" />Nueva intervención</button>
     </div>
     {success && <FeedbackMessage variant="success" className="mb-3">Actualización registrada correctamente.</FeedbackMessage>}

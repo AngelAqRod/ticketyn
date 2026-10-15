@@ -1,3 +1,4 @@
+import { FilterHeading } from './FilterHeading'
 import { CircuitActions } from './CircuitActions'
 import { confirmDeactivation } from '../lib/catalogActions'
 import { capacityInMicroMbps } from '../lib/capacity'
@@ -7,7 +8,7 @@ import { FeedbackMessage } from './FeedbackMessage'
 import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { Network, SlidersHorizontal, Users, Ticket, Pencil, Power, Trash2 } from 'lucide-react'
+import { Network, Users, Ticket, Pencil, Power, Trash2 } from 'lucide-react'
 import { CatalogDeleteConfirmation } from './CatalogDeleteConfirmation'
 import { QuickCatalogCreate } from './QuickCatalogCreate'
 import { SearchableSelect } from './SearchableSelect'
@@ -135,6 +136,15 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
   const setSearch = (value: string) => kind === 'circuits' ? change({ search: value }) : setLocalSearch(value)
   const customerCache = useRef<Customer[] | null>(null)
   const [draft, setDraft] = useState<Draft | null>(() => editorItem ? draftFor(editorItem, kind) : null)
+  const expandedForm = useRef<HTMLFormElement>(null)
+  const revealForm = useRef(false)
+  useEffect(() => {
+    if (!draft || !revealForm.current) return
+    revealForm.current = false
+    const form = expandedForm.current
+    if (!form || circuitEditor || form.closest('dialog')) return
+    form.scrollIntoView?.({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+  }, [draft, circuitEditor])
   const [deleting, setDeleting] = useState<Customer | Circuit | null>(null)
   const [busy, setBusy] = useState(false)
   const sending = useRef(false)
@@ -167,6 +177,7 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
   const ordered = [...visible].sort((a, b) => (code(a) || name(a)).localeCompare(code(b) || name(b)) || a.id - b.id)
 
   function edit(item?: CatalogItem) {
+    revealForm.current = true
     setError(null); setApiInvalidFields([]); setNotice(null)
     setDraft(item ? draftFor(item, kind) : blank())
   }
@@ -206,7 +217,7 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
     {notice && <FeedbackMessage variant="success" className="mb-4">{notice}</FeedbackMessage>}
     {error && <FeedbackMessage id="catalog-form-error" variant="error" className="mb-4">{error}</FeedbackMessage>}
     {circuitEditor && <RequestState compact loading={loading} loadingText="Cargando catálogos del circuito..." errorTitle="" error={loadError} onRetry={() => setRetry(retry + 1)} />}
-    {draft && <form className={`form-surface mb-4${refreshedModule ? '' : ' border-b border-slate-200'}`} aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate aria-describedby={error ? "catalog-form-error" : undefined}>
+    {draft && <form ref={expandedForm} className={`form-surface mb-4${kind === 'circuits' ? ' noc-panel noc-circuit-form' : ''}${refreshedModule ? '' : ' border-b border-slate-200'}`} aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate aria-describedby={error ? "catalog-form-error" : undefined}>
       <h2 className={refreshedModule ? 'toolbar-heading gap-3' : 'mb-3 text-sm font-semibold'}>{refreshedModule && <span className="icon-surface" aria-hidden="true"><RecordIcon size={15} /></span>}{draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}</h2>
       <fieldset disabled={busy || Boolean(circuitEditor && (loading || loadError))} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
         {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.customerId.trim()) || apiInvalidFields.includes("customer_id")} id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
@@ -227,9 +238,8 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
       <div className="mt-4 flex justify-end gap-3"><button type="button" className="button-secondary" disabled={busy} onClick={() => { if (circuitEditor) circuitEditor.onCancel(); else { setDraft(null); setError(null); setApiInvalidFields([]) } }}>Cancelar</button><button type="submit" className="button-primary" disabled={busy || Boolean(circuitEditor && (loading || loadError))}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button></div>
     </form>}
     {!circuitEditor && <>
-    {kind === 'positions' && <div className="mb-3 max-w-md"><FormField id="position-department-filter" label="Filtrar por departamento"><SearchableSelect id="position-department-filter" label="Filtrar por departamento" value={departmentFilter} onChange={setDepartmentFilter} options={departments.map((item) => ({ value: String(item.id), label: item.name }))} placeholder="Todos los departamentos" emptyMessage="No hay departamentos." noMatchMessage="Sin coincidencias." /></FormField></div>}
     {kind === 'circuits' && <section aria-label="Filtros de circuitos" className="filter-toolbar grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-      <p className="toolbar-heading gap-3 sm:col-span-2 xl:col-span-4"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros de circuitos</p>
+      <FilterHeading title="Filtros de circuitos" className="sm:col-span-2 xl:col-span-4" />
       <FormField id="circuit-search" label="Buscar circuitos"><input id="circuit-search" className="form-input" type="search" placeholder="Código o descripción" value={search} onChange={(event) => setSearch(event.target.value)} /></FormField>
       <FormField id="circuit-customer-filter" label="Filtrar por cliente"><SearchableSelect id="circuit-customer-filter" label="Cliente" value={params.get('customer_id') ?? ''} options={customers.map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}` }))} onChange={(value) => change({ customer_id: value })} disabled={loading && !customers.length} placeholder="Todos los clientes" emptyMessage="No hay clientes." noMatchMessage="No se encontraron clientes." /></FormField>
       <FormField id="circuit-node-filter" label="Filtrar por nodo"><SearchableSelect id="circuit-node-filter" label="Nodo" value={params.get('node_id') ?? ''} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ node_id: value })} placeholder="Todos los nodos" emptyMessage="No hay nodos." noMatchMessage="No se encontraron nodos." /></FormField>
@@ -242,11 +252,12 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
       ...(params.get('node_id') ? [{ label: 'Nodo', value: nodes.find((item) => String(item.id) === params.get('node_id'))?.name ?? `#${params.get('node_id')}` }] : []),
       ...(params.get('active') ? [{ label: 'Estado', value: params.get('active') === 'true' ? 'Activos' : params.get('active') === 'false' ? 'Inactivos' : params.get('active')! }] : []),
     ]} />}
-    {(kind === 'customers' || kind === 'nodes' || kind === 'responsibles' || kind === 'positions') && <div className={kind === 'customers' ? 'filter-toolbar' : 'mb-3 max-w-md'}>
-      {kind === 'customers' && <p className="toolbar-heading gap-3"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros de clientes</p>}
+    {(kind === 'customers' || kind === 'nodes' || kind === 'responsibles' || kind === 'positions') && <div className="filter-toolbar">
+      <FilterHeading title={`Filtros de ${info.empty}`} />
+    {kind === 'positions' && <div className="mb-3 max-w-md"><FormField id="position-department-filter" label="Filtrar por departamento"><SearchableSelect id="position-department-filter" label="Filtrar por departamento" value={departmentFilter} onChange={setDepartmentFilter} options={departments.map((item) => ({ value: String(item.id), label: item.name }))} placeholder="Todos los departamentos" emptyMessage="No hay departamentos." noMatchMessage="Sin coincidencias." /></FormField></div>}
       <div className="max-w-md"><label htmlFor="admin-search" className={kind === 'customers' ? 'form-label' : 'mb-1 block text-xs font-medium'}>Buscar {info.empty}</label><input id="admin-search" type="search" className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
     </div>}
-    {loading || loadError || !ordered.length ? <RequestState loading={loading} loadingText={`Cargando ${info.empty}...`} error={loadError ? `Error al cargar ${info.empty}: ${loadError}` : null} errorTitle="" onRetry={() => setRetry(retry + 1)} empty={!ordered.length} emptyTitle={items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`} emptyDescription="" compact={!refreshedModule && loading} /> : <div className="panel table-surface overflow-x-auto"><table className="operation-table min-w-[650px]"><caption className="sr-only">{info.title}</caption>
+    {loading || loadError || !ordered.length ? <RequestState loading={loading} loadingText={`Cargando ${info.empty}...`} error={loadError ? `Error al cargar ${info.empty}: ${loadError}` : null} errorTitle="" onRetry={() => setRetry(retry + 1)} empty={!ordered.length} emptyTitle={items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`} emptyDescription="" compact={!refreshedModule && loading} /> : <div className="panel table-surface overflow-x-auto"><table className="operation-table min-w-[650px]"><caption className="table-title">{info.title}</caption>
       <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente', 'Nodo', 'Sector'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', ...(kind === 'positions' || kind === 'responsibles' ? ['Departamento'] : []), ...(kind === 'responsibles' ? ['Puesto'] : []), 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
       <tbody>{ordered.map((item) => <tr key={item.id}>
         {(kind === 'customers' || kind === 'circuits') && <th scope="row" className="record-code text-slate-900">{kind === 'circuits' ? <Link to={`/circuits/${item.id}`}>{code(item)}</Link> : code(item)}</th>}

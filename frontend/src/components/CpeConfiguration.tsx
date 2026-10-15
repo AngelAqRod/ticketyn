@@ -22,9 +22,9 @@ export function CpeConfiguration({ circuitId }: { circuitId: number }) {
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo guardar la configuración.') }
     finally { sending.current = false; setSaving(false) }
   }
-  if (loading || error && !editing) return <RequestState loading={loading} error={error} onRetry={() => setRetry(retry + 1)} />
-  return <section className="panel p-5 min-w-0" aria-label="Configuración CPE">
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="section-label">Configuración actual del CPE</h2>{!editing && <button ref={editButton} className="button-secondary" onClick={() => { setDraft(value ?? ''); setEditing(true); setNotice('') }}>Editar</button>}</div>
+  if (loading || error && !editing) return <RequestState className="noc-panel noc-request" loading={loading} error={error} onRetry={() => setRetry(retry + 1)} />
+  return <section className="panel noc-panel p-5 min-w-0" aria-label="Configuración CPE">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="section-label noc-section-title">Configuración actual del CPE</h2>{!editing && <button ref={editButton} className="button-secondary" onClick={() => { setDraft(value ?? ''); setEditing(true); setNotice('') }}>Editar</button>}</div>
     {notice && <FeedbackMessage variant="success">{notice}</FeedbackMessage>}
     {editing ? <form onSubmit={(event) => { event.preventDefault(); void save() }}>
       <FormField id="cpe-configuration" label="Configuración actual del CPE" invalid={Boolean(error)} describedBy={error ? 'cpe-error' : undefined}><textarea ref={editor} id="cpe-configuration" className="form-input min-h-80 w-full font-mono text-xs whitespace-pre overflow-auto" wrap="off" spellCheck={false} autoCapitalize="off" autoCorrect="off" autoComplete="off" maxLength={500000} disabled={saving} value={draft} onChange={(event) => setDraft(event.target.value)} /></FormField>

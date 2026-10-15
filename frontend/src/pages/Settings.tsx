@@ -12,7 +12,7 @@ import type { TicketNumberConfig, TicketNumberChanges } from '../types/settings'
 
 export function Settings() {
   const [activations, setActivations] = useState(false), [reasons, setReasons] = useState(false)
-  return <><PageHeading title="Configuración" description="Numeración de tickets, activaciones y motivos de baja." /><NumberingSettings /><section className="panel mt-5 p-5"><button className="button-secondary" aria-expanded={activations} onClick={() => setActivations(!activations)}>Numeración de activaciones</button>{activations && <div className="mt-4"><NumberingSettings activation /></div>}</section><section className="panel mt-5 p-5"><button className="button-secondary" aria-expanded={reasons} onClick={() => setReasons(!reasons)}>Motivos de baja</button>{reasons && <div className="mt-4"><CatalogAdmin kind="deactivation-reasons" embedded /></div>}</section></>
+  return <div className="noc-settings"><PageHeading title="Configuración" description="Numeración de tickets, activaciones y motivos de baja." /><NumberingSettings /><section className="panel noc-panel mt-5 p-5"><button className="button-secondary noc-section-title" aria-expanded={activations} onClick={() => setActivations(!activations)}>Numeración de activaciones</button>{activations && <div className="mt-4"><NumberingSettings activation /></div>}</section><section className="panel noc-panel mt-5 p-5"><button className="button-secondary noc-section-title" aria-expanded={reasons} onClick={() => setReasons(!reasons)}>Motivos de baja</button>{reasons && <div className="mt-4"><CatalogAdmin kind="deactivation-reasons" embedded /></div>}</section></div>
 }
 
 function NumberingSettings({ activation = false }: { activation?: boolean }) {
@@ -68,8 +68,8 @@ function NumberingSettings({ activation = false }: { activation?: boolean }) {
   }
   return <>
     {loading ? <RequestState loading loadingText="Cargando configuración..." /> : !config ? <RequestState error={error} errorTitle="" onRetry={() => setRetry(retry + 1)} /> : <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-      <form className="form-surface" aria-label={activation ? "Numeración de activaciones" : "Numeración de tickets"} onSubmit={submit} noValidate aria-busy={saving} aria-describedby={error ? (activation ? "activation-number-settings-error" : "number-settings-error") : undefined}>
-        <h2 className="mb-4 flex items-center gap-3 text-lg font-bold"><span className="icon-surface" aria-hidden="true"><Hash size={16} /></span>Numeración de {activation ? "activaciones" : "tickets"}</h2>
+      <form className="form-surface noc-panel" aria-label={activation ? "Numeración de activaciones" : "Numeración de tickets"} onSubmit={submit} noValidate aria-busy={saving} aria-describedby={error ? (activation ? "activation-number-settings-error" : "number-settings-error") : undefined}>
+        <h2 className="noc-section-title mb-4 flex items-center gap-3 text-lg font-bold"><span className="icon-surface" aria-hidden="true"><Hash size={16} /></span>Numeración de {activation ? "activaciones" : "tickets"}</h2>
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2"><legend className="sr-only">Formato de referencia</legend>
           <FormField describedBy={error ? (activation ? "activation-number-settings-error" : "number-settings-error") : undefined} invalid={apiInvalidFields.includes("prefix")} id={activation ? "activation-number-prefix" : "number-prefix"} label="Prefijo"><input id={activation ? "activation-number-prefix" : "number-prefix"} className="form-input" value={prefix} onChange={(event) => { setPrefix(event.target.value); setSuccess(false) }} /></FormField>
           <FormField describedBy={error ? (activation ? "activation-number-settings-error" : "number-settings-error") : undefined} invalid={apiInvalidFields.includes("separator")} id={activation ? "activation-number-separator" : "number-separator"} label="Separador"><input id={activation ? "activation-number-separator" : "number-separator"} className="form-input" value={separator} onChange={(event) => { setSeparator(event.target.value); setSuccess(false) }} /></FormField>
@@ -81,7 +81,7 @@ function NumberingSettings({ activation = false }: { activation?: boolean }) {
         {success && <FeedbackMessage variant="success" className="mt-4">Configuración guardada correctamente.</FeedbackMessage>}
         <div className="mt-5 flex justify-end border-t border-slate-200 pt-4"><button type="submit" className="button-primary" disabled={saving}><Save size={15} aria-hidden="true" />{saving ? 'Guardando...' : 'Guardar cambios'}</button></div>
       </form>
-      <aside className="rounded-xl bg-[var(--navy)] p-6 text-white" aria-label={activation ? "Vista previa de referencia de activación" : "Vista previa de referencia"}>
+      <aside className="noc-settings-preview rounded-xl p-6 text-white" aria-label={activation ? "Vista previa de referencia de activación" : "Vista previa de referencia"}>
         <p className="text-xs font-semibold tracking-wide text-blue-200 uppercase">Próxima referencia · Vista previa</p>
         <output className="mt-4 block break-all font-mono text-3xl font-bold" aria-label={activation ? "Próxima referencia de activación" : "Próxima referencia"}>{preview}</output>
         <p className="mt-5 border-t border-white/20 pt-4 text-sm leading-6 text-blue-100">Los cambios afectan únicamente a {activation ? "las activaciones" : "los tickets"} creados posteriormente.</p>

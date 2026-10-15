@@ -1,5 +1,7 @@
+import { FilterHeading } from '../components/FilterHeading'
+import { PaginationBar } from '../components/PaginationBar'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, RefreshCw, SlidersHorizontal, Zap, Users, Network, Gauge, Power, TrendingUp, TrendingDown } from 'lucide-react'
+import { FileText, RefreshCw, Zap, Users, Network, Gauge, Power, TrendingUp, TrendingDown } from 'lucide-react'
 import { listSectors, listNodes, listResponsibles } from '../api'
 import { FeedbackMessage } from '../components/FeedbackMessage'
 import { downloadFile, getJson } from '../api/client'
@@ -9,8 +11,9 @@ import { FormField } from '../components/FormField'
 import { SearchableSelect } from '../components/SearchableSelect'
 import { RequestState } from '../components/RequestState'
 import { SectionHeading } from '../components/SectionHeading'
-import { MetricStrip } from '../components/MetricStrip'
+import { MetricStrip, type MetricItem } from '../components/MetricStrip'
 import { TrendChart, ActivityChart, DistributionChart } from '../components/ReportCharts'
+import { chartPalette } from '../components/chartTheme'
 import { RankingSection } from '../components/RankingSection'
 import { OperationsTable } from '../components/OperationsTable'
 import { useUrlFilters } from '../hooks/useUrlFilters'
@@ -80,27 +83,27 @@ export function FmsReports({ kind }: { kind: FmsKind }) {
     return () => controller.abort()
   }, [kind, queryKey, offset, invalid, retry])
   const k = summary?.kpis
-  const metrics = kind === 'activations' ? [
-    { label: 'Total de activaciones', value: k?.total, icon: <Zap size={20} /> },
-    { label: 'Clientes distintos atendidos', value: k?.distinct_customers, icon: <Users size={20} /> },
-    { label: 'Circuitos distintos activados', value: k?.distinct_circuits, icon: <Network size={20} /> },
+  const metrics: MetricItem[] = kind === 'activations' ? [
+    { color: 'lilac', label: 'Total de activaciones', value: k?.total, icon: <Zap size={20} /> },
+    { color: 'ice', label: 'Clientes distintos atendidos', value: k?.distinct_customers, icon: <Users size={20} /> },
+    { color: 'indigo', label: 'Circuitos distintos activados', value: k?.distinct_circuits, icon: <Network size={20} /> },
   ] : kind === 'capacity-changes' ? [
-    { label: 'Incrementos registrados', value: k?.increases, icon: <TrendingUp size={20} /> },
-    { label: 'Decrementos registrados', value: k?.decreases, icon: <TrendingDown size={20} /> },
-    { label: 'Capacidad agregada conocida', value: capacity(k?.known_added_mbps), icon: <Gauge size={20} /> },
-    { label: 'Capacidad reducida conocida', value: capacity(k?.known_reduced_mbps), icon: <Gauge size={20} /> },
-    { label: 'Variación neta conocida', value: capacity(k?.known_net_mbps), icon: <Gauge size={20} /> },
+    { color: 'ice', label: 'Incrementos registrados', value: k?.increases, icon: <TrendingUp size={20} /> },
+    { color: 'indigo', label: 'Decrementos registrados', value: k?.decreases, icon: <TrendingDown size={20} /> },
+    { color: 'lilac', label: 'Capacidad agregada conocida', value: capacity(k?.known_added_mbps), icon: <Gauge size={20} /> },
+    { color: 'slate', label: 'Capacidad reducida conocida', value: capacity(k?.known_reduced_mbps), icon: <Gauge size={20} /> },
+    { color: 'cyan', label: 'Variación neta conocida', value: capacity(k?.known_net_mbps), icon: <Gauge size={20} /> },
   ] : [
-    { label: 'Total de bajas', value: k?.deactivations, icon: <Power size={20} /> },
-    { label: 'Total de reactivaciones', value: k?.reactivations, icon: <Zap size={20} /> },
-    { label: 'Circuitos distintos con bajas', value: k?.distinct_deactivated_circuits, icon: <Network size={20} /> },
-    { label: 'Circuitos distintos con reactivaciones', value: k?.distinct_reactivated_circuits, icon: <Network size={20} /> },
+    { color: 'lilac', label: 'Total de bajas', value: k?.deactivations, icon: <Power size={20} /> },
+    { color: 'indigo', label: 'Total de reactivaciones', value: k?.reactivations, icon: <Zap size={20} /> },
+    { color: 'ice', label: 'Circuitos distintos con bajas', value: k?.distinct_deactivated_circuits, icon: <Network size={20} /> },
+    { color: 'cyan', label: 'Circuitos distintos con reactivaciones', value: k?.distinct_reactivated_circuits, icon: <Network size={20} /> },
   ]
   const trendTitle = kind === 'activations' ? 'Evolución de activaciones' : kind === 'capacity-changes' ? 'Evolución de incrementos y decrementos' : 'Evolución de bajas y reactivaciones'
   return <>
     <PageHeading title={fmsReportTitles[kind]} description="Análisis por fecha efectiva de la operación." action={<div className="flex flex-wrap gap-2"><button type="button" className="button-secondary" onClick={() => setRetry(retry + 1)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Actualizar</button><button type="button" className="button-secondary" disabled={Boolean(invalid) || loading || !summary || exporting} onClick={exportPdf}><FileText size={14} aria-hidden="true" />{exporting ? 'Generando PDF...' : 'Exportar PDF'}</button></div>} />
     <section className="filter-toolbar" aria-label="Filtros de reportería FMS">
-      <p className="toolbar-heading gap-3"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros del reporte</p>
+      <FilterHeading title="Filtros del reporte" />
       <div className="mb-3"><PeriodShortcuts includeAll label="Período del reporte" value={selection.period} onChange={(period) => change({ period, from: period === 'custom' ? selection.from : '', to: period === 'custom' ? selection.to : '' })} /></div>
       <div className="segmented-control max-w-full flex-wrap" role="group" aria-label="Tipo de reporte">{[['general', 'General'], ['sector', 'Por Sector'], ['node', 'Por Nodo'], ['responsible', 'Por Responsable']].map(([value, label]) => <button key={value} type="button" className="segment-button" aria-pressed={view === value} onClick={() => change({ view: value, sector_id: '', node_id: '', responsible_id: '' })}>{label}</button>)}</div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
@@ -111,18 +114,18 @@ export function FmsReports({ kind }: { kind: FmsKind }) {
       {catalogError && <RequestState compact error={catalogError} onRetry={() => setRetry(retry + 1)} />}
     </section>
     {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
-    {exporting && <RequestState compact loading loadingText="Generando PDF..." />}
-    {invalid ? selection.error || !['general', 'sector', 'node', 'responsible'].includes(view) ? <RequestState compact error={invalid} errorTitle="" /> : <RequestState compact empty emptyTitle={invalid} emptyDescription="" /> : loading ? <RequestState loading loadingText="Cargando reporte..." /> : error ? <RequestState error={error} onRetry={() => setRetry(retry + 1)} /> : summary && <>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-3 text-xs text-muted"><h2 className="font-semibold text-ink">{scoped ? `Reporte por ${dimension.label} — ${summary[view === 'node' ? 'node' : view === 'responsible' ? 'responsible' : 'sector']?.name ?? ''}` : 'Reporte General'}</h2><span>Generado: {formatDate(summary.generated_at, ticketynTimezone)}</span></div>
+    {exporting && <RequestState compact loading className="workspace-caption" loadingText="Generando PDF..." />}
+    {invalid ? selection.error || !['general', 'sector', 'node', 'responsible'].includes(view) ? <RequestState compact error={invalid} errorTitle="" className="workspace-caption" /> : <RequestState compact empty emptyTitle={invalid} emptyDescription="" /> : loading ? <RequestState loading loadingText="Cargando reporte..." /> : error ? <RequestState error={error} onRetry={() => setRetry(retry + 1)} /> : summary && <>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-3 text-xs workspace-caption"><h2 className="font-semibold text-ink">{scoped ? `Reporte por ${dimension.label} — ${summary[view === 'node' ? 'node' : view === 'responsible' ? 'responsible' : 'sector']?.name ?? ''}` : 'Reporte General'}</h2><span>Generado: {formatDate(summary.generated_at, ticketynTimezone)}</span></div>
       <SectionHeading number="02" title="Resumen" /><MetricStrip variant="light" items={metrics.map((item) => ({ ...item, value: <span className="[overflow-wrap:anywhere]">{item.value}</span> }))} />
-      <p className="my-3 text-[11px] leading-4 text-muted">Fecha efectiva y Sector/Nodo registrados en cada operación. {kind === 'activations' ? 'Circuitos activados durante el período; no representa su estado administrativo actual.' : kind === 'capacity-changes' ? `${k?.unknown_variations ?? 0} operaciones sin capacidad anterior conocida cuentan como operaciones, pero no aportan variación. Las capacidades muestran únicamente variaciones conocidas.` : 'Bajas y reactivaciones son eventos; su diferencia no representa circuitos actualmente fuera de servicio.'}</p>
+      <p className="my-3 text-[11px] leading-4 workspace-caption">Fecha efectiva y Sector/Nodo registrados en cada operación. {kind === 'activations' ? 'Circuitos activados durante el período; no representa su estado administrativo actual.' : kind === 'capacity-changes' ? `${k?.unknown_variations ?? 0} operaciones sin capacidad anterior conocida cuentan como operaciones, pero no aportan variación. Las capacidades muestran únicamente variaciones conocidas.` : 'Bajas y reactivaciones son eventos; su diferencia no representa circuitos actualmente fuera de servicio.'}</p>
       {summary.trend.every((row) => row.count === 0) && <RequestState compact empty emptyTitle="No hay operaciones en este período." emptyDescription="" />}
-      <section className="report-section analytics-card"><SectionHeading number="03" title={trendTitle} />{kind === 'activations' ? <TrendChart trend={summary.trend} granularity={summary.period.granularity} title={trendTitle} countLabel="Activaciones" timeZone={ticketynTimezone} /> : <ActivityChart rows={summary.trend.map((row) => ({ start_at: row.start_at, started: row.first, closed: row.second }))} title={trendTitle} firstLabel={kind === 'capacity-changes' ? 'Incrementos' : 'Bajas'} secondLabel={kind === 'capacity-changes' ? 'Decrementos' : 'Reactivaciones'} timeZone={ticketynTimezone} granularity={summary.period.granularity} />}</section>
+      <section className="report-section analytics-card chart-card"><SectionHeading number="03" title={trendTitle} />{kind === 'activations' ? <TrendChart trend={summary.trend} granularity={summary.period.granularity} title={trendTitle} countLabel="Activaciones" timeZone={ticketynTimezone} /> : <ActivityChart secondColor={chartPalette[1]} rows={summary.trend.map((row) => ({ start_at: row.start_at, started: row.first, closed: row.second }))} title={trendTitle} firstLabel={kind === 'capacity-changes' ? 'Incrementos' : 'Bajas'} secondLabel={kind === 'capacity-changes' ? 'Decrementos' : 'Reactivaciones'} timeZone={ticketynTimezone} granularity={summary.period.granularity} />}</section>
       {kind === 'activations' && !scoped && <RankingSection title="Clientes con más circuitos distintos activados" rows={summary.customers} countLabel="Circuitos distintos" emptyText="Sin activaciones." destination={(row) => `/activations?${new URLSearchParams({ customer_id: String(row.id), period: selection.period, ...(selection.period === 'custom' ? { from: selection.from, to: selection.to } : {}) })}`} />}
-      {kind === 'circuit-lifecycle' && <section className="report-section analytics-card"><SectionHeading number="04" title="Distribución de bajas por motivo" /><DistributionChart title="Motivos de baja" rows={summary.reasons} /></section>}
+      {kind === 'circuit-lifecycle' && <section className="report-section analytics-card chart-card"><SectionHeading number="04" title="Distribución de bajas por motivo" /><DistributionChart title="Motivos de baja" rows={summary.reasons} /></section>}
       <SectionHeading number={kind === 'activations' && scoped || kind === 'capacity-changes' ? '04' : '05'} title="Detalle de operaciones" />
       {items.length ? <OperationsTable kind={kind} items={items} /> : <RequestState compact empty emptyTitle="No hay operaciones en esta página." emptyDescription="" />}
-      <div className="mt-3 flex flex-wrap items-center justify-end gap-2"><button type="button" className="button-secondary" disabled={!offset} onClick={() => change({ offset: String(Math.max(0, offset - 50)) }, false)}>Anterior</button><span className="text-xs text-muted">Página {Math.floor(offset / 50) + 1}</span><button type="button" className="button-secondary" disabled={items.length < 50} onClick={() => change({ offset: String(offset + 50) }, false)}>Siguiente</button></div>
+      <PaginationBar className="mt-3" page={Math.floor(offset / 50) + 1} info={<span className="text-xs">Página {Math.floor(offset / 50) + 1}</span>} previousDisabled={!offset} nextDisabled={items.length < 50} onPrevious={() => change({ offset: String(Math.max(0, offset - 50)) }, false)} onNext={() => change({ offset: String(offset + 50) }, false)} />
     </>}
   </>
 }

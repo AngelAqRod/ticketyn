@@ -57,7 +57,7 @@ export function EscalationModal({ ticketId, onCreated, onCancel, item }: { ticke
     } catch (failure) { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'No se pudo registrar el escalamiento.') }
     finally { sending.current = false; if (!controller.signal.aborted) setSaving(false) }
   }
-  return <dialog ref={dialog} aria-labelledby="escalation-modal-heading" aria-modal="true" className="quick-dialog fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30" onCancel={(event) => { event.preventDefault(); if (!sending.current) onCancel() }}
+  return <dialog ref={dialog} aria-labelledby="escalation-modal-heading" aria-modal="true" className="quick-dialog noc-modal fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30" onCancel={(event) => { event.preventDefault(); if (!sending.current) onCancel() }}
     onKeyDownCapture={(event) => { if (event.key === 'Escape' && event.target instanceof HTMLElement && event.target.getAttribute('role') === 'combobox' && event.target.getAttribute('aria-expanded') === 'false') { event.preventDefault(); event.stopPropagation(); if (!sending.current) onCancel() } }}>
     <header className="quick-dialog-header"><h2 id="escalation-modal-heading" className="text-lg font-semibold">{item ? 'Editar escalamiento' : 'Nuevo escalamiento'}</h2></header>
     <p className="my-3 text-xs text-muted">Solicitar apoyo no cambia el responsable, departamento ni estado del ticket. El solicitante no se registra automáticamente. Fechas en America/Guatemala.</p>

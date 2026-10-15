@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.4 — Rediseño integral de la interfaz
+
+- Renovación visual general de Ticketyn, con una identidad gráfica consistente en los módulos de la aplicación.
+- Rediseño del sidebar y encabezado, con nueva geometría, integración de curvas y paleta Electric Blue.
+- Actualización de tipografía, colores, espaciados y estilos globales.
+- Rediseño visual de formularios, modales, filtros, tablas, paginación y componentes compartidos.
+- Renovación de dashboards, métricas, gráficas y presentación de reportes.
+- Ajustes visuales en tickets, circuitos, operaciones FMS, catálogos y configuración.
+- Incorporación y actualización de pruebas de componentes de la interfaz.
+
+
 ## v0.4.3 — Corrección de compilación del frontend
 
 - Incorpora los archivos compilados del frontend correspondientes a las funcionalidades de CPE introducidas en v0.4.2.

@@ -171,7 +171,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
     {quickNotice && <FeedbackMessage variant="success" className="mb-4">{quickNotice}</FeedbackMessage>}
     {catalogLoading && <RequestState loading compact loadingText="Cargando catálogos..." className="mb-3" />}
     {catalogError && <RequestState compact error={catalogError} errorTitle="Error al cargar catálogos" retryText="Reintentar catálogos" onRetry={() => setCatalogRetry(catalogRetry + 1)} className="mb-3" />}
-    <form onSubmit={submit} noValidate className="form-surface" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting} aria-describedby={submitError ? "ticket-submit-error" : undefined}>
+    <form onSubmit={submit} noValidate className="ticket-noc-form" aria-label={ticket ? "Editar ticket" : "Crear ticket"} aria-busy={submitting} aria-describedby={submitError ? "ticket-submit-error" : undefined}>
       <fieldset disabled={submitting} className="min-w-0 space-y-5">
         <legend className="sr-only">Datos del ticket</legend>
         <section aria-labelledby="incident-heading" className="space-y-3">

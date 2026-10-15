@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { LayoutDashboard, Ticket, Users, Network, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power } from 'lucide-react'
 import { getHealth, getSystemVersion } from '../api'
-import { identityFor, moduleIdentity } from './moduleIdentity'
+import { SevenSegmentNumber } from './SevenSegmentNumber'
+import { identityFor, moduleIdentity, moduleGroups, orderedModuleIdentity } from './moduleIdentity'
 
 const icons = [LayoutDashboard, Ticket, Users, Network, ChartNoAxesCombined, Layers3, Settings, Zap, Gauge, Power, ChartNoAxesCombined, ChartNoAxesCombined, ChartNoAxesCombined]
-const navigation = moduleIdentity.map((item, index) => ({ ...item, icon: icons[index] }))
+const navigation = orderedModuleIdentity.map(item => ({
+  ...item, icon: icons[moduleIdentity.findIndex(original => original.path === item.path)],
+}))
 
 
 export function Layout() {
@@ -33,12 +36,12 @@ export function Layout() {
     <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-white focus:p-3">Saltar al contenido</a>
     <header className="app-header">
       <div className="header-brand">
-        <div className="brand-mark"><Ticket size={21} aria-hidden="true" /></div>
-        <div><span className="text-xl font-bold tracking-tight">Ticketyn</span><span className="hidden text-[9px] tracking-[.1em] text-blue-200 uppercase sm:block">Incident management</span></div>
+        <div className="brand-capsule"><div className="brand-mark"><Ticket size={21} aria-hidden="true" /></div>
+        <div><span className="text-xl font-bold tracking-tight">Ticketyn</span><span className="hidden text-[9px] tracking-[.1em] text-blue-200 uppercase sm:block">Incident management</span></div></div>
       </div>
       <div className="header-context" aria-label="Contexto del módulo">
         <span className="header-context-icon" aria-hidden="true"><ContextIcon size={18} /></span>
-        <div><p className="text-[10px] text-muted">Gestión de incidencias / {context?.group}</p><p className="text-sm font-semibold text-ink">{context?.title}</p></div>
+        <div><p className="header-context-description text-[10px]">Gestión de incidencias / {context?.group}</p><p className="header-context-title text-sm font-semibold">{context?.title}</p></div>
       </div>
       <div className="flex min-w-0 items-center gap-2 px-2 sm:px-4">
         <div className="flex min-w-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
@@ -55,11 +58,11 @@ export function Layout() {
     </header>
     <div className="flex min-h-[calc(100vh-4rem)] flex-col md:flex-row">
       <aside id="main-navigation" className={`${menuOpen ? 'block' : 'hidden'} app-sidebar w-full shrink-0 md:block md:w-56 xl:w-60`}>
-        <nav aria-label="Navegación principal" className="p-3 md:sticky md:top-16 md:py-6">
-          {['Operación', 'Análisis', 'Administración'].map((group) => <div key={group} className="nav-group">
+        <nav aria-label="Navegación principal" tabIndex={0} className="sidebar-navigation-scroll p-3 md:py-6">
+          {moduleGroups.map((group) => <div key={group} className="nav-group">
             <p className="nav-group-label">{group}</p>
             {navigation.filter((item) => item.group === group).map(({ path, title, number, icon: Icon }) => <NavLink key={path} to={path} end={path === '/'} onClick={() => setMenuOpen(false)} className="nav-link">
-              <span aria-hidden="true" className="nav-number">{number}</span><Icon size={15} strokeWidth={1.8} aria-hidden="true" />{title}
+              <span aria-hidden="true" className="nav-number"><SevenSegmentNumber value={number} /></span><Icon size={15} strokeWidth={1.8} aria-hidden="true" /><span className="nav-title">{title}</span>
             </NavLink>)}
           </div>)}
         </nav>

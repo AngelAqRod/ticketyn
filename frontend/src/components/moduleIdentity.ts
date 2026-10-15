@@ -13,6 +13,11 @@ export const moduleIdentity = [
   { path: '/capacity-reports', number: '12', title: 'Reportería de cambios de capacidad', group: 'Análisis' },
   { path: '/lifecycle-reports', number: '13', title: 'Reportería de bajas y reactivaciones', group: 'Análisis' },
 ]
+export const moduleGroups = ['Operación', 'Análisis', 'Administración']
+export const orderedModuleIdentity = moduleGroups
+  .flatMap(group => moduleIdentity.filter(item => item.group === group))
+  .map((item, index) => ({ ...item, number: String(index + 1).padStart(2, '0') }))
+
 export function identityFor(pathname: string) {
-  return moduleIdentity.find((item) => item.path === '/' ? pathname === '/' : pathname === item.path || pathname.startsWith(`${item.path}/`))
+  return orderedModuleIdentity.find(item => item.path === '/' ? pathname === '/' : pathname === item.path || pathname.startsWith(`${item.path}/`))
 }

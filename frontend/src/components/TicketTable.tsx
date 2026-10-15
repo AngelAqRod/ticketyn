@@ -7,7 +7,7 @@ export function TicketTable({ tickets }: { tickets: Ticket[] }) {
   return <div className="panel table-surface overflow-hidden">
     <div className="overflow-x-auto">
       <table className="operation-table min-w-[1350px]">
-        <caption className="sr-only">Listado de tickets</caption>
+        <caption className="table-title">Listado de tickets</caption>
         <thead><tr>{['Referencia', 'Estado', 'Cliente', 'Circuito', 'Nodo', 'Responsable', 'Sector', 'Tipo', 'Inicio', 'Fin', 'Duración'].map((title) =>
           <th key={title} scope="col">{title}</th>)}</tr></thead>
         <tbody>

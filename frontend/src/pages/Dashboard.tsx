@@ -23,7 +23,7 @@ export function Dashboard() {
     <section aria-label="Estadísticas globales de tickets" aria-busy={statsLoading}>
       <SectionHeading number="01" title="Panorama de incidencias" />
       <MetricStrip variant="light" items={cards.map(({ title, count, icon, iconTone }) => ({ label: title, value: statsLoading || statsError ? '—' : count, icon, iconTone }))} />
-      {statsLoading && <RequestState loading compact loadingText="Cargando estadísticas..." className="mt-2" />}
+      {statsLoading && <RequestState loading compact loadingText="Cargando estadísticas..." className="mt-2 workspace-caption" />}
       {statsError && <RequestState error={statsError} errorTitle="Error al cargar estadísticas" retryText="Reintentar estadísticas" onRetry={() => setRefresh(refresh + 1)} className="mt-4" />}
     </section>
     <section className="mt-5" aria-labelledby="recent-heading">

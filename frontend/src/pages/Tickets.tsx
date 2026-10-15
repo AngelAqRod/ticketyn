@@ -1,7 +1,8 @@
+import { PaginationBar } from '../components/PaginationBar'
 import { FeedbackMessage } from '../components/FeedbackMessage'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { ArrowLeft, ArrowRight, RefreshCw, Plus, FileText, FileSpreadsheet } from 'lucide-react'
+import { RefreshCw, Plus, FileText, FileSpreadsheet } from 'lucide-react'
 import { downloadTickets } from '../api/ticketExports'
 import { useTickets } from '../hooks/useTickets'
 import { PageHeading } from '../components/PageHeading'
@@ -34,17 +35,13 @@ export function Tickets() {
   return <>
     <PageHeading title="Tickets" description="Consulta las incidencias registradas, de la más reciente a la más antigua." action={<div className="flex flex-wrap gap-2"><button className="button-secondary" disabled={loading} onClick={() => setRefresh(refresh + 1)}><RefreshCw size={15} aria-hidden="true" />Actualizar</button><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('pdf')}><FileText size={15} aria-hidden="true" />Exportar PDF</button><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('xlsx')}><FileSpreadsheet size={15} aria-hidden="true" />Exportar Excel</button><Link className="button-primary" to="/tickets/new"><Plus size={15} aria-hidden="true" />Nuevo ticket</Link></div>} />
     {createdReference && <FeedbackMessage variant="success" className="mb-3">Ticket {createdReference} creado correctamente.</FeedbackMessage>}
-    {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-3" />}
+    {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-3 workspace-caption" />}
     {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
     <TicketFilters params={params} change={change} clear={clear} />
-    <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-xs workspace-caption">
       <span>{params.get('status') === 'OPEN' ? 'Abiertos' : params.get('status') === 'CLOSED' ? 'Cerrados' : 'Todos los estados'}</span><span>Fechas en tu zona horaria local</span>
     </div>
     {loading || error || tickets.length === 0 ? <RequestState loading={loading} error={error} empty={tickets.length === 0} onRetry={() => setRefresh(refresh + 1)} /> : <TicketTable tickets={tickets} />}
-    <div className="pagination-bar">
-      <p className="text-xs text-slate-500">Página {Math.floor(offset / 50) + 1}{!loading && !error && tickets.length > 0 ? ` · Registros ${offset + 1}–${offset + tickets.length}` : ''}</p>
-      <div className="flex gap-2"><button className="button-secondary" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - 50))}><ArrowLeft size={15} aria-hidden="true" />Anterior</button>
-        <button className="button-secondary" disabled={loading || Boolean(error) || tickets.length < 50} onClick={() => setOffset(offset + 50)}>Siguiente<ArrowRight size={15} aria-hidden="true" /></button></div>
-    </div>
+    <PaginationBar page={Math.floor(offset / 50) + 1} info={<p className="text-xs">Página {Math.floor(offset / 50) + 1}{!loading && !error && tickets.length > 0 ? ` · Registros ${offset + 1}–${offset + tickets.length}` : ''}</p>} previousDisabled={offset === 0 || loading} nextDisabled={loading || Boolean(error) || tickets.length < 50} onPrevious={() => setOffset(Math.max(0, offset - 50))} onNext={() => setOffset(offset + 50)} />
   </>
 }

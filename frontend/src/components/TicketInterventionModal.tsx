@@ -88,7 +88,7 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
   const fieldProps = (field: string) => ({ invalid: invalid.includes(field), describedBy: invalid.includes(field) ? errorId : undefined })
 
   return <dialog ref={dialog} aria-labelledby="intervention-heading" aria-modal="true"
-    className="quick-dialog fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30"
+    className="quick-dialog noc-modal fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30"
     onKeyDownCapture={(event) => {
       // El combobox maneja Escape cuando está abierto; cerrado, debe permitir salir del modal.
       const target = event.target

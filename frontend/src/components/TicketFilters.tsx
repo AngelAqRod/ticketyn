@@ -6,7 +6,7 @@ import type { Circuit, Customer, NamedCatalog } from '../types/catalog'
 import { SearchableSelect } from './SearchableSelect'
 import { FormField } from './FormField'
 import { FilterChips } from './FilterChips'
-import { SlidersHorizontal } from 'lucide-react'
+import { FilterHeading } from './FilterHeading'
 import { reportPeriod } from '../lib/reportPeriod'
 
 interface Props { params: URLSearchParams; change: (values: Record<string, string>) => void; clear: () => void }
@@ -64,7 +64,7 @@ export function TicketFilters({ params, change, clear }: Props) {
   const named = [['sector_id', 'Sector', catalogs?.sectors], ['department_id', 'Departamento', catalogs?.departments], ['incident_type_id', 'Tipo de incidencia', catalogs?.types]] as const
   const assignments = [['node_id', 'Nodo', catalogs?.nodes], ['responsible_id', 'Responsable', catalogs?.responsibles]] as const
   return <section aria-label="Filtros de tickets" className="filter-toolbar">
-    <p className="toolbar-heading gap-3"><span className="icon-surface" aria-hidden="true"><SlidersHorizontal size={15} /></span>Filtros de tickets</p>
+    <FilterHeading title="Filtros de tickets" />
     <div className="mb-3"><PeriodShortcuts label="Período de tickets" value={selectedPeriod} onChange={choosePeriod} includeAll /></div>
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
       <FormField id="filter-search" label="Buscar tickets"><input id="filter-search" className="form-input" type="search" placeholder="Referencia, número, título o descripción" value={params.get('search') ?? ''} onChange={(event) => change({ search: event.target.value })} /></FormField>

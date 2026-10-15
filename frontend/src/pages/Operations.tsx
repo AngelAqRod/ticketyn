@@ -1,3 +1,5 @@
+import { FilterHeading } from '../components/FilterHeading'
+import { PaginationBar } from '../components/PaginationBar'
 import { operationFilters } from '../lib/fmsFilters'
 import { useEffect, useRef, useState } from 'react'
 import { Plus, FileText, FileSpreadsheet } from 'lucide-react'
@@ -44,10 +46,10 @@ export function Operations({ kind }: { kind: FmsKind }) {
   }
   return <>
     <PageHeading title={fmsTitles[kind]} description="Registros operativos independientes de los tickets y del estado administrativo." action={<div className="flex flex-wrap gap-2"><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportOperations('pdf')}><FileText size={15} aria-hidden="true" />Exportar PDF</button><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportOperations('xlsx')}><FileSpreadsheet size={15} aria-hidden="true" />Exportar Excel</button><button type="button" className="button-primary" onClick={() => setModal(true)}><Plus size={15} aria-hidden="true" />Nueva operación</button></div>} />
-    {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-3" />}
+    {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-3 workspace-caption" />}
     {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
     {success && <FeedbackMessage variant="success" className="mb-3">Operación registrada correctamente.</FeedbackMessage>}
-    <section className="filter-toolbar space-y-3" aria-label="Filtros operativos"><PeriodShortcuts includeAll value={params.get('period') ?? 'all'} onChange={(value) => {
+    <section className="filter-toolbar space-y-3" aria-label="Filtros operativos"><FilterHeading title="Filtros operativos" /><PeriodShortcuts includeAll value={params.get('period') ?? 'all'} onChange={(value) => {
       if (value !== 'custom') { change({ period: value, from: '', to: '' }); return }
       try { const range = reportPeriod(new URLSearchParams({ period: params.get('period') === 'custom' ? 'all' : params.get('period') ?? 'all' })); const today = ticketynDateTimeValue().slice(0, 10); change({ period: value, from: range.from || today, to: range.to || today }) } catch { const today = ticketynDateTimeValue().slice(0, 10); change({ period: value, from: today, to: today }) }
     }} label="Período operativo" labels={{ '7': 'Últimos 7 días', '15': 'Últimos 15 días', '30': 'Último mes' }} />
@@ -57,7 +59,7 @@ export function Operations({ kind }: { kind: FmsKind }) {
       </div><button type="button" className="button-secondary" onClick={clear}>Limpiar filtros</button>
     </section>
     {loading || error || !items.length ? <RequestState loading={loading} error={error} empty={!items.length} emptyTitle="Sin operaciones registradas." onRetry={() => setRefresh(refresh + 1)} /> : <OperationsTable kind={kind} items={items} />}
-    <div className="pagination-bar"><span className="text-xs text-muted">Página {Math.floor(offset / 50) + 1}</span><div className="flex gap-2"><button className="button-secondary" disabled={loading || offset === 0} onClick={() => change({ offset: String(Math.max(0, offset - 50)) }, false)}>Anterior</button><button className="button-secondary" disabled={loading || Boolean(error) || items.length < 50} onClick={() => change({ offset: String(offset + 50) }, false)}>Siguiente</button></div></div>
+    <PaginationBar page={Math.floor(offset / 50) + 1} info={<span className="text-xs">Página {Math.floor(offset / 50) + 1}</span>} previousDisabled={loading || offset === 0} nextDisabled={loading || Boolean(error) || items.length < 50} onPrevious={() => change({ offset: String(Math.max(0, offset - 50)) }, false)} onNext={() => change({ offset: String(offset + 50) }, false)} />
     {modal && <OperationModal kind={kind} onCancel={() => setModal(false)} onSaved={() => { setModal(false); setSuccess(true); setRefresh(refresh + 1) }} />}
   </>
 }

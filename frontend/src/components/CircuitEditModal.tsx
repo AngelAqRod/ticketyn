@@ -10,7 +10,7 @@ export function CircuitEditModal({ circuit, onSaved, onCancel }: { circuit: Circ
     element.showModal()
     return () => { element.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus() }
   }, [])
-  return <dialog ref={dialog} className="quick-dialog fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30" aria-label={`Editar circuito ${circuit.circuit_code}`} onCancel={(event) => { event.preventDefault(); if (!busy.current) onCancel() }}>
+  return <dialog ref={dialog} className="quick-dialog noc-modal fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30" aria-label={`Editar circuito ${circuit.circuit_code}`} onCancel={(event) => { event.preventDefault(); if (!busy.current) onCancel() }}>
     <CatalogAdmin kind="circuits" circuitEditor={{ item: circuit, onSaved, onCancel, onBusyChange: (value) => { busy.current = value } }} />
   </dialog>
 }

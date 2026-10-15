@@ -112,7 +112,7 @@ export function QuickCatalogCreate(props: Props) {
   }
 
   return <><dialog ref={dialog} aria-labelledby={`quick-create-title-${props.kind}`} aria-describedby={`quick-create-description-${props.kind}`} aria-modal="true"
-    className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto quick-dialog border border-slate-200 bg-white p-5 text-ink backdrop:bg-slate-900/30"
+    className={`fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto quick-dialog border border-slate-200 bg-white p-5 text-ink backdrop:bg-slate-900/30${props.kind === 'circuit' ? ' noc-modal' : ''}`}
     onCancel={(event) => { event.preventDefault(); event.stopPropagation(); if (!sending.current && !quickNode) props.onCancel() }}>
     <div className="quick-dialog-header"><p className="module-eyebrow">Creación rápida</p><h2 id={`quick-create-title-${props.kind}`} className="text-xl font-semibold">{title}</h2>
     <p id={`quick-create-description-${props.kind}`} className="mb-4 mt-2 text-sm text-slate-500">Se creará un registro activo. El formulario principal se guarda por separado.</p></div>

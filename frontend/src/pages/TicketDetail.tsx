@@ -1,3 +1,5 @@
+import { Ticket as TicketIcon } from 'lucide-react'
+import { SevenSegmentNumber } from '../components/SevenSegmentNumber'
 import { TicketEscalations } from '../components/TicketEscalations'
 import { RequestState } from '../components/RequestState'
 import { FeedbackMessage } from '../components/FeedbackMessage'
@@ -36,9 +38,9 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
     return () => controller.abort()
   }, [id, edit, retry, location.key])
   if (error) return <RequestState error={error} errorTitle="" onRetry={() => setRetry(retry + 1)}><Link className="ml-4 text-primary underline" to="/tickets">Volver a tickets</Link></RequestState>
-  if (!ticket) return <RequestState loading compact loadingText="Cargando ticket..." />
+  if (!ticket) return <RequestState loading compact className="workspace-caption" loadingText="Cargando ticket..." />
   if (edit) return <TicketForm key={ticket.id} ticket={ticket} />
-  if (!catalogs) return <RequestState loading compact loadingText="Cargando catálogos..." />
+  if (!catalogs) return <RequestState loading compact className="workspace-caption" loadingText="Cargando catálogos..." />
   const state: unknown = location.state
   const saved = state && typeof state === 'object' && 'saved' in state && state.saved === true
   const classification = [
@@ -56,32 +58,32 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
     ['Fecha de creación', formatDate(ticket.created_at)], ['Última actualización', formatDate(ticket.updated_at)],
   ]
   return <>
-    <div className="record-header">
-      <div className="min-w-0 max-w-full [overflow-wrap:anywhere]"><p className="module-eyebrow">Operación <span aria-hidden="true">/ 02</span></p><div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 max-w-full font-mono text-3xl font-bold tracking-tight text-primary">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold text-slate-800">{ticket.title}</h2></div>
-      <div className="flex flex-wrap gap-2"><TicketReportDownload ticketId={ticket.id} /><Link to="/tickets" className="button-secondary">Volver a tickets</Link><Link to={`/tickets/${ticket.id}/edit`} className="button-primary">Editar ticket</Link></div>
+    <div className="page-heading ticket-reading-heading">
+      <div className="flex min-w-0 max-w-full items-center gap-4"><span aria-hidden="true" className="heading-emblem"><TicketIcon size={28} /></span><div className="min-w-0 max-w-full [overflow-wrap:anywhere]"><p className="module-eyebrow">Operación <span aria-hidden="true">/ <SevenSegmentNumber value="02" /></span></p><div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 max-w-full font-mono text-3xl font-bold tracking-tight text-white">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold ticket-reading-title">{ticket.title}</h2></div></div>
+      <div className="heading-actions"><TicketReportDownload ticketId={ticket.id} /><Link to="/tickets" className="button-secondary">Volver a tickets</Link><Link to={`/tickets/${ticket.id}/edit`} className="button-primary">Editar ticket</Link></div>
     </div>
     {saved && <FeedbackMessage variant="success" className="mb-3">Cambios guardados correctamente.</FeedbackMessage>}
-    <div className="panel overflow-hidden">
-      <section aria-labelledby="description-heading" className="record-description m-4">
-        <h3 id="description-heading" className="section-label mb-2">Descripción</h3>
+    <div className="ticket-reading-panels space-y-4">
+      <section aria-labelledby="description-heading" className="noc-panel p-4">
+        <h3 id="description-heading" className="section-label noc-section-title mb-2">Descripción</h3>
         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{ticket.description}</p>
       </section>
-      <section aria-labelledby="ticket-resolution-heading" className="m-4">
-        <h3 id="ticket-resolution-heading" className="section-label mb-2">Resolución documentada</h3>
+      <section aria-labelledby="ticket-resolution-heading" className="noc-panel p-4">
+        <h3 id="ticket-resolution-heading" className="section-label noc-section-title mb-2">Resolución documentada</h3>
         <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm leading-6 text-slate-700">{ticket.resolution || 'Sin resolución documentada.'}</p>
       </section>
-      <div className="grid lg:grid-cols-3">
-        <section aria-labelledby="classification-heading" className="border-b border-slate-200 p-4 lg:col-span-2 lg:border-r lg:border-b-0">
-          <h3 id="classification-heading" className="section-label mb-3">Cliente y clasificación</h3>
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <section aria-labelledby="classification-heading" className="noc-panel p-4 lg:col-span-2">
+          <h3 id="classification-heading" className="section-label noc-section-title mb-3">Cliente y clasificación</h3>
           <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{classification.map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-slate-900">{value}</dd></div>)}</dl>
         </section>
-        <section aria-labelledby="times-heading" className="p-4">
-          <h3 id="times-heading" className="section-label mb-3">Tiempos operativos</h3>
+        <section aria-labelledby="times-heading" className="noc-panel p-4">
+          <h3 id="times-heading" className="section-label noc-section-title mb-3">Tiempos operativos</h3>
           <dl className="space-y-3">{times.map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-mono text-sm tabular-nums text-slate-900">{value}</dd></div>)}</dl>
         </section>
       </div>
-      <section aria-labelledby="metadata-heading" className="border-t border-slate-200 bg-slate-50/50 p-4">
-        <h3 id="metadata-heading" className="section-label mb-2">Metadatos</h3>
+      <section aria-labelledby="metadata-heading" className="noc-panel p-4">
+        <h3 id="metadata-heading" className="section-label noc-section-title mb-2">Metadatos</h3>
         <dl className="flex flex-wrap gap-x-8 gap-y-2">{metadata.map(([label, value]) => <div key={label} className="flex flex-wrap items-baseline gap-2"><dt className="text-xs text-slate-500">{label}</dt><dd className="text-xs tabular-nums text-slate-600">{value}</dd></div>)}</dl>
       </section>
     </div>

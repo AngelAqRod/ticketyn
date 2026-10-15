@@ -111,8 +111,8 @@ export function OperationModal({ kind, circuit, onCancel, onSaved }: { kind: Fms
   }
   const client = customers.find((item) => String(item.id) === customerId)
   const availableCircuits = [...circuits, ...(circuit && !circuits.some((item) => item.id === circuit.id) ? [circuit] : [])].filter((item) => customerId && String(item.customer_id) === customerId)
-  return <><dialog ref={dialog} className="quick-dialog fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30" aria-labelledby="operation-title" onCancel={(event) => { event.preventDefault(); if (!sending.current && !quick) onCancel() }}>
-    <h2 id="operation-title" className="mb-4 text-xl font-semibold">Registrar · {fmsTitles[kind]}</h2>
+  return <><dialog ref={dialog} className="quick-dialog noc-modal fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30" aria-labelledby="operation-title" onCancel={(event) => { event.preventDefault(); if (!sending.current && !quick) onCancel() }}>
+    <h2 id="operation-title" className="noc-section-title mb-4 text-xl font-semibold">Registrar · {fmsTitles[kind]}</h2>
     <RequestState loading={loading} compact error={loading ? null : people.length ? null : error} onRetry={() => setRetry(retry + 1)} />
     <form aria-label="Registrar operación" onSubmit={submit} aria-describedby={error ? 'operation-error' : undefined}>
       <fieldset disabled={saving || loading || !people.length} className="space-y-3"><legend className="sr-only">Datos operativos</legend>

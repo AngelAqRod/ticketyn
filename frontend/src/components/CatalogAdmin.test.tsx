@@ -335,3 +335,23 @@ it('limita puestos al departamento seleccionado y limpia el puesto al cambiarlo'
   expect(screen.getByRole('combobox', { name: 'Puesto' })).toHaveValue('')
   expect(screen.getByRole('combobox', { name: 'Puesto' })).toBeDisabled()
 })
+
+it.each([false, true])('revela el formulario solo al abrir Nuevo/Editar y respeta movimiento reducido (%s)', async (reduced) => {
+  const scroll = vi.fn()
+  const oldScroll = HTMLElement.prototype.scrollIntoView
+  HTMLElement.prototype.scrollIntoView = scroll
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: reduced })))
+  try {
+    mockApi(); open('/customers')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo cliente' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' }))
+    expect(scroll).toHaveBeenCalledTimes(1)
+    expect(scroll).toHaveBeenLastCalledWith({ block: 'start', behavior: reduced ? 'instant' : 'smooth' })
+    fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: 'Texto actualizado' } })
+    expect(scroll).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(scroll).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Editar CUS-A' }))
+    expect(scroll).toHaveBeenCalledTimes(2)
+  } finally { HTMLElement.prototype.scrollIntoView = oldScroll }
+})

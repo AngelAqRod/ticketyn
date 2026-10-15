@@ -1,3 +1,4 @@
+import { PaginationBar } from '../components/PaginationBar'
 import { PeriodShortcuts } from '../components/PeriodShortcuts'
 import { EscalationStatistics } from '../components/EscalationStatistics'
 import { FeedbackMessage } from '../components/FeedbackMessage'
@@ -99,20 +100,20 @@ export function Reports() {
       </div>
       {sectorError && scopedView && <RequestState compact error={sectorError} errorTitle="" retryText="Reintentar sectores" onRetry={() => setRetry(retry + 1)} />}
     </section>
-    {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-2" />}
+    {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-2 workspace-caption" />}
     {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
     {invalid ? <p role={missingSector ? 'status' : 'alert'} className="panel p-4 text-sm">{invalid}</p> : loading ? <RequestState loading loadingText="Cargando reporte..." /> : error ? <RequestState error={`Error al cargar reporte: ${error}`} errorTitle="" onRetry={() => setRetry(retry + 1)} /> : summary && <>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-slate-500"><h2 className="font-semibold text-slate-800">{summary.node ? `Reporte por Nodo — ${summary.node.name}` : summary.responsible ? `Reporte por Responsable — ${summary.responsible.name}` : summary.sector ? `Reporte por Sector — ${summary.sector.name}` : 'Reporte General'}</h2><span>Generado: {formatDate(summary.generated_at)}</span></div>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs workspace-caption"><h2 className="font-semibold text-slate-800">{summary.node ? `Reporte por Nodo — ${summary.node.name}` : summary.responsible ? `Reporte por Responsable — ${summary.responsible.name}` : summary.sector ? `Reporte por Sector — ${summary.sector.name}` : 'Reporte General'}</h2><span>Generado: {formatDate(summary.generated_at)}</span></div>
       <SectionHeading number="02" title="Resumen" />
       <MetricStrip variant="light" items={[
         { label: 'Incidencias iniciadas', value: summary.kpis.started, icon: <Tickets size={20} /> },
         { label: 'Incidencias cerradas', value: summary.kpis.closed, icon: <CircleCheck size={20} />, iconTone: 'success' },
-        { label: 'Duración promedio', value: summary.kpis.average_duration_seconds === null ? '—' : formatDuration(summary.kpis.average_duration_seconds), icon: <Clock3 size={20} /> },
-        { label: 'Duración acumulada', value: formatDuration(summary.kpis.total_duration_seconds), icon: <Timer size={20} /> },
+        { color: 'ice', label: 'Duración promedio', value: summary.kpis.average_duration_seconds === null ? '—' : formatDuration(summary.kpis.average_duration_seconds), icon: <Clock3 size={20} /> },
+        { color: 'indigo', label: 'Duración acumulada', value: formatDuration(summary.kpis.total_duration_seconds), icon: <Timer size={20} /> },
       ]} />
-      <p className="mt-2 mb-3 max-w-5xl text-[11px] leading-4 text-muted">Iniciadas, evolución, rankings y detalle: Inicio en el período. Cerradas y duraciones: estado Cerrado y Fin en el período, incluso si comenzaron antes. Cerrados sin Fin no aportan duración.</p>
+      <p className="mt-2 mb-3 max-w-5xl text-[11px] leading-4 workspace-caption">Iniciadas, evolución, rankings y detalle: Inicio en el período. Cerradas y duraciones: estado Cerrado y Fin en el período, incluso si comenzaron antes. Cerrados sin Fin no aportan duración.</p>
       {summary.kpis.started === 0 && <RequestState compact empty emptyTitle="No hay incidencias iniciadas en este período." emptyDescription="" className="mb-3" />}
-      <section className="report-section analytics-card"><SectionHeading number="03" title="Evolución de incidencias" /><TrendChart trend={summary.trend} granularity={summary.period.granularity} /></section>
+      <section className="report-section analytics-card chart-card"><SectionHeading number="03" title="Evolución de incidencias" /><TrendChart trend={summary.trend} granularity={summary.period.granularity} /></section>
       <section className="report-section"><SectionHeading number="04" title="Concentración" />
         <div className={`grid gap-x-8 gap-y-4 ${sectorView ? '' : 'xl:grid-cols-2'}`}>
           {!sectorView && ranking('Sectores con más incidencias', summary.sectors, 'sector_id')}
@@ -128,20 +129,20 @@ export function Reports() {
       <section className="report-section grid gap-4 xl:grid-cols-2">
         {view !== 'node' && ranking('Nodos de distribución', summary.nodes ?? [], 'node_id')}
         {view !== 'responsible' && ranking('Responsables', summary.responsibles ?? [], 'responsible_id')}
-        <p className="text-xs text-muted xl:col-span-2">Estos rankings incluyen solo tickets con Nodo o Responsable asignado. Los KPI conservan los tickets sin asignación.</p>
+        <p className="text-xs workspace-caption xl:col-span-2">Estos rankings incluyen solo tickets con Nodo o Responsable asignado. Los KPI conservan los tickets sin asignación.</p>
       </section>
       <section className="report-section"><SectionHeading number="06" title="Departamentos" />
         <div className="grid gap-4 xl:grid-cols-2">
           {ranking('Tickets por departamento', summary.departments ?? [], 'department_id')}
-          <div className="analytics-card"><h3 className="mb-3 text-sm font-semibold">Tiempo de resolución por departamento</h3><DistributionChart title="Tiempo de resolución por departamento (minutos)" rows={(summary.department_durations ?? []).map((row) => ({ label: row.label, count: row.average_duration_seconds / 60 }))} /></div>
+          <div className="analytics-card chart-card"><h3 className="mb-3 text-sm font-semibold">Tiempo de resolución por departamento</h3><DistributionChart title="Tiempo de resolución por departamento (minutos)" rows={(summary.department_durations ?? []).map((row) => ({ label: row.label, count: row.average_duration_seconds / 60 }))} /></div>
         </div>
       </section>
-      <section className="report-section analytics-card"><SectionHeading number="07" title="Iniciadas vs cerradas" /><ActivityChart rows={summary.activity ?? []} /></section>
-      <section className="report-section grid gap-4 xl:grid-cols-2"><div className="analytics-card"><SectionHeading number="08" title="Distribución por hora" /><DistributionChart title="Distribución por hora" rows={summary.hours ?? []} /></div><div className="analytics-card"><SectionHeading number="09" title="Distribución por día" /><DistributionChart title="Distribución por día" rows={summary.weekdays ?? []} /></div></section>
-      {!sectorView && <section className="report-section analytics-card"><SectionHeading number="10" title="Duración promedio por sector" /><DistributionChart title="Duración promedio por sector (minutos)" rows={(summary.sector_durations ?? []).map((row) => ({ label: row.label, count: row.average_duration_seconds / 60 }))} /></section>}
+      <section className="report-section analytics-card chart-card"><SectionHeading number="07" title="Iniciadas vs cerradas" /><ActivityChart rows={summary.activity ?? []} /></section>
+      <section className="report-section grid gap-4 xl:grid-cols-2"><div className="analytics-card chart-card"><SectionHeading number="08" title="Distribución por hora" /><DistributionChart title="Distribución por hora" rows={summary.hours ?? []} /></div><div className="analytics-card chart-card"><SectionHeading number="09" title="Distribución por día" /><DistributionChart title="Distribución por día" rows={summary.weekdays ?? []} /></div></section>
+      {!sectorView && <section className="report-section analytics-card chart-card"><SectionHeading number="10" title="Duración promedio por sector" /><DistributionChart title="Duración promedio por sector (minutos)" rows={(summary.sector_durations ?? []).map((row) => ({ label: row.label, count: row.average_duration_seconds / 60 }))} /></section>}
       <div className="report-section"><SectionHeading number="11" title="Detalle de tickets" /></div>
       {detail.loading || detail.error || detail.tickets.length === 0 ? <RequestState loading={detail.loading} error={detail.error} empty={detail.tickets.length === 0} onRetry={() => setRetry(retry + 1)} /> : <TicketTable tickets={detail.tickets} />}
-      <div className="pagination-bar"><span className="text-xs text-slate-500">Página {Math.floor(offset / 50) + 1} · Las exportaciones incluyen todos los resultados.</span><div className="flex gap-2"><button className="button-secondary" disabled={offset === 0 || detail.loading} onClick={() => change({ offset: offset > 50 ? String(offset - 50) : '' }, false)}>Anterior</button><button className="button-secondary" disabled={detail.loading || Boolean(detail.error) || detail.tickets.length < 50} onClick={() => change({ offset: String(offset + 50) }, false)}>Siguiente</button></div></div>
+      <PaginationBar page={Math.floor(offset / 50) + 1} info={<span className="text-xs">Página {Math.floor(offset / 50) + 1} · Las exportaciones incluyen todos los resultados.</span>} previousDisabled={offset === 0 || detail.loading} nextDisabled={detail.loading || Boolean(detail.error) || detail.tickets.length < 50} onPrevious={() => change({ offset: offset > 50 ? String(offset - 50) : '' }, false)} onNext={() => change({ offset: String(offset + 50) }, false)} />
     </>}
     {!invalid && <EscalationStatistics query={selection.query} summary={summary?.escalations ?? null} people={responsibles} loading={loading} onRecipientChange={(value) => change({ recipient_id: value })} />}
   </>

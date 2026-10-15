@@ -1,3 +1,4 @@
+import { PaginationBar } from './PaginationBar'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUpRight, CircleCheck, Clock3, Tickets } from 'lucide-react'
@@ -42,19 +43,19 @@ export function EscalationStatistics({ query, summary, people, loading: reportLo
     {summary && <>
       <MetricStrip variant="light" items={[
         { label: 'Tickets únicos escalados', value: summary.escalated_tickets, icon: <Tickets size={20} /> },
-        { label: 'Eventos de escalamiento', value: summary.events, icon: <ArrowUpRight size={20} /> },
-        { label: 'Escalamientos activos', value: summary.active, icon: <Clock3 size={20} /> },
+        { color: 'indigo', label: 'Eventos de escalamiento', value: summary.events, icon: <ArrowUpRight size={20} /> },
+        { color: 'amber', label: 'Escalamientos activos', value: summary.active, icon: <Clock3 size={20} /> },
         { label: 'Escalamientos finalizados', value: summary.finished, icon: <CircleCheck size={20} />, iconTone: 'success' },
-        { label: 'Duración promedio de escalamientos', value: summary.average_duration_seconds === null ? '—' : formatDuration(summary.average_duration_seconds) },
-        { label: 'Tickets con escalamiento', value: `${summary.escalated_percentage.toFixed(2)} %` },
+        { color: 'ice', label: 'Duración promedio de escalamientos', value: summary.average_duration_seconds === null ? '—' : formatDuration(summary.average_duration_seconds) },
+        { color: 'indigo', label: 'Tickets con escalamiento', value: `${summary.escalated_percentage.toFixed(2)} %` },
       ]} />
-      <div className="mt-4 grid gap-4 xl:grid-cols-2"><div className="analytics-card"><h3 className="section-label mb-3">Tickets con y sin escalamiento</h3><DistributionChart title="Tickets con y sin escalamiento" rows={[{ label: 'Con escalamiento', count: summary.escalated_tickets }, { label: 'Sin escalamiento', count: summary.total_tickets - summary.escalated_tickets }]} /></div><div className="analytics-card"><h3 className="section-label mb-3">Evolución de escalamientos</h3><TrendChart timeZone={query.timezone} trend={summary.trend} granularity={summary.granularity} title="Evolución de escalamientos" countLabel="Escalamientos" /></div></div>
+      <div className="mt-4 grid gap-4 xl:grid-cols-2"><div className="analytics-card chart-card"><h3 className="section-label mb-3">Tickets con y sin escalamiento</h3><DistributionChart title="Tickets con y sin escalamiento" rows={[{ label: 'Con escalamiento', count: summary.escalated_tickets }, { label: 'Sin escalamiento', count: summary.total_tickets - summary.escalated_tickets }]} /></div><div className="analytics-card chart-card"><h3 className="section-label mb-3">Evolución de escalamientos</h3><TrendChart timeZone={query.timezone} trend={summary.trend} granularity={summary.granularity} title="Evolución de escalamientos" countLabel="Escalamientos" /></div></div>
       <div className="mt-4"><RankingSection title="Escalamientos recibidos por persona" rows={summary.recipients} countLabel="Escalamientos" onSelect={(row) => { if (row.id !== null) onRecipientChange(String(row.id)) }} /></div>
       <div className="mt-4"><RankingSection title="Escalamientos por departamento" rows={summary.departments ?? []} countLabel="Escalamientos" /></div>
-      <h3 className="section-label mt-4 mb-2">Tickets relacionados · {recipient ? people.find((item) => String(item.id) === recipient)?.name : 'Todos los destinatarios'}</h3>
+      <h3 className="section-label table-heading-bar mt-4 mb-2">Tickets relacionados · {recipient ? people.find((item) => String(item.id) === recipient)?.name : 'Todos los destinatarios'}</h3>
       <RequestState compact loading={loading} error={error} onRetry={() => setRetry(retry + 1)} empty={!tickets.length && !loading && !error} emptyTitle="Sin tickets relacionados" emptyDescription="No hay escalamientos en esta selección." />
       {tickets.length > 0 && <div className="table-surface overflow-x-auto"><table className="operation-table"><thead><tr><th scope="col">Referencia</th><th scope="col">Título</th><th scope="col">Estado</th></tr></thead><tbody>{tickets.map((ticket) => <tr key={ticket.id}><td><Link className="button-ghost" to={`/tickets/${ticket.id}`}>{ticket.reference}</Link></td><td>{ticket.title}</td><td>{ticket.status === 'OPEN' ? 'Abierto' : 'Cerrado'}</td></tr>)}</tbody></table></div>}
-      <div className="pagination-bar"><span>Página {offset / 50 + 1}</span><div className="flex gap-2"><button type="button" className="button-secondary" aria-label="Página anterior de tickets escalados" disabled={offset === 0 || loading} onClick={() => setOffset(offset - 50)}>Anterior</button><button type="button" className="button-secondary" aria-label="Página siguiente de tickets escalados" disabled={tickets.length < 50 || loading} onClick={() => setOffset(offset + 50)}>Siguiente</button></div></div>
+      <PaginationBar page={offset / 50 + 1} info={<span>Página {offset / 50 + 1}</span>} previousLabel="Página anterior de tickets escalados" nextLabel="Página siguiente de tickets escalados" previousDisabled={offset === 0 || loading} nextDisabled={tickets.length < 50 || loading} onPrevious={() => setOffset(offset - 50)} onNext={() => setOffset(offset + 50)} />
     </>}
   </section>
 }
