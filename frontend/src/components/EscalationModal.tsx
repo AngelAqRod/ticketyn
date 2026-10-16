@@ -10,7 +10,7 @@ import { SearchableSelect } from './SearchableSelect'
 import { RequestState } from './RequestState'
 import { FeedbackMessage } from './FeedbackMessage'
 
-export function EscalationModal({ ticketId, onCreated, onCancel, item }: { ticketId: number; onCreated: () => void; onCancel: () => void; item?: Escalation }) {
+export function EscalationModal({ ticketId, onCreated, onCancel, item, internal = false }: { ticketId: number; internal?: boolean; onCreated: () => void; onCancel: () => void; item?: Escalation }) {
   const dialog = useRef<HTMLDialogElement>(null), input = useRef<HTMLTextAreaElement>(null), sending = useRef(false)
   const request = useRef<AbortController | null>(null)
   const [people, setPeople] = useState<Responsible[]>([]), [reasons, setReasons] = useState<EscalationReason[]>([])
@@ -50,9 +50,9 @@ export function EscalationModal({ ticketId, onCreated, onCancel, item }: { ticke
         if (department && Number(department) !== item.department_id) changes.department_id = destination.department_id
         if (started !== ticketynDateTimeValue(new Date(item.started_at))) changes.started_at = startedAt
         if (item.status === 'FINISHED' && finished !== ticketynDateTimeValue(new Date(item.finished_at!))) changes.finished_at = finishedAt
-        await editEscalation(ticketId, item.id, changes, controller.signal)
+        await editEscalation(ticketId, item.id, changes, controller.signal, internal ? 'internal-tickets' : 'tickets')
       }
-      else await createEscalation(ticketId, { ...destination, reason_id: Number(reason), description }, controller.signal)
+      else await createEscalation(ticketId, { ...destination, reason_id: Number(reason), description }, controller.signal, internal ? 'internal-tickets' : 'tickets')
       if (!controller.signal.aborted) onCreated()
     } catch (failure) { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'No se pudo registrar el escalamiento.') }
     finally { sending.current = false; if (!controller.signal.aborted) setSaving(false) }

@@ -17,9 +17,9 @@ describe('Siete segmentos', () => {
     expect(container.firstChild).toHaveClass('text-xl', 'text-blue-200')
   })
   it('mantiene la identidad del encabezado alineada con el orden de navegación', () => {
-    expect(identityFor('/activations/1')?.number).toBe('05')
-    expect(identityFor('/reports')?.number).toBe('08')
-    expect(identityFor('/catalogs')?.number).toBe('12')
-    expect(identityFor('/settings')?.number).toBe('13')
+    expect(identityFor('/activations/1')?.number).toBe('07')
+    expect(identityFor('/reports')?.number).toBe('10')
+    expect(identityFor('/catalogs')?.number).toBe('14')
+    expect(identityFor('/settings')?.number).toBe('15')
   })
 })

@@ -31,16 +31,16 @@ def snapshot_destination(session, values, item=None):
         recipient_department_name=department.name, recipient_position_name=position.name if position else None, recipient_level=None)
 
 
-def audit(session, item, event, previous):
+def audit(session, item, event, previous, model=EscalationAudit):
     def serial(value):
         return value.isoformat() if isinstance(value, datetime) else value
     fields = ('started_at', 'finished_at', 'department_id', 'recipient_id', 'recipient_department_name', 'recipient_position_name', 'recipient_level', 'status')
     changes = {key: {'before': serial(previous.get(key)), 'after': serial(getattr(item, key))}
                for key in fields if previous.get(key) != getattr(item, key)}
-    session.add(EscalationAudit(escalation_id=item.id, event=event, actor=None, changes=changes))
+    session.add(model(escalation_id=item.id, event=event, actor=None, changes=changes))
 
 
-def create_escalation(session, ticket_id, values):
+def create_escalation(session, ticket_id, values, *, Ticket=Ticket, TicketEscalation=TicketEscalation, audit_model=EscalationAudit):
     try:
         if session.scalar(select(Ticket.id).where(Ticket.id == ticket_id).with_for_update(read=True)) is None:
             raise HTTPException(404, 'Ticket no encontrado')
@@ -62,7 +62,7 @@ def create_escalation(session, ticket_id, values):
         item = TicketEscalation(ticket_id=ticket_id, **values)
         session.add(item); session.flush()
         item.updated_at = item.created_at
-        audit(session, item, 'created', {})
+        audit(session, item, 'created', {}, model=audit_model)
         session.commit(); session.refresh(item)
         return item
     except IntegrityError:
@@ -73,7 +73,7 @@ def create_escalation(session, ticket_id, values):
         raise
 
 
-def change_escalation(session, ticket_id, id, values, *, finish=False):
+def change_escalation(session, ticket_id, id, values, *, finish=False, TicketEscalation=TicketEscalation, audit_model=EscalationAudit):
     try:
         item = session.scalar(select(TicketEscalation).where(TicketEscalation.id == id,
             TicketEscalation.ticket_id == ticket_id).with_for_update(of=TicketEscalation))
@@ -93,7 +93,7 @@ def change_escalation(session, ticket_id, id, values, *, finish=False):
             raise HTTPException(422, 'La finalización debe ser igual o posterior al inicio y solo corresponde a escalamientos finalizados')
         if any(previous[key] != getattr(item, key) for key in fields):
             item.updated_at = datetime.now(timezone.utc)
-            audit(session, item, 'finished' if finish else 'updated', previous)
+            audit(session, item, 'finished' if finish else 'updated', previous, model=audit_model)
             session.commit(); session.refresh(item)
         return item
     except IntegrityError:
@@ -104,11 +104,11 @@ def change_escalation(session, ticket_id, id, values, *, finish=False):
         raise
 
 
-def finish_escalation(session, ticket_id, id, values=None):
-    return change_escalation(session, ticket_id, id, values or {}, finish=True)
+def finish_escalation(session, ticket_id, id, values=None, **context):
+    return change_escalation(session, ticket_id, id, values or {}, finish=True, **context)
 
 
-def list_escalations(session, ticket_id, *, newest_first=False, limit=None, offset=0):
+def list_escalations(session, ticket_id, *, newest_first=False, limit=None, offset=0, TicketEscalation=TicketEscalation):
     ordering = (TicketEscalation.started_at.desc(), TicketEscalation.id.desc()) if newest_first else (TicketEscalation.started_at, TicketEscalation.id)
     statement = select(TicketEscalation).where(TicketEscalation.ticket_id == ticket_id).order_by(*ordering)
     if limit is not None:

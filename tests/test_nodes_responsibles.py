@@ -177,7 +177,7 @@ def test_new_migration_roundtrip(postgres_engine):
             with Operations.context(context): revision['upgrade']()
             inspector = inspect(connection)
             # This historical roundtrip stops at 0004, before follow-up in 0008.
-            assert set(inspector.get_table_names(schema=schema)) == set(Base.metadata.tables) - {'cpe_models', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit', 'activations', 'activation_interventions', 'activation_number_config', 'capacity_changes', 'circuit_lifecycle_operations', 'deactivation_reasons', 'service_types'}
+            assert set(inspector.get_table_names(schema=schema)) == set(Base.metadata.tables) - {'maintenance_changes', 'change_number_config', 'change_completion_types', 'change_support', 'change_tickets', 'change_updates', 'change_audit', 'internal_tickets', 'internal_ticket_updates', 'internal_escalations', 'internal_escalation_audit', 'internal_ticket_number_config', 'internal_incident_types', 'providers', 'cpe_models', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit', 'activations', 'activation_interventions', 'activation_number_config', 'capacity_changes', 'circuit_lifecycle_operations', 'deactivation_reasons', 'service_types'}
             assert connection.scalar(text('SELECT node_id FROM circuits')) is None
             for table, column, target in [('circuits','node_id','nodes'),('tickets','responsible_id','responsibles')]:
                 assert next(c for c in inspector.get_columns(table, schema=schema) if c['name'] == column)['nullable']

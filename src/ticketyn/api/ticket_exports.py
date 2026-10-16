@@ -61,37 +61,82 @@ def export_ticket_pdf(session, filters, output):
 
 
 def export_ticket_xlsx(session, filters, output):
-    workbook = Workbook(write_only=True)
-    sheet = workbook.create_sheet('Tickets')
-    sheet.freeze_panes = 'A2'
     headers = ['Referencia', 'Estado', 'Cliente', 'Código cliente', 'Circuito', 'Código circuito',
         'Sector', 'Departamento', 'Tipo de incidencia', 'Título', 'Descripción', 'Inicio', 'Fin',
         'Duración', 'Duración (segundos)', 'Nodo', 'Responsable']
     widths = [22, 14, 32, 24, 38, 28, 26, 26, 28, 45, 65, 34, 34, 22, 22, 28, 28]
-    for index, width in enumerate(widths, 1): sheet.column_dimensions[get_column_letter(index)].width = width
-    cells = []
-    for title in headers:
-        cell = WriteOnlyCell(sheet, value=title)
-        cell.font = Font(bold=True, color='FFFFFF')
-        cell.fill = PatternFill('solid', fgColor='102744')
-        cells.append(cell)
-    sheet.append(cells)
     zone = ZoneInfo(filters.timezone)
-    count = 1
-    for ticket, customer, circuit, sector, department, kind in ticket_rows(session, filters.model_dump()):
-        # ISO incluye offset: conserva incluso las horas repetidas al cambiar DST.
-        date = lambda value: value.astimezone(zone).isoformat() if value else None
-        values = [ticket.reference, 'Abierto' if ticket.status == 'OPEN' else 'Cerrado', customer.name,
-            customer.customer_code, circuit.description, circuit.circuit_code, sector.name, department.name,
-            kind.name, ticket.title, ticket.description, date(ticket.start_at), date(ticket.end_at),
-            'En curso' if ticket.duration_seconds is None else duration_text(ticket.duration_seconds), ticket.duration_seconds, ticket.node.name if ticket.node else None, ticket.responsible.name if ticket.responsible else None]
+    def rows():
+        for ticket, customer, circuit, sector, department, kind in ticket_rows(session, filters.model_dump()):
+            # ISO incluye offset: conserva incluso las horas repetidas al cambiar DST.
+            date = lambda value: value.astimezone(zone).isoformat() if value else None
+            yield [ticket.reference, 'Abierto' if ticket.status == 'OPEN' else 'Cerrado', customer.name,
+                customer.customer_code, circuit.description, circuit.circuit_code, sector.name, department.name,
+                kind.name, ticket.title, ticket.description, date(ticket.start_at), date(ticket.end_at),
+                'En curso' if ticket.duration_seconds is None else duration_text(ticket.duration_seconds), ticket.duration_seconds, ticket.node.name if ticket.node else None, ticket.responsible.name if ticket.responsible else None]
+    write_export_xlsx(output, 'Tickets', headers, widths, rows())
+
+
+def write_export_xlsx(output, title, headers, widths, rows, *, metadata=None, extra_sheets=()):
+    """Shared write-only workbook, literal text cells and existing Tickets styling."""
+    workbook = Workbook(write_only=True)
+    def append_sheet(name, labels, sizes, records):
+        sheet = workbook.create_sheet(name)
+        sheet.freeze_panes = 'A2'
+        for index, width in enumerate(sizes, 1):
+            sheet.column_dimensions[get_column_letter(index)].width = width
         cells = []
-        for value in values:
-            cell = WriteOnlyCell(sheet, value=value)
-            if isinstance(value, str): cell.data_type = 's'  # Nunca ejecutar texto de usuario como fórmula.
-            cell.alignment = Alignment(vertical='top', wrap_text=True)
+        for label in labels:
+            cell = WriteOnlyCell(sheet, value=label)
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill('solid', fgColor='102744')
             cells.append(cell)
         sheet.append(cells)
-        count += 1
-    sheet.auto_filter.ref = f'A1:Q{count}'
+        count = 1
+        for values in records:
+            cells = []
+            for value in values:
+                cell = WriteOnlyCell(sheet, value=value)
+                if isinstance(value, str): cell.data_type = 's'
+                cell.alignment = Alignment(vertical='top', wrap_text=True)
+                cells.append(cell)
+            sheet.append(cells)
+            count += 1
+        sheet.auto_filter.ref = f'A1:{get_column_letter(len(labels))}{count}'
+    append_sheet(title, headers, widths, rows)
+    for name, labels, sizes, records in extra_sheets:
+        append_sheet(name, labels, sizes, records)
+    if metadata is not None:
+        info = workbook.create_sheet('Filtros')
+        info.column_dimensions['A'].width = 110
+        for value in metadata:
+            cell = WriteOnlyCell(info, value=value)
+            cell.data_type = 's'
+            cell.alignment = Alignment(vertical='top', wrap_text=True)
+            info.append([cell])
     workbook.save(output)
+
+
+def stream_ticket_export(session, format, filters, filename, renderer):
+    """Same snapshot, spooling and cleanup for client and internal ticket lists."""
+    from tempfile import SpooledTemporaryFile
+    from fastapi.responses import StreamingResponse
+    from starlette.background import BackgroundTask
+    from ticketyn.api.reports import read_snapshot
+    read_snapshot(session)
+    output = SpooledTemporaryFile(max_size=2 * 1024 * 1024)
+    try:
+        renderer(session, filters, output)
+        output.seek(0)
+    except Exception:
+        output.close()
+        raise
+    def chunks():
+        try:
+            while chunk := output.read(65536): yield chunk
+        finally:
+            output.close()
+    media = 'application/pdf' if format == 'pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    return StreamingResponse(chunks(), media_type=media,
+        headers={'Content-Disposition': f'attachment; filename="{filename}.{format}"'},
+        background=BackgroundTask(output.close))

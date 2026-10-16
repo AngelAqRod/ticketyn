@@ -162,6 +162,18 @@
   @container (min-width: 45rem) { .metric-strip[data-count="4"] { border-radius: 999px; } }
   @container (min-width: 56rem) { .metric-strip[data-count="5"] { border-radius: 999px; } }
   @container (min-width: 67rem) { .metric-strip[data-count="6"] { border-radius: 999px; } }
+  /* Opt-in grid for the six internal-report KPIs; other metric strips stay intact. */
+  .metric-strip[data-layout="internal-summary"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 28px; }
+  .metric-strip[data-layout="internal-summary"] .metric-item { width: 100%; padding-inline: 10px; }
+  .metric-strip[data-layout="internal-summary"] .metric-item:has(.metric-icon) { column-gap: 6px; }
+  .metric-strip[data-layout="internal-summary"] .metric-icon { width: 28px; height: 28px; }
+  .metric-strip[data-layout="internal-summary"] .metric-item[data-color="indigo"] { --metric-bg: #d9ddf3; }
+  .metric-strip[data-layout="internal-summary"] .metric-item[data-color="cyan"] { --metric-bg: #c7e9ea; --metric-border: #8ec6c9; --metric-label: #285f64; --metric-value: #164b50; }
+  .metric-strip[data-layout="internal-summary"] .metric-icon { color: var(--metric-value); background: var(--metric-bg); border-color: var(--metric-border); }
+  .metric-strip[data-layout="internal-summary"] dt { font-size: 9px; letter-spacing: .02em; line-height: 1.3; }
+  .metric-strip[data-layout="internal-summary"] dd { font-size: 22px; }
+  @container (min-width: 38rem) { .metric-strip[data-layout="internal-summary"] { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @container (min-width: 72rem) { .metric-strip[data-layout="internal-summary"] { grid-template-columns: repeat(6, minmax(0, 1fr)); border-radius: 999px; } }
   .metric-icon[data-tone="warning"] { color: var(--warning); background: #fffaf0; border-color: #f3e7cf; }
   .metric-icon[data-tone="success"] { color: var(--success); background: #f3fbf6; border-color: #dceee2; }
   .filter-toolbar { @apply mb-4 rounded-xl border p-4; border-color: var(--operational-border); background: var(--operational-surface); box-shadow: var(--shadow-card); }
@@ -333,7 +345,29 @@
     border-radius: 9999px;
     background: linear-gradient(90deg, #172B59, #202447);
   }
-  .catalog-selector-icon { flex-shrink: 0; color: #A9CFFF; background: #293B64; }
+  .catalog-selector-icon { margin-inline: 4px; flex-shrink: 0; color: #A9CFFF; background: #293B64; }
+  .catalog-selector-window { display: grid; grid-template-columns: 6px minmax(0, 1fr) 6px; flex: 1 1 0%; min-width: 0; align-items: center; }
+  .catalog-selector .catalog-selector-options { flex-wrap: nowrap; overscroll-behavior-x: contain; }
+  .catalog-selector-arrow { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 32px; width: 32px; height: 32px; padding: 0; border: 1px solid #526A99; border-radius: 999px; background: #293B64; color: #A9CFFF; }
+  .catalog-selector-arrow:hover:not(:disabled) { background: #176BDF; color: #FFFFFF; }
+  .catalog-selector-arrow:disabled { opacity: 0.35; }
+  .catalog-selector-arrow:focus-visible { outline-color: #A9CFFF; }
+  .catalog-selector-overflow { height: 28px; border-radius: 999px; opacity: 0; pointer-events: none; }
+  .catalog-selector-overflow.is-visible { opacity: 1; }
+  .catalog-selector-overflow-left { background: linear-gradient(90deg, #60A5FA80, transparent); }
+  .catalog-selector-overflow-right { background: linear-gradient(270deg, #60A5FA80, transparent); }
+  @media (max-width: 640px) {
+    .catalog-selector { gap: 2px; }
+    .catalog-selector-window { grid-template-columns: 4px minmax(0, 1fr) 4px; }
+  }
+  @media (max-width: 380px) {
+    .catalog-selector { gap: 0; padding: 2px; }
+    .catalog-selector-icon { width: 24px; height: 24px; margin-inline: 0; }
+    .catalog-selector-arrow { flex-basis: 24px; width: 24px; }
+    .catalog-selector-window { grid-template-columns: 2px minmax(0, 1fr) 2px; }
+    .catalog-selector .catalog-selector-options { padding: 2px; }
+    .catalog-selector .catalog-selector-options .segment-button { padding-inline: 4px; }
+  }
   :is(.catalog-selector-options, .noc-tabs-options) {
     display: flex;
     align-items: center;
@@ -471,3 +505,21 @@
   }
   .noc-settings .grid:has(> .noc-settings-preview) { align-items: start; }
 }
+
+/* Change control: existing NOC surfaces and semantic calendar states. */
+.change-status { display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 12px; }
+.change-status-SCHEDULED { background: #D9CFF3; color: #57418B; }
+.change-status-EXECUTING { background: #d7e7f6; color: #203f62; }
+.change-status-FINISHED { background: #c8e7dc; color: #164e3c; }
+.change-calendar { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; min-width: 0; }
+.change-calendar-cell { min-width: 0; min-height: 100px; padding: 6px; border: 1px solid #cbd8ea; border-radius: 16px; background: #f8fbff; box-shadow: 0 2px 5px #1732580a; }
+.change-calendar-cell:hover { border-color: #a4b9dd; box-shadow: 0 3px 8px #17325812; }
+.change-calendar-weekdays { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; color: #526784; font-size: 12px; text-align: center; }
+.change-calendar-weekdays > span { padding-block: 4px; min-width: 0; }
+.change-calendar-date-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.change-calendar-date { display: inline-flex; align-items: center; padding-inline: 6px; border-radius: 999px; color: #173258; background: #e8eff9; }
+.change-calendar-date[aria-current="date"] { background: #176BDF; color: #ffffff; }
+.change-calendar-mobile-weekday { display: none; font-size: 12px; color: #526784; }
+.change-calendar-event { display: flex; flex-direction: column; gap: 3px; padding: 5px; border-radius: 8px; overflow-wrap: anywhere; font-size: 11px; }
+.change-calendar-day, .change-calendar-day .change-calendar-weekdays { grid-template-columns: minmax(0,1fr); }
+@media (max-width: 640px) { .change-calendar { grid-template-columns: minmax(0,1fr); } .change-calendar-placeholder, .change-calendar-weekdays { display: none; } .change-calendar-mobile-weekday { display: inline; } .change-calendar-cell { min-height: 70px; } }

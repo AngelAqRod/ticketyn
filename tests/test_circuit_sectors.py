@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from threading import Barrier
 from uuid import uuid4
 
@@ -67,6 +68,9 @@ def test_ticket_automatic_assignment_and_history(api_client, ticket_payload, db_
     body = {k: v for k, v in ticket_payload.items() if k != 'sector_id'}
     ticket = api_client.post('/api/tickets', json=body).json()
     assert ticket['sector_id'] == ticket_payload['sector_id']
+    archived = db_session.get(Ticket, ticket['id'])
+    archived.created_at = datetime.now(timezone.utc) - timedelta(days=30)
+    db_session.commit()
     cid = ticket_payload['circuit_id']; new = sector(api_client)
     assert api_client.patch(f'/api/circuits/{cid}', json={'sector_id': new}).status_code == 200
     response = api_client.patch(f"/api/tickets/{ticket['id']}", json={'title': 'Corregido', 'sector_id': new})

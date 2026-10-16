@@ -10,7 +10,7 @@ from ticketyn.api.crud import get_or_404, save_item
 from ticketyn.models import Responsible, Ticket, TicketUpdate, TicketEscalation
 
 
-def list_updates(session: Session, ticket_id: int, escalation_id: int | None = None) -> list[TicketUpdate]:
+def list_updates(session: Session, ticket_id: int, escalation_id: int | None = None, *, Ticket=Ticket, TicketUpdate=TicketUpdate) -> list[TicketUpdate]:
     get_or_404(session, Ticket, ticket_id)
     statement = select(TicketUpdate).where(TicketUpdate.ticket_id == ticket_id)
     if escalation_id is not None:
@@ -18,7 +18,7 @@ def list_updates(session: Session, ticket_id: int, escalation_id: int | None = N
     return list(session.scalars(statement.order_by(TicketUpdate.occurred_at, TicketUpdate.id)))
 
 
-def create_update(session: Session, ticket_id: int, values: dict) -> TicketUpdate:
+def create_update(session: Session, ticket_id: int, values: dict, *, Ticket=Ticket, TicketUpdate=TicketUpdate, TicketEscalation=TicketEscalation) -> TicketUpdate:
     try:
         # FOR SHARE conserva relaciones estables; no modifica el ticket.
         ticket = session.scalar(select(Ticket).where(Ticket.id == ticket_id)
@@ -43,7 +43,7 @@ def create_update(session: Session, ticket_id: int, values: dict) -> TicketUpdat
         raise
 
 
-def page_updates(session: Session, ticket_id: int, limit: int, cursor: str | None, escalation_id: int | None = None):
+def page_updates(session: Session, ticket_id: int, limit: int, cursor: str | None, escalation_id: int | None = None, *, Ticket=Ticket, TicketUpdate=TicketUpdate):
     get_or_404(session, Ticket, ticket_id)
     statement = select(TicketUpdate).where(TicketUpdate.ticket_id == ticket_id)
     if escalation_id is not None:

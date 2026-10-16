@@ -29,6 +29,10 @@ def ticket_stats(session: Session) -> dict[str, int]:
 
 
 def validate_ticket_values(session: Session, values: dict, changed_relations: set[str]) -> None:
+    if values.get('internal_ticket_id') is not None:
+        from ticketyn.models import InternalTicket
+        if session.scalar(select(InternalTicket.id).where(InternalTicket.id == values['internal_ticket_id']).with_for_update(read=True)) is None:
+            raise HTTPException(404, 'Ticket interno relacionado no encontrado')
     if values["end_at"] is not None and values["end_at"] < values["start_at"]:
         raise HTTPException(status_code=422, detail="end_at debe ser igual o posterior a start_at")
     if "responsible_id" in changed_relations and values.get("responsible_id") is not None:

@@ -9,7 +9,8 @@ import { TicketInterventionModal } from './TicketInterventionModal'
 
 const message = (error: unknown) => error instanceof Error ? error.message : 'No se pudo cargar el seguimiento.'
 
-export function TicketFollowUp({ ticketId }: { ticketId: number }) {
+export function TicketFollowUp({ ticketId, internal = false }: { ticketId: number; internal?: boolean }) {
+  const scope = internal ? 'internal-tickets' : 'tickets'
   const [updates, setUpdates] = useState<TicketUpdate[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -25,13 +26,13 @@ export function TicketFollowUp({ ticketId }: { ticketId: number }) {
     const controller = new AbortController()
     moreRequest.current?.abort()
     setLoading(true); setLoadError(null); setMoreError(null); setMoreLoading(false)
-    pageTicketUpdates(ticketId, null, controller.signal).then((page) => {
+    pageTicketUpdates(ticketId, null, controller.signal, scope).then((page) => {
       if (!controller.signal.aborted) { setUpdates(page.items); setCursor(page.next_cursor); setLoading(false) }
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) { setLoadError(message(error)); setLoading(false) }
     })
     return () => { controller.abort(); moreRequest.current?.abort() }
-  }, [ticketId, retry])
+  }, [ticketId, retry, scope])
 
   async function loadMore() {
     if (!cursor || moreRequest.current && !moreRequest.current.signal.aborted) return
@@ -39,7 +40,7 @@ export function TicketFollowUp({ ticketId }: { ticketId: number }) {
     moreRequest.current = controller
     setMoreLoading(true); setMoreError(null)
     try {
-      const page = await pageTicketUpdates(ticketId, cursor, controller.signal)
+      const page = await pageTicketUpdates(ticketId, cursor, controller.signal, scope)
       if (!controller.signal.aborted) {
         setUpdates((previous) => [...previous, ...page.items.filter((item) => !previous.some((existing) => existing.id === item.id))])
         setCursor(page.next_cursor)
@@ -73,6 +74,6 @@ export function TicketFollowUp({ ticketId }: { ticketId: number }) {
     </>}
     {!loading && !loadError && <><RequestState compact loading={moreLoading} error={moreError} loadingText="Cargando más intervenciones..." errorTitle="" onRetry={() => void loadMore()} retryText="Reintentar más intervenciones" />
       {cursor && !moreError && <button type="button" className="button-secondary mt-3" disabled={moreLoading} onClick={() => void loadMore()}>Cargar más</button>}</>}
-    {modal && <TicketInterventionModal ticketId={ticketId} onCancel={() => setModal(false)} onCreated={() => { setModal(false); setSuccess(true); setRetry((value) => value + 1) }} />}
+    {modal && <TicketInterventionModal internal={internal} ticketId={ticketId} onCancel={() => setModal(false)} onCreated={() => { setModal(false); setSuccess(true); setRetry((value) => value + 1) }} />}
   </section>
 }

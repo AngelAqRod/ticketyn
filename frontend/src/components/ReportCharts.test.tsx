@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { categoryColor, chartPalette } from './chartTheme'
 import { ActivityChart, DistributionChart, RankingChart, TrendChart } from './ReportCharts'
 
-const captured = vi.hoisted(() => ({ charts: [] as Record<string, unknown>[], lines: [] as Record<string, unknown>[], bars: [] as Record<string, unknown>[] }))
+const captured = vi.hoisted(() => ({ charts: [] as Record<string, unknown>[], lines: [] as Record<string, unknown>[], bars: [] as Record<string, unknown>[], yAxes: [] as Record<string, unknown>[] }))
 vi.mock('recharts', () => {
   const wrapper = ({ children }: { children?: ReactNode }) => <div>{children}</div>
   const chart = (props: Record<string, unknown> & { children?: ReactNode }) => { captured.charts.push(props); return wrapper(props) }
@@ -12,7 +12,7 @@ vi.mock('recharts', () => {
     ResponsiveContainer: wrapper, LineChart: chart, BarChart: chart,
     Line: (props: Record<string, unknown>) => { captured.lines.push(props); return null },
     Bar: (props: Record<string, unknown> & { children?: ReactNode }) => { captured.bars.push(props); return wrapper(props) },
-    CartesianGrid: () => null, XAxis: () => null, YAxis: () => null,
+    CartesianGrid: () => null, XAxis: () => null, YAxis: (props: Record<string, unknown>) => { captured.yAxes.push(props); return null },
     Tooltip: () => null, LabelList: () => null,
     Cell: ({ fill }: { fill: string }) => <span data-testid="category" data-color={fill} />,
   }
@@ -55,6 +55,22 @@ describe('Capsule NOC charts', () => {
     expect(captured.charts.at(-1)!.layout).toBe('vertical')
     expect(captured.bars.at(-1)).toMatchObject({ radius: [0, 4, 4, 0], barSize: 13 })
     expect(screen.getAllByTestId('category').map(el => el.getAttribute('data-color'))).toEqual([...chartPalette, ...chartPalette.slice(0, 4)])
+  })
+  it('opts into integer count ticks without rounding durations or percentages by default', () => {
+    const rows = [{label:'Agendado',count:0},{label:'Finalizado',count:1}]
+    const {rerender}=render(<DistributionChart rows={rows} title="Cambios por Estado" integerCounts />)
+    expect(captured.yAxes.at(-1)!.allowDecimals).toBe(false)
+    expect(captured.charts.at(-1)!.data).toBe(rows)
+    const fractional=[{label:'Duración',count:0.25}]
+    rerender(<DistributionChart rows={fractional} title="Horas" />)
+    expect(captured.yAxes.at(-1)!.allowDecimals).toBe(true)
+    expect(captured.charts.at(-1)!.data).toBe(fractional)
+  })
+  it('allows explicit semantic category colors, including zero-count states', () => {
+    const rows=[{label:'Agendado',count:0,color:'#D69A46'},{label:'Finalizado',count:1,color:'#91C9B5'},{label:'En ejecución',count:0,color:'#176BDF'}]
+    render(<DistributionChart rows={rows} title="Cambios por Estado" integerCounts />)
+    expect(captured.charts.at(-1)!.data).toBe(rows)
+    expect(screen.getAllByTestId('category').map(el=>el.getAttribute('data-color'))).toEqual(rows.map(row=>row.color))
   })
   it('retains distribution zeros, precision and input order, including empty results', () => {
     const rows = [{ label: '00', count: 0 }, { label: '01', count: 1.23456 }]

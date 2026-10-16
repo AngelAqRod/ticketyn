@@ -44,7 +44,7 @@ export type Sector = NamedCatalog
 export type Department = NamedCatalog
 export type IncidentType = NamedCatalog
 
-export interface NamedCatalogInput { name: string; active: boolean; description?: string | null }
+export interface NamedCatalogInput { name: string; active: boolean; description?: string | null; applies_efficiency?: boolean }
 export interface CustomerInput extends NamedCatalogInput { customer_code: string }
 export interface CircuitInput { cpe_model_id?: number | null; sector_id: number; service_type_id?: number | null; initial_capacity?: string | null; initial_capacity_unit?: string | null; node_id: number; customer_id: number; circuit_code: string; description: string; active: boolean }
-export type CatalogKind = 'cpe-models' | 'customers' | 'circuits' | 'sectors' | 'departments' | 'incident-types' | 'nodes' | 'responsibles' | 'escalation-reasons' | 'positions' | 'deactivation-reasons' | 'service-types'
+export type CatalogKind = 'change-types' | 'change-completion-types' | 'internal-incident-types' | 'providers' | 'cpe-models' | 'customers' | 'circuits' | 'sectors' | 'departments' | 'incident-types' | 'nodes' | 'responsibles' | 'escalation-reasons' | 'positions' | 'deactivation-reasons' | 'service-types'

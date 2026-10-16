@@ -4,8 +4,10 @@ Ticketyn es un producto web de gestión de incidencias: tickets, clientes,
 circuitos/servicios contratados, catálogos, filtros operativos y reportería.
 Licencia **GNU AGPL v3, AGPL-3.0-only**; texto completo en [LICENSE](LICENSE).
 
-Versión **v0.4.0** en preparación para revisión y validación en laboratorio.
-La versión declarada de backend y frontend es `0.4.0`.
+Versión **v0.5.0** en preparación para revisión y validación en laboratorio.
+La versión declarada de backend y frontend es `0.5.0`.
+
+Tickets internos: [arquitectura, seguridad y prueba local](docs/internal-tickets-v0.5.0-design.md).
 
 Notas: [CHANGELOG](CHANGELOG.md) y [gestión operativa v0.4.0](#gestión-operativa-de-circuitos--v040).
 La documentación de versiones anteriores permanece disponible en `docs/`.

@@ -28,6 +28,8 @@ UNIQUE_ERRORS = {
 
 
 CATALOG_NAMES = {
+    'change_types': 'tipo de cambio',
+    'providers': 'proveedor', 'internal_incident_types': 'tipo de incidencia interna',
     'cpe_models': 'modelo de CPE', 'service_types': 'tipo de servicio', 'customers': 'cliente', 'sectors': 'sector', 'departments': 'departamento',
     'incident_types': 'tipo de incidencia', 'nodes': 'nodo', 'responsibles': 'responsable',
     'deactivation_reasons': 'motivo de baja', 'escalation_reasons': 'motivo', 'positions': 'puesto en este departamento',

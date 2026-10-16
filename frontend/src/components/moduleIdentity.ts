@@ -1,6 +1,8 @@
 export const moduleIdentity = [
   { path: '/', number: '01', title: 'Dashboard', group: 'Operación' },
   { path: '/tickets', number: '02', title: 'Tickets', group: 'Operación' },
+  { path: '/internal-tickets', number: '14', title: 'Tickets internos', group: 'Operación' },
+  { path: '/changes', number: '15', title: 'Control de cambios', group: 'Operación' },
   { path: '/customers', number: '03', title: 'Clientes', group: 'Operación' },
   { path: '/circuits', number: '04', title: 'Circuitos', group: 'Operación' },
   { path: '/reports', number: '05', title: 'Reportería de tickets', group: 'Análisis' },

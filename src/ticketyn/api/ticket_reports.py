@@ -19,7 +19,7 @@ from ticketyn.api.documents import build_pdf, duration_text, fonts, modern_table
 from ticketyn.api.reports import read_snapshot
 from ticketyn.api.ticket_data import get_ticket
 from ticketyn.api.ticket_update_data import list_updates
-from ticketyn.models import Circuit, Customer, Ticket, TicketUpdate
+from ticketyn.models import Circuit, Customer, Ticket, TicketUpdate, InternalTicket, Sector, Node, Provider
 from ticketyn.schemas.report import ReportFilters
 
 router = APIRouter(prefix='/api/tickets', tags=['ticket-reports'])
@@ -116,6 +116,22 @@ def intervention_block(heading, content, section_heading=None):
     return items
 
 
+def related_internal_incident(session, internal_ticket_id):
+    """One bounded projection; inactive catalogs remain valid historical references."""
+    row = session.execute(select(
+        InternalTicket.reference, InternalTicket.title, InternalTicket.description,
+        Sector.name.label('sector'), Node.name.label('node'),
+        InternalTicket.status, Provider.name.label('provider'),
+    ).join(Sector, InternalTicket.sector_id == Sector.id)
+     .outerjoin(Node, InternalTicket.node_id == Node.id)
+     .outerjoin(Provider, InternalTicket.provider_id == Provider.id)
+     .where(InternalTicket.id == internal_ticket_id)).one_or_none()
+    if row is None:
+        # A valid FK normally guarantees this; never invent linked incident data.
+        raise HTTPException(404, 'Ticket interno relacionado no encontrado')
+    return row
+
+
 def internal_pdf(session, ticket_id, output, zone, issued):
     fonts()
     ticket = get_ticket(session, ticket_id)
@@ -130,6 +146,17 @@ def internal_pdf(session, ticket_id, output, zone, issued):
             ['Tipo de incidencia', ticket.incident_type.name], *timing_rows(ticket, zone, issued)], [250, 530], compact=True),
         section('Descripción original'), paragraph(ticket.description, size=10)]
     story.extend([section('Resolución documentada'), paragraph(ticket.resolution or 'Sin resolución documentada.', size=10)])
+    if getattr(ticket, 'internal_ticket_id', None) is not None:
+        related = related_internal_incident(session, ticket.internal_ticket_id)
+        rows = [['Correlativo', related.reference], ['Incidencia', related.title or related.description],
+                ['Sector', related.sector]]
+        if related.node is not None:
+            rows.append(['Nodo', related.node])
+        rows.extend([['Estado actual', 'Abierto' if related.status == 'OPEN' else 'Cerrado'],
+                     ['Proveedor atribuible', related.provider or 'Ninguno']])
+        story.extend([section('Incidencia interna relacionada'),
+                      modern_table(['Dato', 'Valor'], rows, [250, 530], compact=True)])
+
     history_heading = section('Seguimiento cronológico · Uso interno', keep=False)
     if not updates:
         history_heading.style.keepWithNext = True
@@ -140,6 +167,11 @@ def internal_pdf(session, ticket_id, output, zone, issued):
         heading = paragraph(f'{date_text(update.occurred_at, zone)} · {update.responsible.name if update.responsible else "Sin asignar"} · {visibility}{association}', bold=True, size=9)
         story.extend(intervention_block(heading, paragraph(update.content, size=10), history_heading if index == 0 else None))
     escalations = list_escalations(session, ticket_id)
+    append_escalations(story, escalations, zone)
+    build_pdf(output, 'Reporte técnico interno', str(zone), story, issued_at=date_text(issued, zone))
+
+
+def append_escalations(story, escalations, zone):
     escalation_heading = section('Historial de escalamientos', keep=False)
     if not escalations:
         escalation_heading.style.keepWithNext = True
@@ -156,7 +188,6 @@ def internal_pdf(session, ticket_id, output, zone, issued):
         if escalation.finished_at:
             details.extend([f'Finalizado: {date_text(escalation.finished_at, zone)}', f'Duración: {duration_text((escalation.finished_at - escalation.started_at).total_seconds())}'])
         story.extend(intervention_block(heading, paragraph('\n'.join([*details, escalation.description]), size=10), escalation_heading if index == 0 else None))
-    build_pdf(output, 'Reporte técnico interno', str(zone), story, issued_at=date_text(issued, zone))
 
 
 def customer_pdf(session, ticket_id, output, zone, issued):
@@ -176,11 +207,11 @@ def customer_pdf(session, ticket_id, output, zone, issued):
     build_pdf(output, 'Reporte para cliente', str(zone), story, issued_at=date_text(issued, zone))
 
 
-def report_response(session, ticket_id, options, audience):
+def report_response(session, ticket_id, options, audience, *, renderer=None, filename=None):
     output = SpooledTemporaryFile(max_size=2 * 1024 * 1024)
     try:
         read_snapshot(session)
-        renderer = internal_pdf if audience == 'internal' else customer_pdf
+        renderer = renderer or (internal_pdf if audience == 'internal' else customer_pdf)
         renderer(session, ticket_id, output, ZoneInfo(options.timezone), datetime.now(timezone.utc))
         output.seek(0)
     except HTTPException:
@@ -198,8 +229,9 @@ def report_response(session, ticket_id, options, audience):
         finally:
             output.close()
     name = 'interno' if audience == 'internal' else 'cliente'
+    filename = filename or f'ticketyn-ticket-{ticket_id}-{name}.pdf'
     return StreamingResponse(chunks(), media_type='application/pdf',
-        headers={'Content-Disposition': f'attachment; filename="ticketyn-ticket-{ticket_id}-{name}.pdf"',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"',
                  'Cache-Control': 'no-store'}, background=BackgroundTask(output.close))
 
 

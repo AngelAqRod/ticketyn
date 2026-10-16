@@ -13,7 +13,8 @@ const named = { id: 1, name: 'Nombre inicial', active: true, created_at }
 type Row = typeof customer | typeof circuit | typeof named
 interface Options { empty?: boolean; fail?: boolean; write?: (path: string, options: RequestInit) => Promise<Response> }
 function mockApi(options: Options = {}) {
-  const rows: Record<CatalogKind, Row[]> = { 'cpe-models': [named, { ...named, id: 2, name: 'Modelo inactivo', active: false }],
+  const rows: Record<CatalogKind, Row[]> = {
+    'change-types': [], 'change-completion-types': [], 'internal-incident-types': [], providers: [], 'cpe-models': [named, { ...named, id: 2, name: 'Modelo inactivo', active: false }],
     'service-types': [],
     'deactivation-reasons': [],
     positions: [{ ...named, name: 'Consultor de redes', department_id: 1, department: named } as Row, { ...named, id: 2, name: 'Otro departamento', department_id: 2, department: inactiveCustomer } as Row],
@@ -65,6 +66,28 @@ function writes(mock: ReturnType<typeof mockApi>) { return mock.mock.calls.filte
 afterEach(() => vi.restoreAllMocks())
 
 describe('administración de catálogos', () => {
+  it('administra Tipos de cambio con nombre, descripción y estado mediante el catálogo compartido',async()=>{
+    const mock=mockApi();open('/catalogs')
+    fireEvent.click(await screen.findByRole('button',{name:'Tipos de cambio'}))
+    await screen.findByRole('heading',{name:'Tipos de cambio',level:1})
+    fireEvent.click(screen.getByRole('button',{name:'Nuevo tipo de cambio'}))
+    fireEvent.change(field('Nombre'),{target:{value:'Mantenimiento de red'}})
+    fireEvent.change(screen.getByLabelText('Descripción (opcional)'),{target:{value:'Ventana técnica'}})
+    fireEvent.click(screen.getByRole('button',{name:'Guardar'}))
+    await screen.findByText('Registro creado correctamente.')
+    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({name:'Mantenimiento de red',description:'Ventana técnica',active:true})
+    fireEvent.click(screen.getByRole('button',{name:'Editar Mantenimiento de red'}))
+    expect(screen.getByLabelText('Descripción (opcional)')).toHaveValue('Ventana técnica')
+    fireEvent.change(field('Nombre'),{target:{value:'Mantenimiento corregido'}})
+    fireEvent.click(screen.getByRole('button',{name:'Guardar'}))
+    await screen.findByText('Cambios guardados correctamente.')
+    fireEvent.click(screen.getByRole('button',{name:'Desactivar Mantenimiento corregido'}))
+    await screen.findByText('Registro desactivado. Los tickets históricos conservan su referencia.')
+    fireEvent.click(screen.getByRole('button',{name:'Activar Mantenimiento corregido'}))
+    await screen.findByText('Registro activado correctamente.')
+    expect(JSON.parse(String(writes(mock)[2][1]?.body))).toEqual({active:false})
+    expect(JSON.parse(String(writes(mock)[3][1]?.body))).toEqual({active:true})
+  })
   it('asocia la validación existente solo a los campos obligatorios vacíos', async () => {
     const mock = mockApi(); open('/customers')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo cliente' })).toBeEnabled())

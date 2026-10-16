@@ -106,3 +106,21 @@ def test_customer_title_without_internal_classification(monkeypatch, rendered):
     assert 'CONTENIDO-PUBLICO' in words
     for private in ['TIPO-PRIVADO', 'RESPONSABLE-PRIVADO', 'Tipo de incidencia', 'Responsable', 'Descripción original.']:
         assert private not in words
+
+
+def test_related_incident_long_title_keeps_all_content_and_pagination(monkeypatch, rendered):
+    ticket = incident()
+    ticket.internal_ticket_id = 17
+    related = SimpleNamespace(reference='INT-0000017', title=('TOPÓLOGÍA & <NOC> ' * 2500) + ' FIN-INCIDENCIA-INTERNA', description='No duplicar', sector='Sector histórico', node=None, status='OPEN', provider=None)
+    monkeypatch.setattr(reports, 'get_ticket', lambda *_: ticket)
+    monkeypatch.setattr(reports, 'list_updates', lambda *_: [])
+    monkeypatch.setattr(reports, 'list_escalations', lambda *_: [])
+    monkeypatch.setattr(reports, 'related_internal_incident', lambda *_: related)
+    output = BytesIO()
+    reports.internal_pdf(None, 1, output, ZoneInfo('UTC'), ticket.end_at)
+    words = ' '.join(text for _, text in rendered)
+    assert output.getvalue().startswith(b'%PDF-')
+    assert 'Incidencia interna relacionada' in words and 'FIN-INCIDENCIA-INTERNA' in words
+    assert 'TOPÓLOGÍA & <NOC>' in words and 'Ninguno' in words
+    assert 'Seguimiento cronológico' in words and 'Historial de escalamientos' in words
+    assert max(page for page, _ in rendered) > 1

@@ -16,7 +16,7 @@ import { FeedbackMessage } from './FeedbackMessage'
 
 const message = (error: unknown) => error instanceof Error ? error.message : 'No se pudo completar la solicitud.'
 
-export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { ticketId: number; onCreated: () => void; onCancel: () => void }) {
+export function TicketInterventionModal({ ticketId, onCreated, onCancel, internal = false }: { ticketId: number; internal?: boolean; onCreated: () => void; onCancel: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const initialFocus = useRef<HTMLTextAreaElement>(null)
   const [responsibles, setResponsibles] = useState<Responsible[]>([])
@@ -50,7 +50,7 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
   useEffect(() => {
     const controller = new AbortController()
     setCatalogLoading(true); setCatalogError(null)
-    Promise.all([listResponsibles(controller.signal), listEscalations(ticketId, controller.signal)]).then(([items, escalations]) => {
+    Promise.all([listResponsibles(controller.signal), listEscalations(ticketId, controller.signal, internal ? 'internal-tickets' : 'tickets')]).then(([items, escalations]) => {
       if (!controller.signal.aborted) setEscalations(escalations)
       if (!controller.signal.aborted) { setResponsibles(items); setCatalogLoading(false) }
     }).catch((error: unknown) => {
@@ -74,7 +74,7 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
     try {
       await createTicketUpdate(ticketId, { content, occurred_at: occurredAt,
         ...(escalationId ? { escalation_id: Number(escalationId) } : {}),
-        responsible_id: responsibleId ? Number(responsibleId) : null, visibility }, controller.signal)
+        responsible_id: responsibleId ? Number(responsibleId) : null, visibility: internal ? 'INTERNAL' : visibility }, controller.signal, internal ? 'internal-tickets' : 'tickets')
       if (!controller.signal.aborted) {
         onCreated()
       }
@@ -110,9 +110,9 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel }: { tic
           <FormField id="follow-up-responsible" label="Responsable de la intervención" {...fieldProps('responsible_id')}>
             <SearchableSelect id="follow-up-responsible" label="Responsable de la intervención" value={responsibleId} options={responsibles.map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} onChange={setResponsibleId} disabled={saving || catalogLoading || Boolean(catalogError)} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="Sin coincidencias." />
           </FormField>
-          <FormField id="follow-up-visibility" label="Visibilidad" {...fieldProps('visibility')}>
+          {!internal && <FormField id="follow-up-visibility" label="Visibilidad" {...fieldProps('visibility')}>
             <select id="follow-up-visibility" className="form-input" value={visibility} onChange={(event) => setVisibility(event.target.value as TicketUpdateVisibility)}><option value="INTERNAL">Interna</option><option value="PUBLIC">Pública</option></select>
-          </FormField>
+          </FormField>}
           <FormField id="follow-up-date" label="Fecha de intervención" required {...fieldProps('occurred_at')}>
             <input id="follow-up-date" type="date" className="form-input" required value={intervention[0]} onChange={(event) => setIntervention([event.target.value, intervention[1]])} />
           </FormField>

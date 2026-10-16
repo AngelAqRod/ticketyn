@@ -177,8 +177,8 @@ describe('reportería operativa', () => {
     const url = new URL(call, 'http://local')
     expect(url.searchParams.get('sector_id')).toBe('1')
     expect(url.searchParams.has('offset')).toBe(false)
-    expect(url.searchParams.get('from')).toBe(new Date(2026, 9, 1).toISOString())
-    expect(url.searchParams.get('to')).toBe(new Date(2026, 9, 3).toISOString())
+    expect(new Date(url.searchParams.get('from')!).toISOString()).toBe(new Date(2026, 9, 1).toISOString())
+    expect(new Date(url.searchParams.get('to')!).toISOString()).toBe(new Date(2026, 9, 3).toISOString())
     click.mockRestore()
   })
   it('error de exportación estructurado se muestra sin perder el reporte', async () => {

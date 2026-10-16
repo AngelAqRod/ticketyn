@@ -7,15 +7,15 @@ export async function listTicketUpdates(ticketId: number, signal?: AbortSignal):
   return updates
 }
 
-export const createTicketUpdate = (ticketId: number, payload: TicketUpdateCreate, signal?: AbortSignal) =>
-  postJson<TicketUpdate>(`/api/tickets/${ticketId}/updates`, payload, signal)
+export const createTicketUpdate = (ticketId: number, payload: TicketUpdateCreate, signal?: AbortSignal, scope = 'tickets') =>
+  postJson<TicketUpdate>(`/api/${scope}/${ticketId}/updates`, payload, signal)
 
 export interface TicketUpdatePage { items: TicketUpdate[]; next_cursor: string | null }
 
-export async function pageTicketUpdates(ticketId: number, cursor: string | null, signal?: AbortSignal): Promise<TicketUpdatePage> {
+export async function pageTicketUpdates(ticketId: number, cursor: string | null, signal?: AbortSignal, scope = 'tickets'): Promise<TicketUpdatePage> {
   const query = new URLSearchParams({ limit: '10' })
   if (cursor) query.set('cursor', cursor)
-  const page = await getJson<TicketUpdatePage>(`/api/tickets/${ticketId}/updates?${query}`, signal)
+  const page = await getJson<TicketUpdatePage>(`/api/${scope}/${ticketId}/updates?${query}`, signal)
   if (!page || !Array.isArray(page.items) || !(page.next_cursor === null || typeof page.next_cursor === 'string')) throw new ApiError('La API no devolvió un historial válido.')
   return page
 }

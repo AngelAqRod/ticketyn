@@ -24,3 +24,8 @@ __all__ += ["Activation", "ActivationNumberConfig", "ActivationIntervention", "C
 
 from ticketyn.models.service_type import ServiceType
 __all__ += ["ServiceType", "CpeModel"]
+
+from ticketyn.models.internal_ticket import InternalTicket, InternalTicketUpdate, InternalEscalation, InternalEscalationAudit, InternalTicketNumberConfig, InternalIncidentType, Provider
+
+__all__ += ['InternalTicket', 'InternalTicketUpdate', 'InternalEscalation', 'InternalEscalationAudit', 'InternalTicketNumberConfig', 'InternalIncidentType', 'Provider']
+from ticketyn.models.change import ChangeType, ChangeCompletionType, ChangeNumberConfig, MaintenanceChange, ChangeSupport, ChangeTicket, ChangeUpdate, ChangeAudit

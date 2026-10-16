@@ -9,7 +9,7 @@ from starlette.background import BackgroundTask
 from ticketyn.api.crud import DBSession
 from ticketyn.api.report_data import report_summary
 from ticketyn.api.report_exports import export_pdf, export_xlsx
-from ticketyn.schemas.report import ReportFilters, ReportSummary
+from ticketyn.schemas.report import ReportFilters, ReportSummary, InternalReportFilters, InternalReportSummary
 
 router = APIRouter(prefix='/api/reports', tags=['reports'])
 
@@ -29,8 +29,12 @@ def summary(session: DBSession, filters: Annotated[ReportFilters, Query()]):
 
 @router.get('/export/{format}')
 def export(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotated[ReportFilters, Query()]):
+    return export_response(session, format, filters)
+
+
+def export_response(session, format, filters, *, internal=False):
     read_snapshot(session)
-    summary = report_summary(session, filters)
+    summary = report_summary(session, filters, internal=internal)
     output = SpooledTemporaryFile(max_size=2 * 1024 * 1024)
     try:
         (export_pdf if format == 'pdf' else export_xlsx)(session, filters, summary, output)
@@ -44,8 +48,19 @@ def export(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotate
                 yield chunk
         finally:
             output.close()
-    name = 'nodo' if filters.node_id else 'responsable' if filters.responsible_id else 'sector' if filters.sector_id else 'general'
+    name = 'tickets-internos' if internal else 'nodo' if filters.node_id else 'responsable' if filters.responsible_id else 'sector' if filters.sector_id else 'general'
     media = 'application/pdf' if format == 'pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     return StreamingResponse(chunks(), media_type=media,
         headers={'Content-Disposition': f'attachment; filename="ticketyn-{name}.{format}"'},
         background=BackgroundTask(output.close))
+
+
+@router.get('/internal-tickets/summary', response_model=InternalReportSummary)
+def internal_summary(session: DBSession, filters: Annotated[InternalReportFilters, Query()]):
+    read_snapshot(session)
+    return report_summary(session, filters, internal=True)
+
+
+@router.get('/internal-tickets/export/{format}')
+def internal_export(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotated[InternalReportFilters, Query()]):
+    return export_response(session, format, filters, internal=True)

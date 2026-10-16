@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.5.0 — En revisión
+
+### Funcionalidades
+
+- Tickets internos de infraestructura/NOC, sin cliente, circuito ni contenido para cliente.
+- Seguimiento siempre interno, escalamientos, cierre y corrección de proveedor tras el cierre.
+- Catálogos independientes de tipos de incidencia interna y proveedores.
+- Numeración interna configurable e independiente; interfaz Capsule NOC.
+- Vínculo opcional desde Tickets y consulta inversa paginada, sin propagar estados.
+- Reportería y exportaciones de tickets internos.
+- Sincronización de sectores entre circuitos y tickets recientes.
+- Relaciones entre tickets internos y registros de Control de Cambios.
+
+### Control de Cambios
+
+- Nuevo módulo de Control de Cambios para registrar y consultar intervenciones.
+- Catálogo administrable de Tipos de cambio.
+- Vistas de listado y calendario, con filtros y navegación por períodos.
+- Registro de cambios sin necesidad de crear un ticket interno.
+- Gestión de fechas y horas de las intervenciones.
+- Gráficas y estadísticas específicas de Control de Cambios.
+
+### Datos y compatibilidad
+
+- Migración aditiva `0021_internal_tickets` desde `0020_activation_cpe`; vínculos históricos NULL.
+- Reutilización de servicios operativos, controles y componentes existentes.
+- Se conserva el modelo de acceso externo sin usuarios ni autorización individual de backend.
+- Pruebas con PostgreSQL temporal, migración y numeración concurrente; sin publicación automática.
+- Migración aditiva `0022_change_control` para el módulo Control de Cambios.
+- Migración `0023_change_types` para el catálogo de tipos de cambio.
+- Migración `0024_default_change_types_upper` para normalizar los tipos de cambio predeterminados a mayúsculas.
+
 ## v0.4.4 — Rediseño integral de la interfaz
 
 - Renovación visual general de Ticketyn, con una identidad gráfica consistente en los módulos de la aplicación.
@@ -29,7 +61,7 @@
 
 ## 0.4.1 — Corrección de Nodo histórico de tickets
 
-- Recupera Nodos faltantes desde circuitos con Nodo válido mediante `0018_recover_ticket_nodes`, bajo la confirmación de que esos Nodos no cambiaron.
+g- Recupera Nodos faltantes desde circuitos con Nodo válido mediante `0018_recover_ticket_nodes`, bajo la confirmación de que esos Nodos no cambiaron.
 - Preserva Nodos históricos existentes y registros FMS; aborta ante relaciones inconsistentes.
 - Verifica creación transaccional, listado/detalle, filtros, reportería y exportaciones sobre el Nodo persistido.
 - Sin sustituciones visuales ni sincronización permanente. El downgrade de la reparación conserva los datos.

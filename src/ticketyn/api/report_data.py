@@ -50,17 +50,27 @@ def trend(session, started, filters, grain, time_field="start_at"):
     return buckets
 
 
-def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
+def report_summary(session: Session, filters: ReportFilters, *, internal=False) -> ReportSummary:
+    # One aggregation engine; the context supplies the entity, predicate and catalogs.
+    from ticketyn.models import InternalTicket, InternalIncidentType, Provider
+    from ticketyn.api.internal_ticket_data import statement as internal_statement
+    entity = InternalTicket if internal else Ticket
+    statement_for = internal_statement if internal else ticket_statement
     selected_sector = get_or_404(session, Sector, filters.sector_id) if filters.sector_id else None
     selected_node = get_or_404(session, Node, filters.node_id) if filters.node_id else None
     selected_responsible = get_or_404(session, Responsible, filters.responsible_id) if filters.responsible_id else None
-    started = ticket_statement(filters.ticket_filters()).order_by(None).subquery()
-    closed = ticket_statement({**filters.ticket_filters(), 'status': 'CLOSED'}, time_field='end_at').where(Ticket.end_at.is_not(None)).order_by(None).subquery()
+    started = statement_for(filters.ticket_filters()).order_by(None).subquery()
+    closed = statement_for(filters.ticket_filters(), time_field='end_at').where(entity.status == 'CLOSED', entity.end_at.is_not(None)).order_by(None).subquery()
     duration = func.extract('epoch', closed.c.end_at - closed.c.start_at)
     closed_stats = session.execute(select(func.count(), func.avg(duration), func.coalesce(func.sum(duration), 0)).select_from(closed)).one()
     started_count = session.scalar(select(func.count()).select_from(started))
     rankings = {}
-    for key, field, model in [('departments', 'department_id', Department), ('sectors', 'sector_id', Sector), ('customers', 'customer_id', Customer), ('circuits', 'circuit_id', Circuit), ('incident_types', 'incident_type_id', IncidentType), ('nodes', 'node_id', Node), ('responsibles', 'responsible_id', Responsible)]:
+    dimensions = [('departments', 'department_id', Department), ('sectors', 'sector_id', Sector), ('customers', 'customer_id', Customer), ('circuits', 'circuit_id', Circuit), ('incident_types', 'incident_type_id', IncidentType), ('nodes', 'node_id', Node), ('responsibles', 'responsible_id', Responsible)]
+    if internal:
+        dimensions = [(key, field, InternalIncidentType if key == 'incident_types' else model) for key, field, model in dimensions if key not in ('customers', 'circuits')]
+        dimensions.append(('providers', 'provider_id', Provider))
+        rankings.update(customers=[], circuits=[])
+    for key, field, model in dimensions:
         if (key == 'sectors' and selected_sector) or (key == 'nodes' and selected_node) or (key == 'responsibles' and selected_responsible):
             rankings[key] = []
             continue
@@ -68,6 +78,8 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
         count = func.count().label('count')
         statement = select(model.id, label.label('label'), count).select_from(started)
         statement = statement.join(model, getattr(started.c, field) == model.id)
+        if internal and model is Provider:
+            statement = select(func.coalesce(model.id, 0).label('id'), func.coalesce(model.name, 'Ninguno').label('label'), count).select_from(started).outerjoin(model, started.c.provider_id == model.id)
         groups = [model.id, label]
         if model is Circuit:
             statement = statement.join(Customer, model.customer_id == Customer.id).add_columns(Customer.id.label('customer_id'), Customer.customer_code, Customer.name.label('customer_name'))
@@ -104,9 +116,20 @@ def report_summary(session: Session, filters: ReportFilters) -> ReportSummary:
     department_durations = durations_by(Department, 'department_id')
     from ticketyn.api.escalation_stats import escalation_summary
     from ticketyn.schemas.escalation_stats import EscalationFilters
-    escalation_filters = EscalationFilters.model_validate(filters.model_dump(by_alias=True))
-    return ReportSummary(
-        escalations=escalation_summary(session, escalation_filters),
+    escalation_filters = None if internal else EscalationFilters.model_validate(filters.model_dump(by_alias=True))
+    extra = {}
+    result_model = ReportSummary
+    if internal:
+        from ticketyn.schemas.report import InternalReportSummary
+        from ticketyn.api.internal_ticket_exports import friendly_filters
+        result_model = InternalReportSummary
+        links = select(Ticket.internal_ticket_id, func.count().label('count')).where(Ticket.internal_ticket_id.is_not(None)).group_by(Ticket.internal_ticket_id).subquery()
+        related = session.execute(select(func.coalesce(func.sum(links.c.count), 0), func.count(links.c.internal_ticket_id)).select_from(started).outerjoin(links, links.c.internal_ticket_id == started.c.id)).one()
+        open_count = session.scalar(select(func.count()).select_from(started).where(started.c.status == 'OPEN'))
+        extra = dict(open_tickets=open_count, closed_tickets=started_count-open_count, related_tickets=related[0], with_related=related[1], without_related=started_count-related[1], applied_filters=friendly_filters(session, filters))
+    return result_model(
+        **extra,
+        escalations=None if internal else escalation_summary(session, escalation_filters),
         period={'from_at': filters.from_at, 'to_exclusive': filters.to_at, 'timezone': filters.timezone, 'granularity': grain},
         generated_at=datetime.now(timezone.utc),
         sector={'id': selected_sector.id, 'name': selected_sector.name} if selected_sector else None,

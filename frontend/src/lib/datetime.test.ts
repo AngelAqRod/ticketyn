@@ -33,3 +33,21 @@ it('convierte fechas operativas de Guatemala independientemente del navegador', 
   expect(ticketynDateTimeValue(new Date('2026-10-12T05:59:00Z'))).toBe('2026-10-11T23:59')
   expect(() => ticketynDateTimeToIso('2026-02-30T08:00')).toThrow()
 })
+
+
+it.each(['Etc/GMT+6', 'UTC', 'Asia/Tokyo'])('conserva segundos y medianoche en Guatemala desde %s', zone => {
+  const moduleUrl = pathToFileURL(resolve('src/lib/datetime.ts')).href
+  const result = execFileSync(process.execPath, ['--input-type=module', '-e',
+    `import { ticketynDateTimeToIso } from ${JSON.stringify(moduleUrl)}; console.log(JSON.stringify(['2026-10-15T23:00:00', '2026-10-16T03:00:00', '2026-10-15T23:00:50'].map(ticketynDateTimeToIso)));`,
+  ], { env: { ...process.env, TZ: zone }, encoding: 'utf8' })
+  expect(JSON.parse(result)).toEqual(['2026-10-16T05:00:00.000Z', '2026-10-16T09:00:00.000Z', '2026-10-16T05:00:50.000Z'])
+})
+
+
+it('preserva segundos al editar y rechaza valores fuera de rango', async () => {
+  const { ticketynDateTimeToIso, ticketynDateTimeValue } = await import('./datetime')
+  expect(ticketynDateTimeValue(new Date('2026-10-16T05:00:50Z'), true)).toBe('2026-10-15T23:00:50')
+  for (const value of ['2026-02-30T23:00:50', '2026-10-15T24:00:00', '2026-10-15T23:60:00', '2026-10-15T23:00:60', '']) {
+    expect(() => ticketynDateTimeToIso(value)).toThrow('Introduce una fecha/hora válida.')
+  }
+})

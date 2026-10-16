@@ -3,11 +3,19 @@ from io import BytesIO
 
 import pytest
 from openpyxl import load_workbook
-from sqlalchemy import event
+from sqlalchemy import event, update
+from ticketyn.models import Ticket
 
 from test_tickets import create_ticket, RELATED_PATHS
 
 BASE = {'from': '2020-01-01T00:00:00Z', 'to': '2020-01-02T00:00:00Z', 'timezone': 'UTC'}
+
+
+def preserve_historical_creation(session, circuit_id):
+    # These report scenarios model old snapshots, not recently corrected entries.
+    session.execute(update(Ticket).where(Ticket.circuit_id==circuit_id).values(
+        created_at=datetime(2020,1,1,tzinfo=timezone.utc), updated_at=Ticket.updated_at))
+    session.commit()
 
 
 def summary(client, **params):
@@ -45,9 +53,10 @@ def test_temporal_universes_kpis_rankings_and_boundaries(api_client, ticket_payl
     assert report['customers'][0]['label'].startswith('TEST-CUSTOMER')
 
 
-def test_sector_and_historical_catalogs(api_client, ticket_payload):
+def test_sector_and_historical_catalogs(api_client, ticket_payload, db_session):
     create_ticket(api_client, ticket_payload)
     second_sector = api_client.post('/api/sectors', json={'name': 'Otro sector'}).json()
+    preserve_historical_creation(db_session, ticket_payload['circuit_id'])
     assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': second_sector['id']}).status_code == 200
     create_ticket(api_client, {**ticket_payload, 'sector_id': second_sector['id']})
     for field, path in RELATED_PATHS.items():
@@ -96,11 +105,12 @@ def test_all_time_period(api_client):
 
 
 @pytest.mark.parametrize('sector_view', [False, True])
-def test_xlsx_all_rows_period_sector_styles_and_safe_strings(api_client, ticket_payload, sector_view):
+def test_xlsx_all_rows_period_sector_styles_and_safe_strings(api_client, ticket_payload, sector_view, db_session):
     for _ in range(51):
         create_ticket(api_client, {**ticket_payload, 'title': '=1+1'})
     create_ticket(api_client, {**ticket_payload, 'start_at': BASE['to']})
     other_sector = api_client.post('/api/sectors', json={'name': 'Otro'}).json()['id']
+    preserve_historical_creation(db_session, ticket_payload['circuit_id'])
     assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': other_sector}).status_code == 200
     create_ticket(api_client, {**ticket_payload, 'sector_id': other_sector})
     filters = {**BASE, **({'sector_id': ticket_payload['sector_id']} if sector_view else {})}
@@ -122,7 +132,7 @@ def test_xlsx_all_rows_period_sector_styles_and_safe_strings(api_client, ticket_
 
 
 @pytest.mark.parametrize('sector_view', [False, True])
-def test_pdf_all_rows_respects_period_sector(api_client, ticket_payload, sector_view, monkeypatch):
+def test_pdf_all_rows_respects_period_sector(api_client, ticket_payload, sector_view, monkeypatch, db_session):
     # Captura el texto que ReportLab realmente escribe, sin una dependencia PDF de test.
     from reportlab.pdfgen.canvas import Canvas
     original = Canvas.drawString
@@ -141,6 +151,7 @@ def test_pdf_all_rows_respects_period_sector(api_client, ticket_payload, sector_
     included = [create_ticket(api_client, ticket_payload)['reference'] for _ in range(51)]
     excluded = create_ticket(api_client, {**ticket_payload, 'start_at': BASE['to']})['reference']
     sector = api_client.post('/api/sectors', json={'name': 'Otro'}).json()['id']
+    preserve_historical_creation(db_session, ticket_payload['circuit_id'])
     assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': sector}).status_code == 200
     other = create_ticket(api_client, {**ticket_payload, 'sector_id': sector})['reference']
     response = api_client.get('/api/reports/export/pdf', params={**BASE, **({'sector_id': ticket_payload['sector_id']} if sector_view else {})})
@@ -180,9 +191,10 @@ def test_snapshot_uses_repeatable_read_in_isolated_engine(postgres_engine):
         assert session.scalar(text('SHOW transaction_isolation')) == 'repeatable read'
 
 
-def test_ranking_full_data_and_deterministic_order(api_client, ticket_payload):
+def test_ranking_full_data_and_deterministic_order(api_client, ticket_payload, db_session):
     for index in range(12):
         sector = api_client.post('/api/sectors', json={'name': f'Sector {index:02}'}).json()['id']
+        preserve_historical_creation(db_session, ticket_payload['circuit_id'])
         assert api_client.patch(f"/api/circuits/{ticket_payload['circuit_id']}", json={'sector_id': sector}).status_code == 200
         for _ in range(2 if index == 11 else 1):
             create_ticket(api_client, {**ticket_payload, 'sector_id': sector})

@@ -13,7 +13,7 @@ from ticketyn.api.report_data import report_tickets
 
 def metadata(summary):
     zone = ZoneInfo(summary.period.timezone)
-    return [
+    rows = [
         ['Ticketyn', report_title(summary)],
         ['Sector', summary.sector['name'] if summary.sector else 'Todos'],
         ['Nodo', summary.node['name'] if summary.node else 'Todos'],
@@ -29,6 +29,12 @@ def metadata(summary):
         ['Rankings Nodo/Responsable', 'Solo tickets con asignación; NULL continúa incluido en los KPI correspondientes.'],
         ['Universo cierres/duración', 'Estado CLOSED y Fin en el período, aunque Inicio sea anterior.'],
     ]
+
+    if getattr(summary, 'report_kind', None) == 'internal':
+        rows.extend([['Filtros', ' · '.join(summary.applied_filters)], ['Abiertos (iniciados)', summary.open_tickets],
+                     ['Cerrados (iniciados)', summary.closed_tickets], ['Tickets de clientes vinculados', summary.related_tickets],
+                     ['Incidencias con tickets vinculados', summary.with_related], ['Incidencias sin tickets vinculados', summary.without_related]])
+    return rows
 
 
 def export_xlsx(session, filters, summary, output):
@@ -70,18 +76,27 @@ def export_xlsx(session, filters, summary, output):
                    incident_type.name, ticket.title, ticket.description, local(ticket.start_at),
                    local(ticket.end_at), ticket.duration_seconds, ('En curso' if ticket.duration_seconds is None else duration_text(ticket.duration_seconds)),
                    ticket.start_at.astimezone(zone).isoformat(), ticket.end_at.astimezone(zone).isoformat() if ticket.end_at else None, ticket.node.name if ticket.node else None, ticket.responsible.name if ticket.responsible else None]
-    sheet('Tickets', ['Referencia', 'Estado', 'Cliente código', 'Cliente nombre', 'Circuito código',
-                     'Circuito descripción', 'Sector', 'Departamento', 'Tipo de incidencia', 'Título',
-                     'Descripción', 'Inicio', 'Fin', 'Duración (segundos)', 'Duración', 'Inicio ISO (con offset)', 'Fin ISO (con offset)', 'Nodo', 'Responsable'],
-          ticket_rows(), [22, 12, 22, 30, 25, 35, 24, 24, 25, 40, 65, 23, 23, 23, 22, 32, 32, 28, 28])
+    if getattr(summary, 'report_kind', None) == 'internal':
+        from ticketyn.api.internal_ticket_exports import HEADERS, export_rows
+        sheet('Tickets internos', HEADERS, export_rows(session, filters, excel=True), [24, 50, 14, 26, 26, 26, 28, 32, 30, 34, 22, 24])
+    else:
+        sheet('Tickets', ['Referencia', 'Estado', 'Cliente código', 'Cliente nombre', 'Circuito código',
+                         'Circuito descripción', 'Sector', 'Departamento', 'Tipo de incidencia', 'Título',
+                         'Descripción', 'Inicio', 'Fin', 'Duración (segundos)', 'Duración', 'Inicio ISO (con offset)', 'Fin ISO (con offset)', 'Nodo', 'Responsable'],
+              ticket_rows(), [22, 12, 22, 30, 25, 35, 24, 24, 25, 40, 65, 23, 23, 23, 22, 32, 32, 28, 28])
     sheet('Evolución', ['Inicio del bucket (local)', 'Incidencias', 'Inicio ISO (con offset)'],
           ([bucket.start_at.astimezone(zone).replace(tzinfo=None), bucket.count, bucket.start_at.isoformat()] for bucket in summary.trend), [28, 20, 32])
-    for key, title in [('sectors', 'Sectores'), ('customers', 'Clientes'), ('circuits', 'Circuitos'), ('incident_types', 'Tipos'), ('nodes', 'Nodos'), ('responsibles', 'Responsables'), ('departments', 'Departamentos')]:
+    for key, title in report_dimensions(summary):
+        if key == 'incident_types' and getattr(summary, 'report_kind', None) != 'internal':
+            title = 'Tipos'
         if (key == 'sectors' and summary.sector) or (key == 'nodes' and summary.node) or (key == 'responsibles' and summary.responsible):
             continue
         rows = getattr(summary, key)
-        sheet(title, ['ID', 'Nombre / código', 'Incidencias', 'Cliente código', 'Cliente nombre'],
-              ([row.id, row.label, row.count, row.customer_code, row.customer_name] for row in rows), [12, 65, 20, 25, 35])
+        if getattr(summary, 'report_kind', None) == 'internal':
+            sheet(title, ['ID', 'Nombre', 'Incidencias'], ([row.id, row.label, row.count] for row in rows), [12, 65, 20])
+        else:
+            sheet(title, ['ID', 'Nombre / código', 'Incidencias', 'Cliente código', 'Cliente nombre'],
+                  ([row.id, row.label, row.count, row.customer_code, row.customer_name] for row in rows), [12, 65, 20, 25, 35])
     sheet('Iniciadas y cerradas', ['Bucket ISO', 'Iniciadas', 'Cerradas'], ([row.start_at.isoformat(), row.started, row.closed] for row in summary.activity), [32, 18, 18])
     for key, name in [('hours', 'Horas'), ('weekdays', 'Días')]:
         sheet(name, ['Período', 'Incidencias'], ([row.label, row.count] for row in getattr(summary, key)), [25, 18])
@@ -119,8 +134,10 @@ def export_pdf(session, filters, summary, output):
         paragraph('Iniciadas, evolución, rankings y detalle: Inicio en el período. Cerradas y duraciones: estado Cerrado y Fin en el período, incluso si comenzaron antes. Cerrados sin Fin no aportan duración. Rankings de Nodo/Responsable: solo asignados.', size=7),
         KeepTogether([section('Evolución de incidencias', 2), TrendGraphic(summary.trend, zone, width, summary.period.granularity)]), Spacer(1, 8)]
     story.append(KeepTogether([section('Iniciadas vs cerradas', 3), ActivityGraphic(summary.activity, zone, width, summary.period.granularity)]))
+    if getattr(summary, 'report_kind', None) == 'internal':
+        story.extend([paragraph(' · '.join(summary.applied_filters), size=8), modern_table(['Indicador', 'Valor'], metadata(summary)[-5:], [width * .65, width * .35])])
     number = 4
-    for key, name in [('sectors', 'Sectores'), ('customers', 'Clientes'), ('circuits', 'Circuitos'), ('incident_types', 'Tipos de incidencia'), ('nodes', 'Nodos'), ('responsibles', 'Responsables'), ('departments', 'Departamentos')]:
+    for key, name in report_dimensions(summary):
         if (key == 'sectors' and summary.sector) or (key == 'nodes' and summary.node) or (key == 'responsibles' and summary.responsible): continue
         ranking = getattr(summary, key)
         heading = section(f'{name} · ranking completo ({len(ranking)})', number)
@@ -167,12 +184,17 @@ def export_pdf(session, filters, summary, output):
         number += 1
         story.append(KeepTogether([section('Evolución de escalamientos', number), TrendGraphic(data.trend, zone, width, data.granularity)]))
         number += 1
-    story.extend([PageBreak(), section('Detalle de tickets — todos los iniciados en el período', number, keep=False),
-        ticket_pdf_table(report_tickets(session, filters), zone, width)])
+    if getattr(summary, 'report_kind', None) == 'internal':
+        from ticketyn.api.internal_ticket_exports import export_rows
+        table = modern_table(['Correlativo', 'Incidencia', 'Estado', 'Sector', 'Nodo', 'Depto.', 'Responsable', 'Tipo interno', 'Proveedor', 'Inicio', 'Duración', 'Tickets de clientes'], export_rows(session, filters), [width * fraction for fraction in [.10,.13,.06,.07,.07,.07,.09,.09,.09,.085,.065,.08]], reference=True)
+    else:
+        table = ticket_pdf_table(report_tickets(session, filters), zone, width)
+    story.extend([PageBreak(), section('Detalle de tickets — todos los iniciados en el período', number, keep=False), table])
     build_pdf(output, title, filters.timezone, story)
 
 
 def report_title(summary):
+    if getattr(summary, 'report_kind', None) == 'internal': return 'Reportería de Tickets internos'
     if summary.node: return "Reporte por Nodo"
     if summary.responsible: return "Reporte por Responsable"
     return "Reporte por Sector" if summary.sector else "Reporte General"
@@ -188,3 +210,11 @@ def escalation_metadata(data):
         ['Criterio temporal', 'Inicio operativo del escalamiento. Duración: Fin menos Inicio solo finalizados.'],
         ['Porcentaje', 'Tickets iniciados en el período con escalamiento iniciado en el período / tickets iniciados en el período.'],
     ]
+
+
+def report_dimensions(summary):
+    dimensions = [('sectors', 'Sectores'), ('customers', 'Clientes'), ('circuits', 'Circuitos'), ('incident_types', 'Tipos de incidencia'), ('nodes', 'Nodos'), ('responsibles', 'Responsables'), ('departments', 'Departamentos')]
+    if getattr(summary, 'report_kind', None) == 'internal':
+        dimensions = [(key, title) for key, title in dimensions if key not in ('customers', 'circuits')]
+        dimensions.append(('providers', 'Proveedores'))
+    return dimensions

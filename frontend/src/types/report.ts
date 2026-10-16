@@ -1,6 +1,12 @@
 import type { EscalationSummary } from './escalation'
 export interface ReportRanking { id: number; label: string; count: number; customer_id: number | null; customer_code: string | null; customer_name: string | null }
 export interface ReportSummary {
+  providers?: ReportRanking[]
+  open_tickets?: number
+  closed_tickets?: number
+  related_tickets?: number
+  with_related?: number
+  without_related?: number
   escalations?: EscalationSummary | null
   node?: { id: number; name: string } | null
   responsible?: { id: number; name: string } | null
@@ -19,4 +25,4 @@ export interface ReportSummary {
   trend: { start_at: string; count: number }[]
   sectors: ReportRanking[]; customers: ReportRanking[]; circuits: ReportRanking[]; incident_types: ReportRanking[]
 }
-export interface ReportQuery { from?: string; to?: string; recipient_id?: number; timezone: string; sector_id?: number; node_id?: number; responsible_id?: number; granularity?: string }
+export interface ReportQuery { from?: string; to?: string; recipient_id?: number; timezone: string; sector_id?: number; node_id?: number; responsible_id?: number; granularity?: string; status?: string; department_id?: number; incident_type_id?: number; provider_id?: number; without_provider?: boolean }

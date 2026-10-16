@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, Query, Response
 
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from sqlalchemy.orm import Session
 
 from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_items, save_item, update_item
@@ -13,6 +13,7 @@ from ticketyn.models.fms import Activation, CapacityChange, CircuitLifecycleOper
 from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate, CpeConfigurationInput, CpeConfigurationResponse
 
 from ticketyn.api.circuit_sector import locked_circuit, validate_sector, validate_node
+from ticketyn.api.circuit_ticket_sectors import synchronize_recent_ticket_sectors
 
 router = APIRouter(prefix="/api/circuits", tags=["circuits"])
 
@@ -55,27 +56,37 @@ def get_circuit(id: Annotated[int, Path(gt=0)], session: DBSession):
 
 @router.patch("/{id}", response_model=CircuitResponse)
 def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, session: DBSession):
-    item = locked_circuit(session, id)
-    values = payload.model_dump(exclude_unset=True)
-    sector_id = values.get('sector_id', item.sector_id)
-    if sector_id is None:
-        raise HTTPException(422, 'Selecciona un Sector para el circuito antes de guardar.')
-    if sector_id != item.sector_id:
-        validate_sector(session, sector_id)
-    validate_initial_capacity({'initial_capacity': values.get('initial_capacity', item.initial_capacity), 'initial_capacity_unit': values.get('initial_capacity_unit', item.initial_capacity_unit)})
-    if "customer_id" in values:
-        get_or_404(session, Customer, values["customer_id"])
-    node_id = values.get("node_id", item.node_id)
-    if node_id is None:
-        raise HTTPException(422, "Selecciona un Nodo para el circuito antes de guardar.")
-    if node_id != item.node_id:
-        validate_node(session, node_id)
-    if values.get('service_type_id') is not None and values['service_type_id'] != item.service_type_id:
-        validate_active(session, ServiceType, values['service_type_id'])
-    if values.get('cpe_model_id') is not None and values['cpe_model_id'] != item.cpe_model_id:
-        validate_active(session, CpeModel, values['cpe_model_id'])
-    return update_item(session, item, values)
-
+    try:
+        item = locked_circuit(session, id)
+        values = payload.model_dump(exclude_unset=True)
+        sector_id = values.get('sector_id', item.sector_id)
+        if sector_id is None:
+            raise HTTPException(422, 'Selecciona un Sector para el circuito antes de guardar.')
+        sector_changed = sector_id != item.sector_id
+        new_sector = validate_sector(session, sector_id) if sector_changed else None
+        validate_initial_capacity({'initial_capacity': values.get('initial_capacity', item.initial_capacity), 'initial_capacity_unit': values.get('initial_capacity_unit', item.initial_capacity_unit)})
+        if "customer_id" in values:
+            get_or_404(session, Customer, values["customer_id"])
+        node_id = values.get("node_id", item.node_id)
+        if node_id is None:
+            raise HTTPException(422, "Selecciona un Nodo para el circuito antes de guardar.")
+        if node_id != item.node_id:
+            validate_node(session, node_id)
+        if values.get('service_type_id') is not None and values['service_type_id'] != item.service_type_id:
+            validate_active(session, ServiceType, values['service_type_id'])
+        if values.get('cpe_model_id') is not None and values['cpe_model_id'] != item.cpe_model_id:
+            validate_active(session, CpeModel, values['cpe_model_id'])
+        if sector_changed:
+            synchronize_recent_ticket_sectors(session, item.id, new_sector)
+        return update_item(session, item, values)
+    except OperationalError as error:
+        session.rollback()
+        if getattr(error.orig, 'sqlstate', None) in {'55P03', '40P01', '40001'}:
+            raise HTTPException(409, 'Hay una edición concurrente del circuito o sus tickets. Reintenta guardar los cambios.') from None
+        raise
+    except Exception:
+        session.rollback()
+        raise
 
 
 @router.delete("/{id}", status_code=204, response_class=Response)

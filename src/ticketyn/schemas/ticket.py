@@ -16,7 +16,7 @@ class TicketInput(BaseModel):
     @field_validator("*", mode="before")
     @classmethod
     def validate_supplied_values(cls, value, info):
-        if value is None and info.field_name not in {"end_at", "responsible_id", "resolution", "customer_description", "customer_resolution"}:
+        if value is None and info.field_name not in {"end_at", "responsible_id", "resolution", "customer_description", "customer_resolution", "internal_ticket_id"}:
             raise ValueError("El campo no admite null")
         if isinstance(value, str) and not value.strip():
             raise ValueError("El campo no puede estar vacío")
@@ -24,6 +24,7 @@ class TicketInput(BaseModel):
 
 
 class TicketCreate(TicketInput):
+    internal_ticket_id: PositiveId | None = None
     node_id: PositiveId | None = None
     resolution: OptionalTicketText | None = None
     customer_description: OptionalTicketText | None = None
@@ -42,6 +43,7 @@ class TicketCreate(TicketInput):
 
 
 class TicketUpdate(TicketInput):
+    internal_ticket_id: PositiveId | None = None
     node_id: PositiveId | None = None
     resolution: OptionalTicketText | None = None
     customer_description: OptionalTicketText | None = None
@@ -60,6 +62,7 @@ class TicketUpdate(TicketInput):
 
 
 class TicketResponse(BaseModel):
+    internal_ticket_id: int | None = None
     node_id: int | None
     resolution: str | None
     customer_description: str | None

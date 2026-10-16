@@ -26,7 +26,17 @@ from ticketyn.core.config import get_settings
 
 def create_app() -> FastAPI:
     get_settings()
-    app = FastAPI(title="Ticketyn", version="0.4.4")
+    app = FastAPI(title="Ticketyn", version="0.5.0")
+    from ticketyn.api.internal_tickets import router as internal_router
+    from ticketyn.api.internal_incident_types import router as internal_types_router
+    from ticketyn.api.providers import router as providers_router
+    from ticketyn.api.changes import router as changes_router
+    from ticketyn.api.change_reports import router as change_reports_router
+    app.include_router(changes_router)
+    app.include_router(change_reports_router)
+    app.include_router(internal_router)
+    app.include_router(internal_types_router)
+    app.include_router(providers_router)
     app.include_router(cpe_models_router)
     app.include_router(service_types_router)
     app.include_router(fms_router)

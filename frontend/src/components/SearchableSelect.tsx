@@ -1,9 +1,12 @@
 import { X, ChevronDown } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { AriaAttributes, KeyboardEvent } from 'react'
+import type { AriaAttributes, KeyboardEvent, ReactNode } from 'react'
 
 export interface SelectOption { value: string; label: string; disabled?: boolean }
 interface Props extends Pick<AriaAttributes, 'aria-describedby' | 'aria-invalid'> {
+  dropdownFooter?: ReactNode
+  onSearchChange?: (query: string) => void
+  remote?: boolean
   id: string
   value: string
   options: SelectOption[]
@@ -16,21 +19,21 @@ interface Props extends Pick<AriaAttributes, 'aria-describedby' | 'aria-invalid'
   noMatchMessage: string
 }
 
-export function SearchableSelect({ id, value, options, onChange, disabled = false, required = false, label, placeholder, emptyMessage, noMatchMessage, 'aria-describedby': describedBy, 'aria-invalid': invalid }: Props) {
+export function SearchableSelect({ id, value, options, onChange, onSearchChange, dropdownFooter, remote = false, disabled = false, required = false, label, placeholder, emptyMessage, noMatchMessage, 'aria-describedby': describedBy, 'aria-invalid': invalid }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const selected = options.find((option) => option.value === value)
-  const matches = options.filter((option) => option.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  const matches = remote ? options : options.filter((option) => option.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
   const enabled = matches.filter((option) => !option.disabled)
   const expanded = open && !disabled
   const activeIndex = matches.findIndex((option) => option.value === active && !option.disabled)
   const listId = `${id}-options`
 
   function close() { setOpen(false); setQuery(''); setActive(null) }
-  function show() { if (!disabled) { setOpen(true); setQuery(''); setActive(null) } }
+  function show() { if (!disabled) { setOpen(true); setQuery(''); onSearchChange?.(''); setActive(null) } }
   function select(option: SelectOption) {
     if (disabled || option.disabled) return
     onChange(option.value)
@@ -75,12 +78,12 @@ export function SearchableSelect({ id, value, options, onChange, disabled = fals
         aria-activedescendant={expanded && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
         value={expanded ? query : selected?.label ?? ''} placeholder={selected?.label ?? placeholder}
         onFocus={show} onClick={() => { if (!expanded) show() }}
-        onChange={(event) => { setOpen(true); setQuery(event.target.value); setActive(null) }} onKeyDown={keyboard} />
+        onChange={(event) => { setOpen(true); setQuery(event.target.value); onSearchChange?.(event.target.value); setActive(null) }} onKeyDown={keyboard} />
       {value && <button type="button" className="combobox-action" disabled={disabled} aria-label={`Limpiar ${label}`} onClick={() => { onChange(''); close() }}><X size={14} aria-hidden="true" /></button>}
       <button type="button" className="combobox-action" disabled={disabled} aria-label={`${expanded ? 'Cerrar' : 'Abrir'} ${label}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (expanded) close(); else { input.current?.focus(); show() } }}><ChevronDown size={14} aria-hidden="true" /></button>
     </div>
     {expanded && <div className="combobox-menu">
-      {query && <button type="button" className="px-3 py-2 text-xs text-primary underline" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(''); setActive(null); input.current?.focus() }}>Limpiar búsqueda</button>}
+      {query && <button type="button" className="px-3 py-2 text-xs text-primary underline" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(''); onSearchChange?.(''); setActive(null); input.current?.focus() }}>Limpiar búsqueda</button>}
       <ul id={listId} role="listbox" aria-label={label} className="overflow-y-auto py-1">
         {matches.map((option, index) => <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={value === option.value} aria-disabled={option.disabled || undefined}
           className={`px-3 py-2 text-sm ${option.disabled ? 'cursor-not-allowed text-slate-400' : `cursor-pointer hover:bg-primary-soft ${active === option.value ? 'bg-primary-soft text-ink' : 'text-slate-800'}`}`}
@@ -88,6 +91,7 @@ export function SearchableSelect({ id, value, options, onChange, disabled = fals
           {option.label}{option.disabled && <span className="ml-2 text-xs">(Inactivo)</span>}{value === option.value && <span aria-hidden="true" className="ml-2">✓</span>}
         </li>)}
       </ul>
+      {dropdownFooter}
       {!matches.length && <p role="status" className="px-3 py-3 text-sm text-slate-500">{options.length ? noMatchMessage : emptyMessage}</p>}
     </div>}
   </div>

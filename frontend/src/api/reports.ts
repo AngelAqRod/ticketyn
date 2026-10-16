@@ -5,6 +5,6 @@ export function reportParams(query: ReportQuery): string {
   for (const [key, value] of Object.entries(query)) if (value !== undefined) params.set(key, String(value))
   return params.toString()
 }
-export const getReport = (query: ReportQuery, signal?: AbortSignal) => getJson<ReportSummary>(`/api/reports/summary?${reportParams(query)}`, signal)
-export const reportExportUrl = (format: 'pdf' | 'xlsx', query: ReportQuery) => `/api/reports/export/${format}?${reportParams(query)}`
-export const downloadReport = (format: 'pdf' | 'xlsx', query: ReportQuery) => downloadFile(reportExportUrl(format, query), `ticketyn-${query.node_id ? 'nodo' : query.responsible_id ? 'responsable' : query.sector_id ? 'sector' : 'general'}.${format}`)
+export const getReport = (query: ReportQuery, signal?: AbortSignal, internal = false) => getJson<ReportSummary>(`/api/reports/${internal ? 'internal-tickets/' : ''}summary?${reportParams(query)}`, signal)
+export const reportExportUrl = (format: 'pdf' | 'xlsx', query: ReportQuery, internal = false) => `/api/reports/${internal ? 'internal-tickets/' : ''}export/${format}?${reportParams(query)}`
+export const downloadReport = (format: 'pdf' | 'xlsx', query: ReportQuery, internal = false) => downloadFile(reportExportUrl(format, query, internal), `ticketyn-${internal ? 'tickets-internos' : query.node_id ? 'nodo' : query.responsible_id ? 'responsable' : query.sector_id ? 'sector' : 'general'}.${format}`)

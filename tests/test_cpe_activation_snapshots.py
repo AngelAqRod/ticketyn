@@ -88,7 +88,7 @@ def test_old_or_optional_history_not_replaced(api_client, operation_payload, db_
     assert api_client.get(f"/api/activations/{activation['id']}/reports/pdf").status_code == 200
     assert 'NUEVO SERVICIO ACTUAL' not in ' '.join(pdf_strings)
     assert 'Sin registrar' in ' '.join(pdf_strings)
-    assert api_client.get('/api/system/version').json() == {'version':'0.4.4'}
+    assert api_client.get('/api/system/version').json() == {'version':'0.5.0'}
     assert api_client.get('/health').json() == {'status':'ok'}
 
 
@@ -196,14 +196,14 @@ def test_0020_preserves_existing_activation_and_does_not_backfill(postgres_engin
             db.execute(text("INSERT INTO circuits(id,customer_id,circuit_code,description,cpe_model_id) VALUES(1,1,'C-1','Anterior',1)"))
             db.execute(text("INSERT INTO activations(circuit_id,responsible_id,effective_at,activation_number,reference,service_type_name,initial_capacity,initial_capacity_unit) VALUES(1,1,'2020-01-01T00:00:00Z',1,'ACT-1','Servicio original',200,'Mbps')"))
             previous = db.scalar(text('SELECT to_jsonb(a) FROM activations a'))
-        cli(engine.url, 'upgrade', 'head')
+        cli(engine.url, 'upgrade', '0020_activation_cpe')
         with engine.connect() as db:
             current = db.scalar(text('SELECT to_jsonb(a) FROM activations a'))
             assert current.pop('cpe_activation') is None
             assert current == previous
             assert db.scalar(text('SELECT cpe_model_id FROM circuits')) == 1
         cli(engine.url, 'downgrade', '0019_cpe_activation_snapshots')
-        cli(engine.url, 'upgrade', 'head')
+        cli(engine.url, 'upgrade', '0020_activation_cpe')
         with engine.begin() as db:
             db.execute(text("UPDATE activations SET cpe_activation='Snapshot a conservar'"))
         import subprocess, sys, os

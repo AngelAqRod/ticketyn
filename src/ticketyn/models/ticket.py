@@ -26,6 +26,7 @@ class Ticket(Base):
     resolution: Mapped[str | None] = mapped_column(Text)
     customer_description: Mapped[str | None] = mapped_column(Text)
     customer_resolution: Mapped[str | None] = mapped_column(Text)
+    internal_ticket_id: Mapped[int | None] = mapped_column(ForeignKey("internal_tickets.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     circuit_id: Mapped[int] = mapped_column(ForeignKey("circuits.id"), index=True)
     node_id: Mapped[int | None] = mapped_column(ForeignKey("nodes.id"), index=True)

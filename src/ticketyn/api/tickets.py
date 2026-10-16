@@ -1,11 +1,7 @@
-from tempfile import SpooledTemporaryFile
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Path, Query
-from fastapi.responses import StreamingResponse
-from starlette.background import BackgroundTask
-from ticketyn.api.reports import read_snapshot
-from ticketyn.api.ticket_exports import export_ticket_pdf, export_ticket_xlsx
+from ticketyn.api.ticket_exports import export_ticket_pdf, export_ticket_xlsx, stream_ticket_export
 from ticketyn.schemas.ticket_export import TicketExportFilters
 
 from ticketyn.api import ticket_data
@@ -29,23 +25,8 @@ def list_tickets(session: DBSession, filters: Annotated[TicketFilters, Query()])
 
 @router.get('/export/{format}')
 def export_tickets(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotated[TicketExportFilters, Query()]):
-    read_snapshot(session)
-    output = SpooledTemporaryFile(max_size=2 * 1024 * 1024)
-    try:
-        (export_ticket_pdf if format == 'pdf' else export_ticket_xlsx)(session, filters, output)
-        output.seek(0)
-    except Exception:
-        output.close()
-        raise
-    def chunks():
-        try:
-            while chunk := output.read(65536): yield chunk
-        finally:
-            output.close()
-    media = 'application/pdf' if format == 'pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    return StreamingResponse(chunks(), media_type=media,
-        headers={'Content-Disposition': f'attachment; filename="ticketyn-tickets.{format}"'},
-        background=BackgroundTask(output.close))
+    return stream_ticket_export(session, format, filters, 'ticketyn-tickets',
+                                export_ticket_pdf if format == 'pdf' else export_ticket_xlsx)
 
 
 @router.get("/stats", response_model=TicketStats)

@@ -128,3 +128,32 @@ class ReportSummary(BaseModel):
     customers: list[ReportRanking]
     circuits: list[ReportRanking]
     incident_types: list[ReportRanking]
+
+
+class InternalReportFilters(ReportFilters):
+    status: Literal['OPEN', 'CLOSED'] | None = None
+    department_id: PositiveId | None = None
+    incident_type_id: PositiveId | None = None
+    provider_id: PositiveId | None = None
+    without_provider: bool = False
+    search: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode='after')
+    def provider_selection(self):
+        if self.provider_id is not None and self.without_provider:
+            raise ValueError('Selecciona un proveedor o Ninguno, no ambos')
+        return self
+
+    def ticket_filters(self):
+        return {key: getattr(self, key) for key in ('from_at', 'to_at', 'sector_id', 'node_id', 'responsible_id', 'department_id', 'incident_type_id', 'provider_id', 'without_provider', 'status', 'search')}
+
+
+class InternalReportSummary(ReportSummary):
+    report_kind: Literal['internal'] = 'internal'
+    providers: list[ReportRanking] = Field(default_factory=list)
+    open_tickets: int = 0
+    closed_tickets: int = 0
+    related_tickets: int = 0
+    with_related: int = 0
+    without_related: int = 0
+    applied_filters: list[str] = Field(default_factory=list)

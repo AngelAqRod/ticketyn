@@ -104,3 +104,10 @@ export const listCpeModels = (signal?: AbortSignal, includeInactive = false) => 
 export const createCpeModel = (payload: NamedCatalogInput) => postJson<NamedCatalog>('/api/cpe-models', payload)
 export const updateCpeModel = (id: number, payload: Partial<NamedCatalogInput>) => patchJson<NamedCatalog>(`/api/cpe-models/${id}`, payload)
 export const getSystemVersion = (signal?: AbortSignal) => getJson<{ version?: string }>('/api/system/version', signal)
+
+export const listInternalIncidentTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog>('/api/internal-incident-types', signal, {}, includeInactive)
+export const listProviders = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & { description?: string | null }>('/api/providers', signal, {}, includeInactive)
+
+export const listChangeCompletionTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & {description: string | null; applies_efficiency: boolean}>('/api/change-completion-types', signal, {}, includeInactive)
+
+export const listChangeTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & {description:string|null}>('/api/change-types', signal, {}, includeInactive)

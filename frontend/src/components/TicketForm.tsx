@@ -1,3 +1,4 @@
+import { InternalTicketSelect } from './InternalTicketSelect'
 import { circuitLabel } from '../lib/circuitLabel'
 import { CircuitAssignmentField } from './CircuitAssignmentField'
 import { CircuitSectorField } from './CircuitSectorField'
@@ -24,6 +25,7 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 
 export function TicketForm({ ticket }: { ticket?: Ticket }) {
   const navigate = useNavigate()
+  const [internalTicketId, setInternalTicketId] = useState(ticket?.internal_ticket_id ? String(ticket.internal_ticket_id) : '')
   const [title, setTitle] = useState(ticket?.title ?? '')
   const [description, setDescription] = useState(ticket?.description ?? '')
   const [resolution, setResolution] = useState(ticket?.resolution ?? '')
@@ -152,6 +154,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
         ticket ? value !== (ticket[field as keyof typeof optionalTexts] ?? null) : value !== null))
       const payload = {
         ...changedTexts,
+        ...((internalTicketId || ticket?.internal_ticket_id) ? { internal_ticket_id: internalTicketId ? Number(internalTicketId) : null } : {}),
         title: title.trim(), description: description.trim(), customer_id: Number(customerId),
         circuit_id: Number(circuitId), ...(!ticket || ticket.circuit_id !== Number(circuitId) || !selectedCircuit?.node_id ? { node_id: Number(effectiveNodeId) } : {}), ...(ticket && ticket.circuit_id === Number(circuitId) && selectedCircuit?.sector_id ? {} : { sector_id: Number(effectiveSectorId) }), department_id: Number(departmentId),
         responsible_id: responsibleId ? Number(responsibleId) : null, incident_type_id: Number(incidentTypeId), start_at: start, end_at: end, status,
@@ -208,6 +211,7 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
             <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={submitError === "Fin debe ser igual o posterior a Inicio." || apiInvalidFields.includes("end_at")} id="end-at" label="Fin"><div className="flex items-center gap-2"><input id="end-at" type="datetime-local" step="60" className="form-input min-w-0" value={endAt} onChange={(e) => setEndAt(e.target.value)} /><button type="button" className="button-secondary shrink-0" aria-label="Ahora de Fin" onClick={() => setEndAt(localDateTimeValue())}>Ahora</button></div></FormField>
           </div>
         </section>
+        <section aria-labelledby="internal-link-heading"><h2 id="internal-link-heading" className="mb-3 text-sm font-semibold">Ticket interno relacionado</h2><InternalTicketSelect value={internalTicketId} onChange={setInternalTicketId} disabled={submitting} /></section>
         <section aria-labelledby="resolution-heading" className="space-y-3">
           <h2 id="resolution-heading" className="text-sm font-semibold text-slate-900">Resolución documentada</h2>
           <p className="text-xs text-muted">Opcional. Explica cómo se resolvió el incidente; puedes completarla o corregirla después del cierre. Los cambios quedan registrados como seguimiento interno, sin identificar al editor.</p>

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ticketyn.models import Ticket, TicketNumberConfig
 
 
-def locked_number_config(session: Session) -> TicketNumberConfig:
+def locked_number_config(session: Session, TicketNumberConfig=TicketNumberConfig) -> TicketNumberConfig:
     """Inicializar sin carreras y bloquear hasta commit/rollback del llamador."""
     session.execute(
         insert(TicketNumberConfig).values(id=1).on_conflict_do_nothing(index_elements=["id"])
@@ -21,7 +21,7 @@ def format_reference(prefix: str, separator: str, number: int, padding: int) -> 
     return f"{prefix}{separator}{str(number).zfill(padding)}"
 
 
-def validate_number_config(session: Session, config: TicketNumberConfig, changes: dict) -> None:
+def validate_number_config(session: Session, config: TicketNumberConfig, changes: dict, Ticket=Ticket) -> None:
     number = changes.get("next_number", config.next_number)
     highest = session.scalar(select(func.max(Ticket.ticket_number)))
     if highest is not None and number <= highest:
