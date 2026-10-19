@@ -192,6 +192,22 @@ restore_disable_original() {
 restore_revision() {
     restore_pg psql --dbname="$1" -X -At --set=ON_ERROR_STOP=1 -c 'SELECT version_num FROM public.alembic_version' 2> "${REVISION_DIAGNOSTIC:-$STATE/diagnostic.log}"
 }
+restore_pause_mail() {
+    # Conditional for old releases without mail tables. Never authorize restored jobs.
+    restore_pg psql --dbname="$STAGE" -X -At --set=ON_ERROR_STOP=1 -c "
+DO \$\$ BEGIN
+    IF to_regclass('public.mail_processor_control') IS NOT NULL THEN
+        INSERT INTO public.mail_processor_control(id,paused,reason,revision,database_oid)
+        VALUES(1,true,'RESTORED',1,NULL)
+        ON CONFLICT(id) DO UPDATE SET paused=true,reason='RESTORED',
+            revision=mail_processor_control.revision+1,database_oid=NULL,updated_at=clock_timestamp();
+        UPDATE public.mail_notification_requests SET state='UNCERTAIN',revision=revision+1,
+            error_code='RESTORED_INTERRUPTED',owner_token=NULL,finished_at=clock_timestamp()
+            WHERE state IN ('PREPARING','SENDING');
+    END IF;
+END \$\$;" > /dev/null 2> "$STATE/diagnostic.log" || restore_fail 'No se pudo pausar correo en staging; no se cambia la DB activa.'
+}
+
 restore_run() {
     PHASE=deteniendo; MUTATING=1; restore_record
     if systemctl is-active --quiet ticketyn; then WAS_ACTIVE=1; fi
@@ -215,6 +231,7 @@ restore_run() {
     [[ $(restore_revision "$STAGE") == "$HEAD" ]] || restore_fail 'La revisión Alembic del dump restaurado no coincide.'
     [[ $(restore_query "SELECT pg_get_userbyid(datdba)||':'||pg_encoding_to_char(encoding) FROM pg_database WHERE datname='$STAGE'") == ticketyn:UTF8 ]] || restore_fail 'Propietario/encoding incorrectos.'
     [[ $(restore_pg psql --dbname="$STAGE" -X -At --set=ON_ERROR_STOP=1 -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p','S','v','m') AND pg_get_userbyid(c.relowner)<>'ticketyn'" 2> "$STATE/diagnostic.log") == 0 ]] || restore_fail 'Objetos restaurados con propietario inesperado.'
+    restore_pause_mail
     restore_cutover
     PHASE=configuracion; restore_record
     [[ $(backup_identity "$CONFIG_FILE") == "$CONFIG_ID" && $(sha256sum "$CONFIG_FILE" | cut -d ' ' -f1) == "$OLD_CONFIG_HASH" ]] || restore_fail 'Configuración original cambió; no se sobrescribe.'

@@ -18,6 +18,8 @@ dependencies = [
     "pydantic-settings>=2.5,<3",
     "reportlab>=4,<5",
     "openpyxl>=3.1,<4",
+    "cryptography>=46,<51",
+    "email-validator>=2.2,<3",
 ]
 
 [project.optional-dependencies]

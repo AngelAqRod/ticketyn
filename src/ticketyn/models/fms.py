@@ -48,6 +48,7 @@ class OperationFields:
 
 class Activation(OperationFields, Base):
     __tablename__ = 'activations'
+    activation_notes: Mapped[str | None] = mapped_column(Text)
     cpe_activation: Mapped[str | None] = mapped_column(Text)
     service_type_name: Mapped[str | None] = mapped_column(String)
     initial_capacity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))

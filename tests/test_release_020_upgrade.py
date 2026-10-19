@@ -47,7 +47,7 @@ def test_016_to_020_preserves_domain_and_supports_followup(postgres_engine, monk
         monkeypatch.setenv('DATABASE_URL', url.render_as_string(hide_password=False))
         get_settings.cache_clear()
         from ticketyn.main import create_app
-        app = create_app()
+        app = create_app(start_notifications=False)
         def session():
             with Session(engine) as db:
                 yield db

@@ -69,7 +69,7 @@ def api_client(db_session, monkeypatch):
     try:
         from ticketyn.main import create_app
 
-        app = create_app()
+        app = create_app(start_notifications=False)
 
         def override_session():
             yield db_session

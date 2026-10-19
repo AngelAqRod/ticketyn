@@ -10,6 +10,8 @@ import sys
 import tarfile
 from uuid import uuid4
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from sqlalchemy import Text, create_engine, inspect, text
 from sqlalchemy.orm import Session
@@ -100,7 +102,7 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
         monkeypatch.setenv('DATABASE_URL', url.render_as_string(hide_password=False))
         get_settings.cache_clear()
         from ticketyn.main import create_app
-        app = create_app()
+        app = create_app(start_notifications=False)
         def session():
             with Session(engine) as db:
                 yield db
@@ -134,24 +136,11 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     previous = tmp_path/'previous'; previous.mkdir()
     shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', previous/'alembic.ini')
-    # The source release predates the additive follow-up migration.
-    (previous/'alembic/versions/0008_ticket_updates.py').unlink()
-    (previous/'alembic/versions/0009_ticket_resolution.py').unlink()
-    (previous/'alembic/versions/0010_ticket_escalations.py').unlink()
-    (previous/'alembic/versions/0011_department_positions.py').unlink()
-    (previous/'alembic/versions/0012_catalog_name_uniqueness.py').unlink()
-    (previous/'alembic/versions/0013_escalation_operations.py').unlink()
-    (previous/'alembic/versions/0014_circuit_operations.py').unlink()
-    (previous/'alembic/versions/0015_circuit_service_types.py').unlink()
-    (previous/'alembic/versions/0016_circuit_sectors.py').unlink()
-    (previous/'alembic/versions/0017_historical_nodes.py').unlink()
-    (previous/'alembic/versions/0018_recover_ticket_nodes.py').unlink()
-    (previous/'alembic/versions/0019_cpe_activation_snapshots.py').unlink()
-    (previous/'alembic/versions/0020_activation_cpe.py').unlink()
-    (previous/'alembic/versions/0021_internal_tickets.py').unlink()
-    (previous/'alembic/versions/0022_change_control.py').unlink()
-    (previous/'alembic/versions/0023_change_types.py').unlink()
-    (previous/'alembic/versions/0024_default_change_types_upper.py').unlink()
+    # Retain only revisions available to this historical source release.
+    for revision_file in (previous/'alembic/versions').glob('*.py'):
+        if int(revision_file.name[:4]) > 7:
+            revision_file.unlink()
+    current_head = ScriptDirectory.from_config(Config(str(ROOT/'alembic.ini'))).get_current_head()
     archive = tmp_path/'candidate.tar'
     # The candidate retains every applied revision and adds follow-up/resolution.
     names = set(subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT).decode().strip('\0').split('\0'))
@@ -162,17 +151,18 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     candidate = tmp_path/'candidate'
     updater.extract_release(archive, candidate)
     assert updater.ri.project_version(candidate) == '0.5.0'
-    assert updater.migration_plan(previous, candidate, HEAD) == '0024_default_change_types_upper'
+    assert updater.migration_plan(previous, candidate, HEAD) == current_head
     # Also demonstrate the exact stable production path v0.2.0 -> v0.3.0.
     stable = tmp_path/'stable020'; stable.mkdir()
     shutil.copytree(ROOT/'alembic', stable/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', stable/'alembic.ini')
-    for name in ('0010_ticket_escalations.py', '0011_department_positions.py', '0012_catalog_name_uniqueness.py', '0013_escalation_operations.py', '0014_circuit_operations.py', '0015_circuit_service_types.py', '0016_circuit_sectors.py', '0017_historical_nodes.py', '0018_recover_ticket_nodes.py', '0019_cpe_activation_snapshots.py', '0020_activation_cpe.py', '0021_internal_tickets.py', '0022_change_control.py', '0023_change_types.py', '0024_default_change_types_upper.py'):
-        (stable/'alembic/versions'/name).unlink()
+    for revision_file in (stable/'alembic/versions').glob('*.py'):
+        if int(revision_file.name[:4]) > 9:
+            revision_file.unlink()
     for name in subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'v0.2.0', 'alembic'], cwd=ROOT).decode().splitlines():
         assert (ROOT/name).read_bytes() == subprocess.check_output(['git', 'show', f'v0.2.0:{name}'], cwd=ROOT)
     updater.forward('0.2.0', '0.3.0')
-    assert updater.migration_plan(stable, candidate, '0009_ticket_resolution') == '0024_default_change_types_upper'
+    assert updater.migration_plan(stable, candidate, '0009_ticket_resolution') == current_head
 
     assert (candidate/'alembic/versions/0008_ticket_updates.py').is_file()
     assert (candidate/'alembic/versions/0009_ticket_resolution.py').is_file()

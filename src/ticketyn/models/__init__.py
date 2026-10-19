@@ -29,3 +29,6 @@ from ticketyn.models.internal_ticket import InternalTicket, InternalTicketUpdate
 
 __all__ += ['InternalTicket', 'InternalTicketUpdate', 'InternalEscalation', 'InternalEscalationAudit', 'InternalTicketNumberConfig', 'InternalIncidentType', 'Provider']
 from ticketyn.models.change import ChangeType, ChangeCompletionType, ChangeNumberConfig, MaintenanceChange, ChangeSupport, ChangeTicket, ChangeUpdate, ChangeAudit
+
+from ticketyn.models.mail_notifications import MailTransportConfig, MailEventConfig
+from ticketyn.models.mail_jobs import MailProcessorControl, MailNotificationRequest

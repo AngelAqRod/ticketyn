@@ -2,12 +2,15 @@
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 from ticketyn.api.crud import save_item
 from ticketyn.api.circuit_sector import locked_circuit, resolve_sector, resolve_node
 from ticketyn.api.ticket_numbers import format_reference
 from ticketyn.models import Circuit, Responsible
 from ticketyn.models.fms import Activation, ActivationNumberConfig, DeactivationReason
+from ticketyn.notifications.fields import ACTIVATION_EVENT
+from ticketyn.notifications.requests import request_notification
 
 
 def locked_activation_config(session: Session):
@@ -59,7 +62,21 @@ def create_operation(session: Session, model, values: dict):
             values = {**values, 'activation_number': config.next_number, 'reference': reference}
             # BigInteger permits storing the exhausted sentinel safely.
             config.next_number += 1
-        return save_item(session, model(**values))
+        operation = model(**values)
+        if model is Activation:
+            session.add(operation)
+            try:
+                # Obtain the ID without committing: the activation, numbering,
+                # circuit assignments and automatic intent must succeed together.
+                session.flush()
+                request_notification(session, ACTIVATION_EVENT, operation.id, automatic=True)
+            except IntegrityError:
+                # Match save_item's existing handling of FMS integrity errors,
+                # including those now detected by the pre-commit flush.
+                raise HTTPException(409, 'Los datos incumplen una restricción de integridad') from None
+            except SQLAlchemyError:
+                raise HTTPException(503, 'No se pudo registrar la activación y su solicitud de notificación.') from None
+        return save_item(session, operation)
     except Exception:
         session.rollback()
         raise

@@ -1,3 +1,5 @@
+# Historical migration coverage is intentionally pinned; current HEAD is tested
+# in test_deployment.py and test_mail_jobs.py.
 """Only original seeded names change; manual capitalization and history survive."""
 from pathlib import Path
 import runpy
@@ -30,7 +32,7 @@ def test_uppercase_defaults_upgrade_is_targeted_and_idempotent(postgres_engine,c
             db.execute(text("INSERT INTO maintenance_changes(ticket_number,reference,title,description,sector_id,manager_id,manager_name,department_id,department_name,status,proposed_start,proposed_end,change_type_id) VALUES (1,'CAM-0000001','Conservar','Descripción',1,1,'Encargado',1,'NOC','SCHEDULED','2026-10-15T23:00:50-06:00','2026-10-16T03:00:00-06:00',2)"))
             before=db.execute(text('SELECT to_jsonb(t) FROM change_types t ORDER BY id')).scalars().all()
             change_before=db.scalar(text('SELECT to_jsonb(t) FROM maintenance_changes t'))
-        cli(engine.url,'upgrade','head');cli(engine.url,'upgrade','head')
+        cli(engine.url,'upgrade','0024_default_change_types_upper');cli(engine.url,'upgrade','0024_default_change_types_upper')
         with engine.begin() as db:
             migration['uppercase_default_types'](db);migration['uppercase_default_types'](db)
             after=db.execute(text('SELECT to_jsonb(t) FROM change_types t ORDER BY id')).scalars().all()

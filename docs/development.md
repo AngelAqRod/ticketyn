@@ -3,6 +3,9 @@
 Guía para un entorno local separado de los datos operativos. Los procedimientos
 de producción están en [Instalación y administración](deployment.md).
 
+Para aprovisionar claves de cifrado en un directorio privado sin root, consulta
+[Gestión de secretos](secrets-v0.6.0.md). No se requieren para arrancar la aplicación.
+
 ## Entorno local
 
 ### Requisitos

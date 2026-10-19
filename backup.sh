@@ -123,6 +123,7 @@ backup_dump() {
     backup_db_metadata "$WORK/db-before.txt"
     printf 'Creando dump PostgreSQL consistente (sin detener Ticketyn)...\n'
     backup_postgres pg_dump --format=custom --compress=6 --lock-wait-timeout=60s \
+        --exclude-table-data='public.mail_processor_control' \
         > "$CONTENT/database.dump" 2> "$WORK/diagnostic.log" || backup_fail 'pg_dump falló; no se publica ningún backup. Revisa PostgreSQL y el espacio disponible.'
     [[ -s $CONTENT/database.dump ]] || backup_fail 'pg_dump produjo un archivo vacío.'
     # Renderiza todo el dump a /dev/null: comprueba el contenido sin ejecutar SQL.

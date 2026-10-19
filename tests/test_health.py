@@ -12,14 +12,14 @@ def test_health(monkeypatch):
     try:
         from ticketyn.main import create_app
 
-        app = create_app()
+        app = create_app(start_notifications=False)
         assert app.version == "0.5.0"
         with TestClient(app) as client:
             response = client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
         # Importar e iniciar la candidata saludable no requiere una conexión DB.
-        with TestClient(create_app()) as client:
+        with TestClient(create_app(start_notifications=False)) as client:
             assert client.get("/health").status_code == 200
     finally:
         get_settings.cache_clear()

@@ -323,6 +323,25 @@ def test_failures_preserve_recovery_artifacts(environment, failure):
     assert not i['work'].exists()
 
 
+def test_mail_pause_failure_prevents_restore_cutover(environment):
+    i = environment
+    safety_script(i)
+    result = shell(configure(i) + """
+restore_pause_mail() { restore_fail 'No se pudo pausar correo en staging'; }
+REPLACE=1
+restore_validate
+restore_begin
+restore_run
+""")
+    assert result.returncode != 0
+    assert 'No se pudo pausar correo en staging' in result.stderr
+    assert json.loads(i['db'].read_text())['ticketyn'] == '100'
+    assert 'ALTER DATABASE ticketyn RENAME' not in i['calls'].read_text()
+    assert i['env'].read_bytes() == components(i)['ticketyn.env']
+    assert (i['config']/'restore-state/previous.env').exists()
+    assert SECRET not in result.stdout + result.stderr
+
+
 def test_invalid_dump_aborts_before_service_or_db(environment):
     result = shell(configure(environment) + 'REPLACE=1\nINVALID_DUMP=1\nrestore_validate')
     assert result.returncode != 0

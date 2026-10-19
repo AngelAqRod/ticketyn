@@ -54,6 +54,7 @@ dumps/
 backups/
 
 # Private keys and certificate bundles
+keys.json
 *.key
 *.pem
 *.p12

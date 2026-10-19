@@ -14,6 +14,7 @@ import { NewTicket } from './pages/NewTicket'
 import { CatalogAdmin } from './components/CatalogAdmin'
 import { Catalogs } from './pages/Catalogs'
 import { Settings } from './pages/Settings'
+import { MailNotifications } from './pages/MailNotifications'
 
 const FmsReports = lazy(() => import('./pages/FmsReports').then((module) => ({ default: module.FmsReports })))
 
@@ -45,6 +46,8 @@ export default function App() {
     {([['activation-reports', 'activations'], ['capacity-reports', 'capacity-changes'], ['lifecycle-reports', 'circuit-lifecycle']] as const).map(([path, kind]) => <Route key={path} path={path} element={<Suspense fallback={<RequestState loading compact loadingText="Cargando reportes..." />}><FmsReports key={kind} kind={kind} /></Suspense>} />)}
     <Route path="catalogs" element={<Catalogs />} />
     <Route path="settings" element={<Settings />} />
+    <Route path="mail-templates" element={<MailNotifications key="templates" section="templates" />} />
+    <Route path="mail-notifications" element={<MailNotifications key="configuration" />} />
     <Route path="*" element={<div className="panel p-10"><h1 className="text-xl font-semibold">Página no encontrada</h1><Link to="/" className="button-ghost mt-4">Volver al dashboard</Link></div>} />
   </Route></Routes>
 }

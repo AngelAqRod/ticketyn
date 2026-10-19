@@ -37,7 +37,9 @@ def normalized_ddl(statements):
 def historical_metadata():
     metadata = MetaData(naming_convention=Base.metadata.naming_convention)
     for table in Base.metadata.sorted_tables:
-        if not table.name.startswith(('change_', 'maintenance_changes')) and table.name not in {'internal_tickets', 'internal_ticket_updates', 'internal_escalations', 'internal_escalation_audit', 'internal_ticket_number_config', 'internal_incident_types', 'providers', 'cpe_models', 'nodes', 'responsibles', 'ticket_updates', 'escalation_reasons', 'ticket_escalations', 'positions', 'escalation_audit', 'activations', 'activation_interventions', 'activation_number_config', 'capacity_changes', 'circuit_lifecycle_operations', 'deactivation_reasons', 'service_types'}:
+        # This fixture describes 0003, independently of later domain additions.
+        if table.name in {'customers', 'circuits', 'sectors', 'departments',
+                          'incident_types', 'ticket_number_config', 'tickets'}:
             table.to_metadata(metadata)
     for table_name, field in [('tickets', 'internal_ticket_id'), ('circuits', 'cpe_model_id'), ('circuits', 'cpe_configuration'), ('circuits', 'sector_id'), ('circuits', 'service_type_id'), ('circuits', 'initial_capacity'), ('circuits', 'initial_capacity_unit'), ('circuits', 'node_id'), ('tickets', 'node_id'), ('tickets', 'responsible_id'), *[('tickets', field) for field in ('resolution', 'customer_description', 'customer_resolution')]]:
         table = metadata.tables[table_name]

@@ -8,6 +8,7 @@ const created_at = '2020-01-01T12:00:00Z'
 const person = { id: 1, name: 'Operador', active: true, created_at }
 const circuit = { id: 8, customer_id: 3, circuit_code: 'C-8', description: 'Enlace principal', active: true, created_at }
 const activation = { id: 42, reference: 'ACT-000042', circuit_id: 8, circuit, responsible: person, responsible_id: 1, effective_at: created_at, created_at }
+const notification = { activation_id: 42, mode: 'DISABLED', state: null, revision: 0, processor_paused: false, can_request: false }
 function setup(mode?: 'pending' | 'error') {
   vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:activation'); static revokeObjectURL = vi.fn() })
   const downloads: string[] = []
@@ -18,6 +19,7 @@ function setup(mode?: 'pending' | 'error') {
       return Promise.resolve(mode === 'error' ? jsonResponse({ detail: 'No se pudo generar el reporte de la activación.' }, 500) : new Response(new Blob(['%PDF'])))
     }
     if (path === '/api/activations/42') return Promise.resolve(jsonResponse(activation))
+    if (path === '/api/activations/42/notification') return Promise.resolve(jsonResponse(notification))
     if (path.startsWith('/api/activations/42/interventions')) return Promise.resolve(jsonResponse(Array.from({ length: 50 }, (_, i) => ({ id: i, responsible: person, occurred_at: created_at, content: 'Trabajo visible' }))))
     if (path.startsWith('/api/customers/3')) return Promise.resolve(jsonResponse({ id: 3, name: 'Cliente', customer_code: 'C-3', active: true, created_at }))
     return Promise.resolve(jsonResponse([person]))
@@ -64,7 +66,7 @@ describe('PDF individual de activación', () => {
 })
 
 it('muestra condiciones históricas sin completar desde el circuito actual', async () => {
-  const mock=vi.fn((path:string)=>Promise.resolve(jsonResponse(path==='/api/activations/42'?{ ...activation, cpe_activation:'MikroTik original', service_type_name:'Internet original', initial_capacity:'1758.5', initial_capacity_unit:'Mbps', circuit:{...circuit, cpe_model:{name:'NO MOSTRAR CPE ACTUAL'}, service_type:{name:'NO MOSTRAR ACTUAL'}, initial_capacity:'9', initial_capacity_unit:'Gbps'} }:path.includes('/interventions')?[]:path.includes('/customers/3')?{id:3,name:'Cliente'}:[person])))
+  const mock=vi.fn((path:string)=>Promise.resolve(jsonResponse(path==='/api/activations/42/notification'?notification:path==='/api/activations/42'?{ ...activation, cpe_activation:'MikroTik original', service_type_name:'Internet original', initial_capacity:'1758.5', initial_capacity_unit:'Mbps', circuit:{...circuit, cpe_model:{name:'NO MOSTRAR CPE ACTUAL'}, service_type:{name:'NO MOSTRAR ACTUAL'}, initial_capacity:'9', initial_capacity_unit:'Gbps'} }:path.includes('/interventions')?[]:path.includes('/customers/3')?{id:3,name:'Cliente'}:[person])))
   vi.stubGlobal('fetch',mock)
   render(<MemoryRouter initialEntries={['/activations/42']}><Routes><Route path="/activations/:id" element={<ActivationDetail />} /></Routes></MemoryRouter>)
   expect(await screen.findByText('Internet original')).toBeInTheDocument()

@@ -1,3 +1,5 @@
+# Historical migration coverage is intentionally pinned; current HEAD is tested
+# in test_deployment.py and test_mail_jobs.py.
 """Upgrade only a disposable database from the published v0.4.x chain."""
 from uuid import uuid4
 from sqlalchemy import create_engine, text, inspect
@@ -17,8 +19,8 @@ def test_upgrade_preserves_client_tickets_and_adds_null_relation(postgres_engine
             db.execute(text("INSERT INTO circuits(id,customer_id,circuit_code,description,node_id,sector_id) VALUES(1,1,'C-1','Enlace',1,1)"))
             db.execute(text("INSERT INTO tickets(id,ticket_number,reference,title,description,customer_id,circuit_id,node_id,sector_id,department_id,incident_type_id,start_at,status) VALUES(1,1,'TEST-1','Histórico','Conservar',1,1,1,1,1,1,'2026-01-01T12:00:00Z','OPEN')"))
             before=db.execute(text('SELECT to_jsonb(t) FROM tickets t')).scalar_one()
-        cli(engine.url,'upgrade','head')
-        cli(engine.url,'upgrade','head')
+        cli(engine.url,'upgrade','0024_default_change_types_upper')
+        cli(engine.url,'upgrade','0024_default_change_types_upper')
         with engine.connect() as db:
             after=db.execute(text('SELECT to_jsonb(t) FROM tickets t')).scalar_one()
             assert after.pop('internal_ticket_id') is None

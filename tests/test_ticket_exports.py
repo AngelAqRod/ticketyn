@@ -77,7 +77,15 @@ def test_every_filter_matches_list_semantics(api_client, ticket_payload, field):
     elif field in RELATED_PATHS:
         other[field] = api_client.post(RELATED_PATHS[field], json={'name': 'Otro'}).json()['id']
     if field == 'sector_id':
-        assert api_client.patch(f"/api/circuits/{other['circuit_id']}", json={'sector_id': other['sector_id']}).status_code == 200
+        # Use a different circuit: correcting the shared circuit would also sync
+        # the recent wanted ticket's sector, as required by the existing service.
+        circuit = api_client.post('/api/circuits', json={
+            'node_id': ticket_payload['node_id'], 'sector_id': other['sector_id'],
+            'customer_id': other['customer_id'], 'circuit_code': 'OTHER.SECTOR',
+            'description': 'Circuito de otro sector',
+        })
+        assert circuit.status_code == 201, circuit.text
+        other['circuit_id'] = circuit.json()['id']
     created_other = create_ticket(api_client, other)
     value = wanted.get(field)
     if field == 'search': value = 'objetivo'

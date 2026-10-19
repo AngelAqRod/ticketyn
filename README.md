@@ -1,6 +1,6 @@
 # Ticketyn
 
-Ticketyn es un proyecto de código abierto para gestionar tickets y operaciones
+Ticketyn es un proyecto para gestionar tickets y operaciones
 técnicas en proveedores de Internet (ISP) y centros de operaciones de red (NOC).
 Nació como una herramienta sencilla de tickets y crece a partir de necesidades
 que aparecen durante su uso.

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
-import { LayoutDashboard, Ticket, Users, Network, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power, Workflow } from 'lucide-react'
+import { LayoutDashboard, Ticket, Users, Network, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power, Workflow, Mail } from 'lucide-react'
 import { getHealth, getSystemVersion } from '../api'
 import { SevenSegmentNumber } from './SevenSegmentNumber'
 import { identityFor, moduleIdentity, moduleGroups, orderedModuleIdentity } from './moduleIdentity'
 
-const icons = [LayoutDashboard, Ticket, Ticket, Workflow, Users, Network, ChartNoAxesCombined, Layers3, Settings, Zap, Gauge, Power, ChartNoAxesCombined, ChartNoAxesCombined, ChartNoAxesCombined]
+const icons = [LayoutDashboard, Ticket, Ticket, Workflow, Users, Network, ChartNoAxesCombined, Layers3, Settings, Zap, Gauge, Power, ChartNoAxesCombined, ChartNoAxesCombined, ChartNoAxesCombined, Mail, Mail]
 const navigation = orderedModuleIdentity.map(item => ({
   ...item, icon: icons[moduleIdentity.findIndex(original => original.path === item.path)],
 }))

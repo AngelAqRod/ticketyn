@@ -14,6 +14,8 @@ export const moduleIdentity = [
   { path: '/activation-reports', number: '11', title: 'Reportería de activaciones', group: 'Análisis' },
   { path: '/capacity-reports', number: '12', title: 'Reportería de cambios de capacidad', group: 'Análisis' },
   { path: '/lifecycle-reports', number: '13', title: 'Reportería de bajas y reactivaciones', group: 'Análisis' },
+  { path: '/mail-notifications', number: '16', title: 'Configuración de correo', group: 'Administración' },
+  { path: '/mail-templates', number: '17', title: 'Plantillas de correo', group: 'Administración' },
 ]
 export const moduleGroups = ['Operación', 'Análisis', 'Administración']
 export const orderedModuleIdentity = moduleGroups

@@ -22,6 +22,7 @@ export function OperationModal({ kind, circuit, onCancel, onSaved }: { kind: Fms
   const [circuits, setCircuits] = useState<Circuit[]>([]), [customers, setCustomers] = useState<Customer[]>([]), [people, setPeople] = useState<NamedCatalog[]>([]), [reasons, setReasons] = useState<NamedCatalog[]>([])
   const [circuitId, setCircuitId] = useState(circuit ? String(circuit.id) : ''), [customerId, setCustomerId] = useState(circuit ? String(circuit.customer_id) : ''), [responsibleId, setResponsibleId] = useState(''), [reasonId, setReasonId] = useState('')
   const [effective, setEffective] = useState(ticketynDateTimeValue), [type, setType] = useState(kind === 'capacity-changes' ? 'INCREASE' : 'DEACTIVATE')
+  const [activationNotes, setActivationNotes] = useState('')
   const [previous, setPrevious] = useState(''), [previousUnit, setPreviousUnit] = useState('Mbps'), [next, setNext] = useState(''), [nextUnit, setNextUnit] = useState('Mbps'), [description, setDescription] = useState('')
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [error, setError] = useState<string | null>(null), [retry, setRetry] = useState(0)
   const capacityTouched = useRef(false), capacityCircuit = useRef(circuitId)
@@ -89,9 +90,11 @@ export function OperationModal({ kind, circuit, onCancel, onSaved }: { kind: Fms
       if (!selectedCircuit?.sector_id && !sectorId) throw new Error('Selecciona un Sector para el circuito antes de guardar.')
       const payload: Record<string, unknown> = { circuit_id: Number(circuitId), responsible_id: Number(responsibleId), effective_at: ticketynDateTimeToIso(effective), ...(!selectedCircuit?.node_id ? { node_id: Number(nodeId) } : {}), ...(!selectedCircuit?.sector_id ? { sector_id: Number(sectorId) } : {}) }
       if (kind === 'activations') {
+        if (activationNotes.length > 10000) throw new Error('Las notas de activación no pueden superar los 10.000 caracteres.')
         const selected = circuit ?? circuits.find((item) => String(item.id) === circuitId)
         if (!customerId || !selected || String(selected.customer_id) !== customerId) throw new Error('El circuito debe pertenecer al cliente seleccionado.')
         payload.customer_id = Number(customerId)
+        payload.activation_notes = activationNotes.trim() ? activationNotes : null
       }
       if (kind === 'capacity-changes') {
         const current = capacityInMicroMbps(next, nextUnit)
@@ -126,6 +129,7 @@ export function OperationModal({ kind, circuit, onCancel, onSaved }: { kind: Fms
         {kind === 'capacity-changes' && <><RequestState compact errorTitle="" loading={capacityLoading} loadingText="Consultando capacidad vigente..." error={capacityError} retryText="Reintentar capacidad" onRetry={() => setCapacityRetry(capacityRetry + 1)} /><CapacityFields id="operation-previous" label={type === 'DECREASE' ? 'Capacidad anterior' : 'Capacidad anterior (opcional)'} required={type === 'DECREASE'} value={previous} unit={previousUnit} onChange={(v, u) => { capacityTouched.current = true; setPrevious(v); setPreviousUnit(u) }} /><CapacityFields id="operation-new" label="Capacidad nueva" required value={next} unit={nextUnit} onChange={(v, u) => { setNext(v); setNextUnit(u) }} /></>}
         {kind === 'circuit-lifecycle' && type === 'DEACTIVATE' && <FormField id="operation-reason" label="Motivo de baja" required><SearchableSelect placeholder="Selecciona una opción" emptyMessage="No hay registros disponibles." noMatchMessage="Sin coincidencias." required id="operation-reason" label="Motivo de baja" value={reasonId} onChange={setReasonId} options={reasons.map((item) => ({ value: String(item.id), label: item.name }))} /></FormField>}
         {kind !== 'activations' && <FormField id="operation-description" label={kind === 'capacity-changes' ? 'Descripción (opcional)' : 'Observaciones (opcional)'}><textarea id="operation-description" className="form-input" maxLength={10000} value={description} onChange={(event) => setDescription(event.target.value)} /></FormField>}
+        {kind === 'activations' && <FormField id="operation-activation-notes" label="Notas de activación"><textarea id="operation-activation-notes" className="form-input" maxLength={10000} rows={4} value={activationNotes} onChange={(event) => setActivationNotes(event.target.value)} /></FormField>}
       </fieldset>
       {error && <FeedbackMessage id="operation-error" variant="error" className="mt-3">{error}</FeedbackMessage>}
       <div className="mt-4 flex justify-end gap-2"><button type="button" className="button-secondary" disabled={saving} onClick={onCancel}>Cancelar</button><button type="submit" className="button-primary" disabled={saving || loading || !people.length || circuitLoading || Boolean(circuitError) || (capacityLoading && !capacityTouched.current)}>{saving ? 'Guardando...' : 'Registrar'}</button></div>

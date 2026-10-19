@@ -366,3 +366,27 @@ def test_real_dump_can_be_restored_in_disposable_cluster(installation, postgres_
             conn.exec_driver_sql(f'DROP DATABASE IF EXISTS {name}')
             if role_created:
                 conn.exec_driver_sql('DROP ROLE ticketyn')
+
+
+def test_database_backup_excludes_independent_mail_keys(installation):
+    i = installation
+    private = i['config'] / 'mail'
+    private.mkdir(mode=0o700)
+    from ticketyn.core.secret_store import create_key_file
+    path = private / 'keys.json'
+    create_key_file(path)
+    content = path.read_bytes()
+    result = shell(setup(i) + mocks(i) + RUN)
+    assert result.returncode == 0, result.stderr
+    archive = next(i['backups'].glob('*.tar'))
+    with tarfile.open(archive) as package:
+        assert package.getnames() == ['database.dump', 'ticketyn.env', 'metadata.txt', 'MANIFEST.txt', 'SHA256SUMS']
+        assert all(content not in package.extractfile(member).read() for member in package.getmembers())
+    assert path.read_bytes() == content
+
+
+def test_backup_does_not_preserve_processor_authorization(installation):
+    i = installation
+    result = shell(setup(i) + mocks(i) + RUN)
+    assert result.returncode == 0, result.stderr
+    assert '--exclude-table-data=public.mail_processor_control' in i['trace'].read_text()

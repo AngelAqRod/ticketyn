@@ -1,3 +1,5 @@
+# Historical migration coverage is intentionally pinned; current HEAD is tested
+# in test_deployment.py and test_mail_jobs.py.
 from uuid import uuid4
 from sqlalchemy import create_engine,text,inspect
 from test_e2e_update_migration import cli
@@ -12,7 +14,7 @@ def test_change_upgrade_preserves_existing_data(postgres_engine):
    for table in ('sectors','departments','internal_incident_types'):db.execute(text(f"INSERT INTO {table}(id,name) VALUES (1,'Histórico')"))
    db.execute(text("INSERT INTO internal_tickets(ticket_number,reference,title,description,sector_id,department_id,incident_type_id,start_at,status) VALUES (1,'INT-0000001','Conservar','Descripción',1,1,1,'2026-01-01T12:00:00Z','OPEN')"))
    before=db.scalar(text('SELECT to_jsonb(t) FROM internal_tickets t'))
-  cli(engine.url,'upgrade','head');cli(engine.url,'upgrade','head')
+  cli(engine.url,'upgrade','0024_default_change_types_upper');cli(engine.url,'upgrade','0024_default_change_types_upper')
   with engine.connect() as db:
    assert db.scalar(text('SELECT to_jsonb(t) FROM internal_tickets t'))==before
    assert db.scalar(text('SELECT count(*) FROM maintenance_changes'))==0
@@ -39,7 +41,7 @@ def test_change_types_upgrade_keeps_unclassified_history_and_seeds_once(postgres
    db.execute(text("INSERT INTO responsibles(id,name,department_id) VALUES (1,'Encargado',1)"))
    db.execute(text("INSERT INTO maintenance_changes(ticket_number,reference,title,description,sector_id,manager_id,manager_name,department_id,department_name,status,proposed_start,proposed_end) VALUES (1,'CAM-0000001','Histórico','Conservar',1,1,'Encargado',1,'NOC','SCHEDULED','2026-10-15T23:00:50-06:00','2026-10-16T03:00:00-06:00')"))
    before=db.scalar(text('SELECT to_jsonb(t) FROM maintenance_changes t'))
-  cli(engine.url,'upgrade','head');cli(engine.url,'upgrade','head')
+  cli(engine.url,'upgrade','0024_default_change_types_upper');cli(engine.url,'upgrade','0024_default_change_types_upper')
   migration=runpy.run_path(str(Path(__file__).resolve().parents[1]/'alembic/versions/0023_change_types.py'))
   with engine.begin() as db:
    migration['seed_types'](db);migration['seed_types'](db)

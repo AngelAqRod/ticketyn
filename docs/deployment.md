@@ -1,5 +1,8 @@
 # Instalación y administración
 
+El aprovisionamiento y recuperación independientes de claves se describen en
+[Gestión de secretos](secrets-v0.6.0.md). El backup general no contiene esas claves.
+
 Esta guía describe las herramientas existentes. No implica que una versión esté
 lista para tu entorno: revisa el código, la versión elegida y valida en laboratorio.
 Los comandos administrativos modifican servicios o datos cuando se ejecutan;
