@@ -1,5 +1,7 @@
 # Tickets internos — Ticketyn v0.5.0
 
+> Este documento conserva el diseño inicial y resultados de validaciones por etapa. Las referencias a `0021_internal_tickets` y los recuentos de pruebas son históricos; no indican el HEAD ni una ejecución actual. Consulta [Módulos](modules.md) para el alcance vigente y [Administración](deployment.md) para migraciones.
+
 ## Decisión de acceso confirmada
 
 Ticketyn sigue siendo una aplicación interna de confianza, sin usuarios, login,
@@ -144,8 +146,10 @@ la instalación para ese clúster. Incluyen numeración concurrente y migración
 repetida. Las pruebas frontend cubren contratos visibles, navegación, catálogos,
 búsqueda remota y la regresión de Tickets/FMS. El build no sustituye esas pruebas.
 
-No se implementan Control de cambios, autenticación, nuevas reporterías internas,
-PDF de cliente para internos, adjuntos ni auditoría con usuario identificado.
+El alcance inicial no incluía Control de cambios ni la reportería interna,
+incorporados posteriormente y descritos en [Módulos](modules.md). Siguen fuera
+del funcionamiento actual la autenticación, PDF de cliente para internos,
+adjuntos y auditoría con usuario identificado.
 
 ### Resultado de validación de esta implementación
 

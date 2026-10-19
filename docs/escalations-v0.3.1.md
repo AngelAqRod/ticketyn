@@ -1,5 +1,7 @@
 # Escalamientos en Ticketyn v0.3.1
 
+> Guía especializada de escalamientos. Las referencias de migración y validación corresponden a v0.3.1; consulta [Módulos](modules.md) para su contexto actual y [Administración](deployment.md) antes de actualizar.
+
 ## Poblaciones de Reportería
 
 El período global utiliza días calendario de `America/Guatemala`, con inicio

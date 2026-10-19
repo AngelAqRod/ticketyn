@@ -1,5 +1,7 @@
 # Control de cambios v0.5.0
 
+> Este documento conserva decisiones y validaciones por etapa. Las referencias a HEAD `0022_change_control` y los resultados de pruebas describen aquel momento. El módulo incorporó después [Tipos de cambio](change-types-v0.5.0.md). Consulta [Módulos](modules.md) para el funcionamiento actual y [Administración](deployment.md) para el esquema vigente.
+
 ## Arquitectura y decisiones
 
 Entidades independientes de Tickets y Tickets internos, con servicios en
@@ -51,8 +53,9 @@ a los primeros 200 eventos. Muestra la ventana propuesta en cada evento.
 La reportería está en `/reports?scope=changes`, dentro del selector existente.
 Todas las agregaciones y exportaciones usan el mismo predicado por Inicio propuesto.
 Duraciones agregadas: reales de cambios Finalizados. Porcentajes de eficiencia:
-únicamente evaluables. Participación: unión de encargado/apoyo y conteo distinto
-por cambio/persona. Los indicadores no son una evaluación automática de desempeño.
+únicamente evaluables. La presentación actual separa las gráficas de encargado
+y personal de apoyo; el total de participación utiliza la unión de ambos y conteo
+distinto por cambio/persona. Los indicadores no son una evaluación automática de desempeño.
 
 Las exportaciones del listado, estadísticas y PDF individual usan consultas completas
 sin el límite de página y no tienen campos comerciales ni de clientes. Las tablas

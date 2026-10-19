@@ -1,5 +1,7 @@
 # Actualización de v0.2.0 a v0.3.0
 
+> Referencia histórica específica de v0.3.0. No sustituye la [guía actual de instalación y administración](deployment.md); las revisiones y condiciones de origen de este documento pertenecen a esa actualización.
+
 Este procedimiento se ejecutará **después de publicar y verificar el tag oficial
 v0.3.0**, sobre una instalación administrada de confianza. Esta preparación no
 actualiza ningún servidor. Probar primero en Debian de laboratorio con datos ficticios.
