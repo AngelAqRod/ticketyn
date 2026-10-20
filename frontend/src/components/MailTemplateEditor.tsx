@@ -92,7 +92,10 @@ export function MailTemplateEditor({ eventKey, fields }: { eventKey: string; fie
           <button type="button" className="button-secondary" disabled={busy || listLoading || !!listError || activations.length < 50} onClick={() => setOffset(offset + 50)}>Más activaciones</button>
           <button type="button" className="button-primary" disabled={busy || listLoading || !!listError || !activationId} onClick={() => void execute('preview')}>Generar vista previa</button>
         </div>
-        {preview && <div className="mt-4 space-y-3 text-ink min-w-0"><h4 className="font-semibold">Asunto resultante</h4><p className="whitespace-pre-wrap break-words">{preview.subject || 'Asunto vacío'}</p><h4 className="font-semibold">Cuerpo resultante</h4><p className="whitespace-pre-wrap break-words">{preview.body || 'Cuerpo vacío'}</p></div>}
+        {preview && <div className="mt-4 space-y-3 text-ink min-w-0"><h4 className="font-semibold">Asunto resultante</h4><p className="whitespace-pre-wrap break-words">{preview.subject || 'Asunto vacío'}</p>
+          {preview.html_body && <><h4 className="font-semibold">Presentación del correo</h4><iframe title="Vista previa HTML del correo" srcDoc={preview.html_body} sandbox="" referrerPolicy="no-referrer" className="block w-full min-w-0 rounded-xl border border-slate-300 bg-white" style={{ height: 560 }} /></>}
+          <details open><summary className="cursor-pointer font-semibold">Contenido de texto plano</summary><p className="mt-2 whitespace-pre-wrap break-words">{preview.body || 'Cuerpo vacío'}</p></details>
+        </div>}
       </section>
     </>}
   </section>

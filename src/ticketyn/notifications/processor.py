@@ -132,7 +132,7 @@ class NotificationProcessor:
                     try:
                         row, lease = reserve_transport(session)
                         settings = transport_settings(row)
-                        message, sender, recipients = build_message(sender_email=row.sender_email, sender_name=row.sender_name, to=to, cc=cc, bcc=bcc, subject=content.subject, body=content.body)
+                        message, sender, recipients = build_message(sender_email=row.sender_email, sender_name=row.sender_name, to=to, cc=cc, bcc=bcc, subject=content.subject, body=content.body, html_body=content.html_body)
                         credentials = transport_credentials(row)
                         session.commit()
                     except MailFailure as error:

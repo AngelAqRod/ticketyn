@@ -7,7 +7,8 @@ import type { MailField, MailTemplate } from '../api/mailNotifications'
 const key = 'fms.activation.created'
 const fields: MailField[] = [{ id: 'activation.activation_notes', group: 'Activación FMS', label: 'Notas de activación', format: 'multiline', temporality: 'HISTORICAL', source_paths: [], resolver: 'attribute' }, { id: 'customer.name', group: 'Cliente', label: 'Cliente', format: 'text', temporality: 'CURRENT', source_paths: [], resolver: 'attribute' }]
 const empty: MailTemplate = { version: 1, subject: [], body: [] }
-function setup(options: { initial?: MailTemplate; noActivations?: boolean; failPreview?: boolean; failSave?: boolean; pending?: boolean } = {}) {
+const htmlPreview = '<!doctype html><html lang="es"><head><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'"></head><body><table><tr><td>Ticketyn</td></tr><tr><td>NOTAS DE ACTIVACIÓN:<br>Primera línea<br>  Segunda línea</td></tr></table></body></html>'
+function setup(options: { initial?: MailTemplate; noActivations?: boolean; failPreview?: boolean; failSave?: boolean; pending?: boolean; legacyPreview?: boolean } = {}) {
   let stored = options.initial ?? structuredClone(empty)
   const mock = vi.fn(async (path: string, init?: RequestInit) => {
     if (path.startsWith('/api/activations?')) return jsonResponse(options.noActivations ? [] : [{ id: 1, reference: 'ACT-0000001', circuit: { circuit_code: 'CIR-1' } }])
@@ -19,7 +20,7 @@ function setup(options: { initial?: MailTemplate; noActivations?: boolean; failP
       }
       return jsonResponse(stored)
     }
-    if (path.endsWith('/preview')) return options.failPreview ? jsonResponse({ detail: 'La activación seleccionada no existe.' }, 404) : jsonResponse({ subject: 'Asunto real ACT-0000001', body: 'NOTAS DE ACTIVACIÓN:\nPrimera línea\n  Segunda línea\nEtiqueta Mixta: Valor mixto' })
+    if (path.endsWith('/preview')) return options.failPreview ? jsonResponse({ detail: 'La activación seleccionada no existe.' }, 404) : jsonResponse({ subject: 'Asunto real ACT-0000001', body: 'NOTAS DE ACTIVACIÓN:\nPrimera línea\n  Segunda línea\nEtiqueta Mixta: Valor mixto', ...(!options.legacyPreview ? { html_body: htmlPreview } : {}) })
     return jsonResponse({ detail: 'Unexpected' }, 404)
   })
   vi.stubGlobal('fetch', mock)
@@ -79,11 +80,16 @@ describe('Editor de plantillas', () => {
     fireEvent.change(screen.getByLabelText('Activación para vista previa'), { target: { value: '1' } })
     fireEvent.click(screen.getByText('Generar vista previa'))
     await screen.findByText('Asunto real ACT-0000001')
+    const frame = screen.getByTitle('Vista previa HTML del correo')
+    expect(frame).toHaveAttribute('srcdoc', htmlPreview)
+    expect(frame).toHaveAttribute('sandbox', '')
+    expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer')
     expect(screen.getByText(/Primera línea/).textContent).toBe('NOTAS DE ACTIVACIÓN:\nPrimera línea\n  Segunda línea\nEtiqueta Mixta: Valor mixto')
     expect(writes(mock)).toHaveLength(0)
     expect(JSON.parse(String(writes(mock, 'POST')[0][1]?.body))).toEqual({ activation_id: 1, template: { ...empty, subject: [{ type: 'text', text: 'Borrador' }] } })
     fireEvent.change(screen.getByLabelText('Texto fijo 1'), { target: { value: 'Otro' } })
     expect(screen.queryByText('Asunto real ACT-0000001')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Vista previa HTML del correo')).not.toBeInTheDocument()
     expect(mock.mock.calls.some(([path]) => path.includes('/send'))).toBe(false)
   })
   it('muestra un estado vacío sin activaciones y bloquea la vista previa', async () => {
@@ -111,6 +117,28 @@ describe('Editor de plantillas', () => {
     fireEvent.click(screen.getByText('Procesando plantilla…'))
     await waitFor(() => expect(writes(mock)).toHaveLength(1))
     expect(screen.getByText('Procesando plantilla…')).toBeDisabled()
+  })
+  it('mantiene el texto plano disponible sin insertar el documento HTML en el editor', async () => {
+    const { mock } = setup(); await loaded()
+    fireEvent.change(screen.getByLabelText('Activación para vista previa'), { target: { value: '1' } })
+    fireEvent.click(screen.getByText('Generar vista previa'))
+    await screen.findByTitle('Vista previa HTML del correo')
+    const summary = screen.getByText('Contenido de texto plano')
+    expect(summary.closest('details')).toHaveAttribute('open')
+    expect(screen.getByText(/Primera línea/)).toBeInTheDocument()
+    // The server document is isolated in srcdoc, not rendered in the parent DOM.
+    expect(screen.queryByText('Ticketyn')).not.toBeInTheDocument()
+    expect(writes(mock)).toHaveLength(0)
+    expect(writes(mock, 'POST')).toHaveLength(1)
+    expect(mock.mock.calls.some(([path]) => /smtp|notification$|\/send/.test(path))).toBe(false)
+  })
+  it('conserva la vista previa de texto si la API anterior no entrega HTML', async () => {
+    setup({ legacyPreview: true }); await loaded()
+    fireEvent.change(screen.getByLabelText('Activación para vista previa'), { target: { value: '1' } })
+    fireEvent.click(screen.getByText('Generar vista previa'))
+    await screen.findByText('Asunto real ACT-0000001')
+    expect(screen.getByText(/Primera línea/)).toBeInTheDocument()
+    expect(screen.queryByTitle('Vista previa HTML del correo')).not.toBeInTheDocument()
   })
 })
 

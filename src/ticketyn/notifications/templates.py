@@ -1,4 +1,4 @@
-"""Read-only renderer shared by previews and a future transport.
+"""Read-only plain-text/HTML renderer shared by previews and SMTP.
 
 Paths come exclusively from the server field registry. No client attribute paths,
 expression evaluation, persistence or transport operations are permitted here.
@@ -9,7 +9,8 @@ from fastapi import HTTPException
 from sqlalchemy import select, func
 from ticketyn.api.fms_exports import capacity_text
 from ticketyn.models.fms import CapacityChange
-from ticketyn.notifications.fields import FIELD_REGISTRY
+from ticketyn.notifications.fields import EVENTS, FIELD_REGISTRY
+from ticketyn.notifications.html import BodyBlock, render_html
 from ticketyn.schemas.mail_templates import MailTemplate, PreviewResponse
 
 def join_subject_elements(elements):
@@ -66,6 +67,7 @@ def render_template(session, event_key, template, activation):
     # only. Static header text is rejected by the input schema instead.
     subject = join_subject_elements(block.text if block.type == 'text' else re.sub(r'[\x00-\x1f\x7f\u2028\u2029]+', ' ', resolve(block.field_id)) for block in template.subject)
     blocks = []
+    html_blocks = []
     for block in template.body:
         if block.type == 'field':
             value = resolve(block.field_id)
@@ -75,11 +77,14 @@ def render_template(session, event_key, template, activation):
                 # other multiline fields retain their existing inline format.
                 separator = '\n' if block.field_id == 'activation.activation_notes' else ' '
                 blocks.append(('field', f'{label}:{separator}{value}'))
+                html_blocks.append(BodyBlock('notes' if block.field_id == 'activation.activation_notes' else 'field', value, label))
         elif block.text.strip():
             blocks.append((block.type, block.text))
+            html_blocks.append(BodyBlock(block.type, block.text))
         elif '\n' in block.text or '\r' in block.text:
             # A newline-only text block is an intentional separator, not empty.
             blocks.append(('spacing', block.text))
+            html_blocks.append(BodyBlock('spacing', block.text))
     body = ''
     previous = None
     for kind, value in blocks:
@@ -89,4 +94,4 @@ def render_template(session, event_key, template, activation):
         previous = kind
     if len(subject.encode('utf-8')) > 998 or len(body) > 100000:
         raise HTTPException(422, 'El resultado supera el límite de 998 bytes de asunto o 100.000 caracteres de cuerpo. Reduce los bloques de la plantilla.')
-    return PreviewResponse(subject=subject, body=body)
+    return PreviewResponse(subject=subject, body=body, html_body=render_html(EVENTS[event_key], html_blocks))

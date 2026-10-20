@@ -493,14 +493,17 @@ def test_mime_uses_renderer_body_without_changing_section_spacing(api_client, op
     note_section = f'\n{label}:\n{notes}' if notes and notes.strip() else ''
     expected = (f"Estimados,\n\nCORRELATIVO: {activation['reference']}" + note_section +
                 f'\nDESCRIPCIÓN DEL CIRCUITO: {description}\n\nSaludos,\nNOC')
-    assert preview == {'subject': activation['reference'], 'body': expected}
+    assert preview['subject'] == activation['reference'] and preview['body'] == expected
     mail, sender, recipients = smtp.build_message(sender_email='noc@example.com', sender_name='NOC', to=['test@example.com'], **preview)
     assert str(mail['Subject']) == preview['subject']
-    assert mail.get_content().replace('\r\n', '\n').removesuffix('\n') == expected.replace('\r\n', '\n')
+    assert mail.get_content_type() == 'multipart/alternative'
+    assert mail.get_body(preferencelist=('plain',)).get_content().replace('\r\n', '\n').removesuffix('\n') == expected.replace('\r\n', '\n')
+    assert mail.get_body(preferencelist=('html',)).get_content().replace('\r\n', '\n').removesuffix('\n') == preview['html_body']
     result = smtp.send_message(smtp.TransportSettings('smtp.example.com', 587, 'STARTTLS', 'NONE'),
                                smtp.Credentials(), mail, sender, recipients)
     assert result.status == 'ACCEPTED'
     submitted, _ = FakeSMTP.instances[-1].sent
-    assert submitted.get_content().replace('\r\n', '\n').removesuffix('\n') == expected.replace('\r\n', '\n')
+    assert submitted.get_body(preferencelist=('plain',)).get_content().replace('\r\n', '\n').removesuffix('\n') == expected.replace('\r\n', '\n')
+    assert submitted.get_body(preferencelist=('html',)).get_content().replace('\r\n', '\n').removesuffix('\n') == preview['html_body']
     assert api_client.get(f"/api/activations/{activation['id']}").json() == activation
     assert api_client.get(f"/api/activations/{activation['id']}/interventions").json() == []

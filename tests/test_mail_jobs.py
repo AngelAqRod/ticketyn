@@ -175,7 +175,8 @@ def test_process_current_configuration_body_and_no_open_transaction(jobs_env, jo
     assert recipients == ['current@example.com', 'cc@example.com', 'hidden@example.com']
     assert message['Bcc'] is None and 'hidden@example.com' not in message.as_string()
     assert str(message['Subject']) == 'Activación ACT-0000001'
-    body = message.get_content().replace('\r\n', '\n')
+    assert message.get_content_type() == 'multipart/alternative'
+    body = message.get_body(preferencelist=('plain',)).get_content().replace('\r\n', '\n')
     assert body == 'Estimados,\n\nCORRELATIVO: ACT-0000001\nNOTAS DE ACTIVACIÓN:\nNotas\n  históricas\n\nNOC\n'
     assert body.removesuffix('\n') == preview.json()['body']
     assert not worker.NotificationProcessor(jobs_env[0]).run_once() and len(sent) == 1

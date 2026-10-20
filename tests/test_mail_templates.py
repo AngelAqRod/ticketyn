@@ -13,6 +13,11 @@ EVENT = '/api/mail-notifications/events/' + ACTIVATION_EVENT
 EMPTY = {'version': 1, 'subject': [], 'body': []}
 
 
+def plain_result(preview):
+    assert preview['html_body'].startswith('<!doctype html>')
+    return {key: preview[key] for key in ('subject', 'body')}
+
+
 def dynamic(identifier, **kwargs):
     return {'type': 'field', 'field_id': identifier, **kwargs}
 
@@ -191,7 +196,7 @@ def test_missing_values_headers_order_and_limits(api_client, operation_payload):
     template['subject'] = [{'type': 'text', 'text': 'á' * 600}]
     assert api_client.post(EVENT + '/preview', json=request).status_code == 422
     request['template'] = EMPTY
-    assert api_client.post(EVENT + '/preview', json=request).json() == {'subject': '', 'body': ''}
+    assert plain_result(api_client.post(EVENT + '/preview', json=request).json()) == {'subject': '', 'body': ''}
     request['activation_id'] = 2147483647
     assert api_client.post(EVENT + '/preview', json=request).status_code == 404
     assert api_client.post('/api/mail-notifications/events/unknown/preview', json=request).status_code == 404
@@ -256,7 +261,7 @@ def test_empty_elements_persist_and_preview_without_placeholder_or_writes(api_cl
     before = api_client.get(f"/api/activations/{activation['id']}").json()
     response = api_client.post(EVENT + '/preview', json={'activation_id': activation['id'], 'template': template})
     assert response.status_code == 200
-    assert response.json() == {'subject': f"texto 1 {activation['reference']} 01/01/2020 12:00:00", 'body': ''}
+    assert plain_result(response.json()) == {'subject': f"texto 1 {activation['reference']} 01/01/2020 12:00:00", 'body': ''}
     assert api_client.get(EVENT + '/template').json() == stored
     assert api_client.get(f"/api/activations/{activation['id']}").json() == before
     assert api_client.get(f"/api/activations/{activation['id']}/interventions").json() == []
@@ -278,7 +283,7 @@ def test_compact_body_preserves_sections_order_and_explicit_breaks(api_client, o
     before = api_client.get(f"/api/activations/{activation['id']}").json()
     result = api_client.post(EVENT + '/preview', json={'activation_id': activation['id'], 'template': stored})
     assert result.status_code == 200
-    assert result.json() == {'subject': 'Asunto intacto', 'body': (
+    assert plain_result(result.json()) == {'subject': 'Asunto intacto', 'body': (
         f"Estimados,\nAviso\n\nCORRELATIVO: {activation['reference']}" + separator +
         'NOTAS DE ACTIVACIÓN:\nLínea uno\n\n  Línea tres\n\nSaludos,\nNOC')}
     assert api_client.get(EVENT + '/template').json() == stored

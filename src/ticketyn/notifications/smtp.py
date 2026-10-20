@@ -58,8 +58,8 @@ def header_text(value):
     return value
 
 
-def build_message(*, sender_email, sender_name, to, cc=(), bcc=(), subject, body):
-    """CCO belongs only to the envelope. Plain UTF-8 content is already rendered."""
+def build_message(*, sender_email, sender_name, to, cc=(), bcc=(), subject, body, html_body=None):
+    """CCO belongs only to the envelope. Content is already safely rendered."""
     try:
         sender = email_address(sender_email)
         local, _, domain = sender.rpartition('@')
@@ -82,6 +82,8 @@ def build_message(*, sender_email, sender_name, to, cc=(), bcc=(), subject, body
         message['Date'] = formatdate(usegmt=True)
         message['Message-ID'] = make_msgid(domain=sender.rpartition('@')[2])
         message.set_content(body, charset='utf-8')
+        if html_body is not None:
+            message.add_alternative(html_body, subtype='html', charset='utf-8')
         return message, sender, envelope
     except (ValueError, TypeError, AttributeError):
         raise MailFailure('CONFIGURATION_ERROR') from None

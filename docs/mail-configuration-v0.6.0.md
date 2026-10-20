@@ -168,7 +168,8 @@ API adicional, bajo `/api/mail-notifications/events/{event_key}`:
 - `GET /template`: devuelve la plantilla guardada o una estructura vacía.
 - `PATCH /template`: reemplaza la plantilla completa, preservando la otra configuración.
 - `POST /preview`: recibe `activation_id` y `template`, incluidos cambios no guardados;
-  devuelve exclusivamente `subject` y `body`. Una activación inexistente devuelve 404.
+  devuelve `subject`, `body` (texto plano) y `html_body` (presentación HTML).
+  Una activación inexistente devuelve 404.
 
 La selección de activaciones reutiliza `GET /api/activations?limit=50&offset=...`;
 se recorren páginas de 50, sin cargar todo el historial. No requiere claves ni
@@ -177,6 +178,13 @@ persistente para las solicitudes automáticas FMS incorporadas en la etapa 7. La
 vista previa sigue sin crear solicitudes ni enviar correos. El editor elimina el
 aviso de autenticación de la pantalla; el modelo de acceso sigue siendo el descrito
 en esta guía.
+
+La vista previa muestra el HTML en un iframe aislado (`sandbox` sin permisos y
+sin envío de Referer), además del texto plano en un apartado desplegable. Utiliza
+la plantilla del editor, incluidos los cambios no guardados. El formato persistido
+`version: 1` no cambia; las plantillas anteriores funcionan sin conversión.
+La [presentación HTML fija](mail-transport-v0.6.0.md#presentación-html-de-las-notificaciones)
+se reutiliza en el envío, sin opciones nuevas de diseño ni recursos externos.
 
 El formato de plantilla tiene `version: 1`, `subject` y `body`. Cada lista admite
 hasta 50 bloques; su orden es el orden de representación. El asunto admite texto
@@ -193,9 +201,11 @@ registro único; el editor solo muestra grupos y nombres amigables.
 
 En **Notas de activación**, la etiqueta predeterminada o personalizada termina en
 dos puntos y el contenido comienza en la línea siguiente, sin añadir una línea
-vacía. Se conservan los saltos y espacios originales de las notas. Los demás campos
+vacía. Se conservan los saltos y espacios originales de las notas. En texto plano, los demás campos
 mantienen `Etiqueta: valor`; las notas vacías se omiten igual que antes. Este formato
-es común a la vista previa y al correo generado por el procesador.
+de texto es común a la vista previa y al correo generado por el procesador. En HTML,
+las etiquetas y los valores se distinguen en bloques visuales, manteniendo la misma
+secuencia y contenido.
 
 Los campos del cuerpo usan **Por defecto** (`DEFAULT`, etiqueta del registro) o
 **Personalizado** (`CUSTOM`, etiqueta local a la plantilla, de hasta 100 caracteres).

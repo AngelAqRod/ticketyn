@@ -23,7 +23,7 @@ export const getMailFields = (key: string, signal?: AbortSignal) => getJson<Mail
 export type SubjectBlock = { type: 'text'; text: string } | { type: 'field'; field_id: string }
 export type BodyBlock = { type: 'introduction' | 'signature'; text: string } | { type: 'field'; field_id: string; label_mode: 'DEFAULT' | 'CUSTOM'; custom_label: string | null }
 export interface MailTemplate { version: 1; subject: SubjectBlock[]; body: BodyBlock[] }
-export interface MailPreview { subject: string; body: string }
+export interface MailPreview { subject: string; body: string; html_body?: string }
 export const getMailTemplate = (key: string, signal?: AbortSignal) => getJson<MailTemplate>(`${base}/events/${encodeURIComponent(key)}/template`, signal)
 export const saveMailTemplate = (key: string, template: MailTemplate) => patchJson<MailTemplate>(`${base}/events/${encodeURIComponent(key)}/template`, template)
 export const previewMailTemplate = (key: string, activation_id: number, template: MailTemplate) => postJson<MailPreview>(`${base}/events/${encodeURIComponent(key)}/preview`, { activation_id, template })

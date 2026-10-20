@@ -76,7 +76,7 @@ def configuration_problem(session, event, activation):
             return 'La plantilla no genera contenido para esta activación.'
         build_message(sender_email=row.sender_email, sender_name=row.sender_name,
                       to=event.to_recipients, cc=event.cc_recipients, bcc=event.bcc_recipients,
-                      subject=content.subject, body=content.body)
+                      subject=content.subject, body=content.body, html_body=content.html_body)
     except (MailFailure, ValidationError, HTTPException, ValueError, TypeError):
         return 'La configuración de correo o la plantilla no es válida. Revísala en Administración.'
     return None

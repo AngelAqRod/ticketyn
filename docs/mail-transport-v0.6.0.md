@@ -29,12 +29,51 @@ requieren autorización explícita y **no pueden usar contraseña ni OAuth2**.
 El constructor valida direcciones y encabezados. Genera texto plano UTF-8 con
 From, To, Cc, Subject, Date y Message-ID. CCO solo figura en el sobre SMTP, nunca
 en encabezados. Las direcciones de dominio internacional se convierten a IDNA en
-el sobre. No incorpora HTML, adjuntos ni datos FMS por iniciativa propia.
+el sobre. Para las notificaciones recibe también HTML del renderizador compartido
+y construye `multipart/alternative`: primero `text/plain` y después `text/html`,
+ambos UTF-8. No consulta datos FMS ni incorpora adjuntos por iniciativa propia.
 
 El contenido ya renderizado conserva los saltos de línea y la agrupación compacta
 establecida en la etapa 4; MIME normaliza finales de línea a CRLF y añade el final
 de línea propio del contenido de texto. La prueba no usa plantillas: su asunto y
 texto son fijos. No hay endpoint para enviar mensajes arbitrarios.
+
+### Presentación HTML de las notificaciones
+
+`notifications/html.py` presenta los mismos bloques ya resueltos por
+`notifications/templates.py`, sin nuevas consultas ni cambios en la plantilla
+guardada. Usa tablas sin bordes visibles, estilos inline y un contenedor de hasta
+640 px. El encabezado es blanco, con **Ticketyn**, **OPERACIONES FMS** y una línea
+azul; debajo aparecen **NOTIFICACIÓN OPERATIVA** y **Registro de activación**. Este
+título visual no sustituye el asunto configurable.
+
+Los campos normales consecutivos se presentan de dos en dos, de izquierda a
+derecha. Una nota, introducción, firma o separación explícita cierra la fila actual;
+si había un solo campo, queda a la izquierda sin adelantar campos posteriores.
+Las notas seleccionadas y no vacías ocupan todo el ancho en su posición configurada,
+con fondo suave y borde izquierdo azul. Después se inicia una nueva fila de campos.
+Los campos vacíos se omiten como antes. La introducción y la firma siguen siendo
+las configuradas. El pie decorativo **Ticketyn · Gestión operativa** no las sustituye.
+La alternativa de texto conserva su formato anterior.
+
+El repositorio no contiene una imagen independiente del logotipo: la cabecera de
+la aplicación combina el nombre **Ticketyn** con un icono React. El correo utiliza
+ese nombre como identidad textual, sin inventar una imagen, depender de recursos
+externos ni añadir partes CID. El contenido permanece completo sin imágenes.
+
+Se escapan valores, etiquetas y textos antes de convertir saltos de línea en
+`<br>`. El administrador no introduce HTML. El documento no contiene recursos de
+red ni contenido activo; incluye una política CSP restrictiva para la vista previa,
+que además se muestra en un iframe sin permisos de sandbox. El documento HTML es
+el mismo en la vista previa y en MIME; no se guarda el mensaje generado.
+
+La presentación prioriza Gmail y Outlook mediante tablas y estilos inline. Una
+media query opcional apila las columnas en pantallas de hasta 480 px conservando
+el orden; los clientes que no la admiten mantienen dos columnas. Algunos clientes
+pueden ignorar límites de ancho o reglas de espacios.
+Las diferencias visuales deben comprobarse manualmente en los clientes reales;
+las pruebas automatizadas no certifican su apariencia. Los clientes también pueden
+recortar visualmente mensajes extensos. La alternativa de texto sigue disponible.
 
 ## Endpoints
 

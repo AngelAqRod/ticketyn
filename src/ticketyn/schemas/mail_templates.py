@@ -58,3 +58,4 @@ class PreviewRequest(StrictBlock):
 class PreviewResponse(StrictBlock):
     subject: str
     body: str
+    html_body: str

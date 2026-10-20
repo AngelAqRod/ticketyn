@@ -243,7 +243,7 @@ def test_historical_activation_uses_current_template_and_recipients(activation_e
     assert processor.NotificationProcessor(engine).run_once()
     _, _, message, sender, recipients = sent[0]
     assert str(message['Subject']) == 'Plantilla vigente'
-    assert 'NOTAS DE ACTIVACIÓN:\n' in message.get_content().replace('\r\n', '\n')
+    assert 'NOTAS DE ACTIVACIÓN:\n' in message.get_body(preferencelist=('plain',)).get_content().replace('\r\n', '\n')
     assert recipients == ['current@example.com', 'hidden@example.com'] and message['Bcc'] is None
     assert str(message['From']).startswith('Noc actual')
     assert activation_client.get(f"/api/activations/{activation['id']}").json() == activation
