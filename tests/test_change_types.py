@@ -21,7 +21,7 @@ def test_catalog_validation_and_lifecycle(api_client):
     assert any(row['id']==id for row in api_client.get('/api/change-types',params={'include_inactive':True}).json())
     assert api_client.get(f'/api/change-types/{id}').json()['description']=='Nueva descripción'
     assert api_client.patch(f'/api/change-types/{id}',json={'active':True}).json()['active']
-    assert api_client.delete(f'/api/change-types/{id}').status_code==405
+    assert api_client.delete(f'/api/change-types/{id}').status_code==403
 
 
 def test_required_active_type_and_historical_retention(api_client,db_session):

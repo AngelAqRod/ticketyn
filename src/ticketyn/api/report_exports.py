@@ -74,7 +74,7 @@ def export_xlsx(session, filters, summary, output):
             yield [ticket.reference, ticket.status, customer.customer_code, customer.name,
                    circuit.circuit_code, circuit.description, sector.name, department.name,
                    incident_type.name, ticket.title, ticket.description, local(ticket.start_at),
-                   local(ticket.end_at), ticket.duration_seconds, ('En curso' if ticket.duration_seconds is None else duration_text(ticket.duration_seconds)),
+                   local(ticket.end_at), ticket.duration_seconds, (duration_text(ticket.duration_seconds) if ticket.duration_seconds is not None else ('En curso' if ticket.status == 'OPEN' else 'Sin fecha de fin')),
                    ticket.start_at.astimezone(zone).isoformat(), ticket.end_at.astimezone(zone).isoformat() if ticket.end_at else None, ticket.node.name if ticket.node else None, ticket.responsible.name if ticket.responsible else None]
     if getattr(summary, 'report_kind', None) == 'internal':
         from ticketyn.api.internal_ticket_exports import HEADERS, export_rows

@@ -66,6 +66,29 @@ def test_xlsx_complete_historical_data_and_headers(api_client, ticket_payload):
     book.close()
 
 
+def test_exports_duration_semantics_for_closed_and_open_tickets(api_client, ticket_payload, pdf_strings):
+    closed_no_end = create_ticket(api_client, {**ticket_payload, 'title': 'Cerrado sin fin', 'status': 'CLOSED', 'end_at': None})
+    open_ticket = create_ticket(api_client, {**ticket_payload, 'title': 'Abierto sin fin', 'status': 'OPEN', 'end_at': None})
+    closed_with_end = create_ticket(api_client, {**ticket_payload, 'title': 'Cerrado con fin', 'status': 'CLOSED', 'end_at': '2020-01-01T14:30:00Z'})
+
+    book = workbook(api_client)
+    sheet = book['Tickets']
+    rows = {row[0]: row for row in list(sheet.values)[1:]}
+    assert rows[closed_no_end['reference']][13] == 'Sin fecha de fin'
+    assert rows[closed_no_end['reference']][14] is None
+    assert rows[open_ticket['reference']][13] == 'En curso'
+    assert rows[open_ticket['reference']][14] is None
+    assert rows[closed_with_end['reference']][13] == '2 h 30 min'
+    assert rows[closed_with_end['reference']][14] == 9000
+    book.close()
+
+    response = api_client.get('/api/tickets/export/pdf')
+    assert response.status_code == 200
+    assert 'Sin fecha de fin' in pdf_strings
+    assert 'En curso' in pdf_strings
+    assert '2 h 30 min' in pdf_strings
+
+
 @pytest.mark.parametrize('field', ['status', 'customer_id', 'circuit_id', 'sector_id', 'department_id', 'incident_type_id', 'search', 'from', 'to'])
 def test_every_filter_matches_list_semantics(api_client, ticket_payload, field):
     wanted = create_ticket(api_client, {**ticket_payload, 'title': 'Único objetivo', 'start_at': '2020-01-01T12:00:00Z'})
@@ -149,4 +172,7 @@ def test_export_query_count_is_independent_of_rows(api_client, ticket_payload, d
     try:
         assert api_client.get('/api/tickets/export/xlsx').status_code == 200
     finally: event.remove(connection, 'before_cursor_execute', record)
-    assert len(queries) == 1
+    selects = [sql for sql in queries if sql.lstrip().upper().startswith('SELECT')]
+    authentication = [sql for sql in selects if 'security_roles' in sql or 'security_config' in sql]
+    assert len(authentication) == 2
+    assert len(selects) - len(authentication) == 1

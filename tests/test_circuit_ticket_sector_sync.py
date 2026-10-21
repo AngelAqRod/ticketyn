@@ -142,6 +142,9 @@ def test_history_failure_rolls_back_circuit_and_tickets(api_client,ticket_payloa
 
 
 def test_ticket_lock_conflict_is_atomic_and_retryable(concurrent_database,correction_clock):
+    from types import SimpleNamespace
+    from ticketyn.security.permissions import DEFAULT_GRANTS
+    request=SimpleNamespace(state=SimpleNamespace(principal=SimpleNamespace(permissions=DEFAULT_GRANTS['SUPERADMIN'])))
     engine,payload=concurrent_database
     with Session(engine) as session:
         new=Sector(name='Sector corregido');session.add(new);session.commit();sector_id=new.id
@@ -151,12 +154,12 @@ def test_ticket_lock_conflict_is_atomic_and_retryable(concurrent_database,correc
         holder.execute(select(Ticket.id).where(Ticket.id==id).with_for_update())
         with Session(engine) as contender:
             with pytest.raises(HTTPException) as failure:
-                patch_circuit(payload['circuit_id'],CircuitUpdate(sector_id=sector_id),contender)
+                patch_circuit(payload['circuit_id'],CircuitUpdate(sector_id=sector_id),contender,request)
             assert failure.value.status_code==409
             assert contender.scalar(select(Circuit.sector_id).where(Circuit.id==payload['circuit_id']))==payload['sector_id']
             assert contender.scalar(select(func.count()).select_from(TicketUpdate))==0
     with Session(engine) as session:
-        patch_circuit(payload['circuit_id'],CircuitUpdate(sector_id=sector_id),session)
+        patch_circuit(payload['circuit_id'],CircuitUpdate(sector_id=sector_id),session,request)
         assert snapshot(session,id)['sector_id']==sector_id and len(history(session,id))==1
 
 

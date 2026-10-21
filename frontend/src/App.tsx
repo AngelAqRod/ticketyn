@@ -1,3 +1,8 @@
+import { Profile } from './pages/Profile'
+import { SecurityRoles } from './pages/SecurityRoles'
+import { SecuritySessions } from './pages/SecuritySessions'
+import { SecurityAudit } from './pages/SecurityAudit'
+import { AuthGate } from './auth/AuthGate'
 import { Changes, ChangeForm, ChangeDetail } from './pages/Changes'
 import { InternalTickets, InternalTicketDetail, InternalTicketEditor } from './pages/InternalTickets'
 import { Operations } from './pages/Operations'
@@ -21,7 +26,7 @@ const FmsReports = lazy(() => import('./pages/FmsReports').then((module) => ({ d
 const Reports = lazy(() => import('./pages/Reports').then((module) => ({ default: module.Reports })))
 
 export default function App() {
-  return <Routes><Route element={<Layout />}>
+  return <AuthGate><Routes><Route element={<Layout />}>
     <Route index element={<Dashboard />} />
     <Route path="internal-tickets" element={<InternalTickets />} />
     <Route path="internal-tickets/new" element={<InternalTicketEditor />} />
@@ -44,10 +49,15 @@ export default function App() {
     <Route path="changes/:id/edit" element={<ChangeForm/>}/>
     <Route path="reports" element={<Suspense fallback={<RequestState loading compact loadingText="Cargando reportes..." />}><Reports /></Suspense>} />
     {([['activation-reports', 'activations'], ['capacity-reports', 'capacity-changes'], ['lifecycle-reports', 'circuit-lifecycle']] as const).map(([path, kind]) => <Route key={path} path={path} element={<Suspense fallback={<RequestState loading compact loadingText="Cargando reportes..." />}><FmsReports key={kind} kind={kind} /></Suspense>} />)}
+    <Route path="profile" element={<Profile />} />
+    <Route path="responsibles" element={<CatalogAdmin key="responsibles" kind="responsibles" administrativeAccess />} />
+    <Route path="security-roles" element={<SecurityRoles />} />
+    <Route path="security-sessions" element={<SecuritySessions />} />
+    <Route path="security-audit" element={<SecurityAudit />} />
     <Route path="catalogs" element={<Catalogs />} />
     <Route path="settings" element={<Settings />} />
     <Route path="mail-templates" element={<MailNotifications key="templates" section="templates" />} />
     <Route path="mail-notifications" element={<MailNotifications key="configuration" />} />
     <Route path="*" element={<div className="panel p-10"><h1 className="text-xl font-semibold">Página no encontrada</h1><Link to="/" className="button-ghost mt-4">Volver al dashboard</Link></div>} />
-  </Route></Routes>
+  </Route></Routes></AuthGate>
 }

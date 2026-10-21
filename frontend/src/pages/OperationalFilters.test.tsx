@@ -1,11 +1,13 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '../test/render'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { Tickets } from './Tickets'
 import { CatalogAdmin } from '../components/CatalogAdmin'
 import { jsonResponse, ticket } from '../test/fixtures'
 const customers = [1, 2].map((id) => ({ id, customer_code: `C-${id}`, name: `Cliente ${id}`, active: id === 1, created_at: ticket.created_at }))
-const circuits = [1, 2].map((id) => ({ id, customer_id: id, circuit_code: `LINE-${id}`, description: `Enlace ${id}`, active: id === 1, created_at: ticket.created_at }))
+const sectors = [1, 2].map((id) => ({ id, name: `Sector ${id}`, active: true, created_at: ticket.created_at }))
+const nodes = [1, 2].map((id) => ({ id, name: `Nodo ${id}`, active: true, created_at: ticket.created_at }))
+const circuits = [1, 2].map((id) => ({ id, customer_id: id, sector_id: id, sector: { id, name: `Sector ${id}` }, node_id: id, node: { id, name: `Nodo ${id}` }, circuit_code: `LINE-${id}`, description: `Enlace ${id}`, active: id === 1, created_at: ticket.created_at }))
 function Location() { const location = useLocation(); const navigate = useNavigate(); return <><output data-testid="url">{location.search}</output><button onClick={() => navigate(-1)}>Atrás</button><button onClick={() => navigate(1)}>Adelante</button></> }
 function setup(path = '/tickets', size = 1) {
   const mock = vi.fn((path: string) => {
@@ -13,8 +15,10 @@ function setup(path = '/tickets', size = 1) {
     let data: unknown = []
     if (address.pathname === '/api/tickets') data = Array.from({ length: size }, (_, id) => ({ ...ticket, id: id + 1, reference: `REF-${id}` }))
     if (address.pathname === '/api/customers') data = customers
-    if (address.pathname === '/api/circuits') data = circuits.filter((row) => (!params.has('customer_id') || String(row.customer_id) === params.get('customer_id')) && (!params.has('active') || String(row.active) === params.get('active')) && (!params.has('search') || `${row.circuit_code} ${row.description}`.toLowerCase().includes(params.get('search')!.toLowerCase())))
-    if (['/api/sectors', '/api/departments', '/api/incident-types', '/api/nodes', '/api/responsibles'].includes(address.pathname)) data = [{ id: 1, name: 'Clasificación', active: true, created_at: ticket.created_at }]
+    if (address.pathname === '/api/sectors') data = sectors
+    if (address.pathname === '/api/nodes') data = nodes
+    if (address.pathname === '/api/circuits') data = circuits.filter((row) => (!params.has('customer_id') || String(row.customer_id) === params.get('customer_id')) && (!params.has('sector_id') || String(row.sector_id) === params.get('sector_id')) && (!params.has('node_id') || String(row.node_id) === params.get('node_id')) && (!params.has('active') || String(row.active) === params.get('active')) && (!params.has('search') || `${row.circuit_code} ${row.description}`.toLowerCase().includes(params.get('search')!.toLowerCase())))
+    if (['/api/departments', '/api/incident-types', '/api/responsibles'].includes(address.pathname)) data = [{ id: 1, name: 'Clasificación', active: true, created_at: ticket.created_at }]
     return Promise.resolve(jsonResponse(data))
   })
   vi.stubGlobal('fetch', mock)
@@ -96,11 +100,11 @@ describe('filtros operativos en URL', () => {
 })
 
 
-describe('filtros Nodo y Responsable', () => {
+describe('filtros Nodo, Sector y Responsable', () => {
   it('restaura ambos filtros, pagina, reinicia offset y limpia URL', async () => {
     const mock = setup('/tickets?node_id=1&responsible_id=1&status=OPEN&offset=50', 50)
     await screen.findByText('REF-0')
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Nodo' })).toHaveValue('Clasificación'))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Nodo' })).toHaveValue('Nodo 1'))
     expect(screen.getByRole('combobox', { name: 'Responsable' })).toHaveValue('Clasificación')
     fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
     await waitFor(() => expect(mock.mock.calls.some(([path]) => path.includes('offset=100') && path.includes('node_id=1') && path.includes('responsible_id=1'))).toBe(true))
@@ -115,13 +119,58 @@ describe('filtros Nodo y Responsable', () => {
   it('Circuitos conserva Nodo junto a cliente/estado y limpia filtros', async () => {
     const mock = setup('/circuits?node_id=1&customer_id=1&active=true')
     await screen.findByText('LINE-1')
-    expect(screen.getByRole('combobox', { name: 'Filtrar por nodo' })).toHaveValue('Clasificación')
+    expect(screen.getByRole('combobox', { name: 'Filtrar por nodo' })).toHaveValue('Nodo 1')
     expect(mock.mock.calls.some(([path]) => path.startsWith('/api/circuits?') && path.includes('node_id=1') && path.includes('customer_id=1') && path.includes('active=true'))).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar Nodo' }))
     expect(params().has('node_id')).toBe(false); expect(params().get('customer_id')).toBe('1')
-    await choose('Filtrar por nodo', 'Clasificación')
+    await choose('Filtrar por nodo', 'Nodo 1')
     expect(params().get('node_id')).toBe('1')
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
     expect(screen.getByTestId('url').textContent).toBe('')
+  })
+  it('Circuitos filtra únicamente por sector y permite seleccionar/limpiar', async () => {
+    const mock = setup('/circuits?sector_id=1')
+    await screen.findByText('LINE-1')
+    expect(screen.getByRole('combobox', { name: 'Filtrar por sector' })).toHaveValue('Sector 1')
+    expect(screen.queryByText('LINE-2')).not.toBeInTheDocument()
+    expect(mock.mock.calls.some(([path]) => path.startsWith('/api/circuits?') && path.includes('sector_id=1'))).toBe(true)
+
+    // Limpiar Sector individual
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar Sector' }))
+    expect(params().has('sector_id')).toBe(false)
+    await screen.findByText('LINE-2')
+
+    // Seleccionar Sector 2
+    await choose('Filtrar por sector', 'Sector 2')
+    expect(params().get('sector_id')).toBe('2')
+    await screen.findByText('LINE-2')
+    expect(screen.queryByText('LINE-1')).not.toBeInTheDocument()
+
+    // Limpiar todos los filtros
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    expect(screen.getByTestId('url').textContent).toBe('')
+    await screen.findByText('LINE-1')
+    await screen.findByText('LINE-2')
+  })
+  it('Circuitos combina sector con cliente, nodo y estado', async () => {
+    const mock = setup('/circuits?customer_id=1&sector_id=1&node_id=1&active=true')
+    await screen.findByText('LINE-1')
+    expect(screen.getByRole('combobox', { name: 'Filtrar por cliente' })).toHaveValue('C-1 — Cliente 1')
+    expect(screen.getByRole('combobox', { name: 'Filtrar por sector' })).toHaveValue('Sector 1')
+    expect(screen.getByRole('combobox', { name: 'Filtrar por nodo' })).toHaveValue('Nodo 1')
+    expect(screen.getByLabelText('Estado de circuitos')).toHaveValue('true')
+    expect(screen.getByText('4 filtros activos')).toBeInTheDocument()
+    expect(mock.mock.calls.some(([path]) =>
+      path.startsWith('/api/circuits?') &&
+      path.includes('customer_id=1') &&
+      path.includes('sector_id=1') &&
+      path.includes('node_id=1') &&
+      path.includes('active=true')
+    )).toBe(true)
+  })
+  it('Sector sin resultados muestra estado vacío comprensible', async () => {
+    setup('/circuits?sector_id=999')
+    expect(await screen.findByText('No hay coincidencias con la búsqueda.')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 })

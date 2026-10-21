@@ -1,7 +1,8 @@
-"""Internal trusted-network API; deliberately follows the existing access model."""
+"""Internal-ticket operations with explicit authorization and bounded context reads."""
 from typing import Annotated, Literal
-from fastapi import APIRouter, Path, Query
-from sqlalchemy import select, func
+from fastapi import APIRouter, Path, Query, Request, HTTPException
+from ticketyn.security.mutations import ticket_mutation
+from sqlalchemy import select, func, or_
 from ticketyn.api.internal_ticket_exports import export_pdf, export_xlsx
 from ticketyn.api.ticket_exports import stream_ticket_export
 from ticketyn.api.ticket_reports import TicketReportOptions, report_response
@@ -14,6 +15,13 @@ from ticketyn.schemas.internal_ticket import InternalTicketCreate, InternalTicke
 from ticketyn.schemas.ticket_update import TicketUpdateResponse, TicketUpdatePage
 from ticketyn.schemas.escalation import EscalationCreate, EscalationResponse, EscalationEdit, EscalationFinish, EscalationAuditResponse
 from ticketyn.schemas.ticket_number_config import TicketNumberConfigResponse, TicketNumberConfigUpdate
+
+from pydantic import BaseModel
+
+class InternalLinkSummary(BaseModel):
+    id: int
+    reference: str
+    title: str
 
 router = APIRouter(tags=['internal-tickets'])
 RootId = Annotated[int, Path(gt=0)]
@@ -35,13 +43,16 @@ def change_config(payload: TicketNumberConfigUpdate, session: DBSession):
         session.rollback(); raise
 
 @router.post('/api/internal-tickets', response_model=InternalTicketResponse, status_code=201)
-def create(payload: InternalTicketCreate, session: DBSession):
+def create(payload: InternalTicketCreate, session: DBSession, request: Request):
+    ticket_mutation(request.state.principal, 'internal_tickets', payload.model_dump())
     return data.response(session, data.persist(session, payload.model_dump()))
 
-@router.get('/api/internal-tickets', response_model=list[InternalTicketResponse])
-def listing(session: DBSession, filters: Annotated[InternalFilters, Query()]):
+@router.get('/api/internal-tickets', response_model=list[InternalTicketResponse | InternalLinkSummary])
+def listing(session: DBSession, filters: Annotated[InternalFilters, Query()], request: Request):
     values = filters.model_dump()
     rows = list(session.scalars(data.statement(values).limit(filters.limit).offset(filters.offset)))
+    if not {'internal_tickets.view', 'reports.internal_tickets.view'} & request.state.principal.permissions:
+        return [{'id': row.id, 'reference': row.reference, 'title': row.title} for row in rows]
     counts = dict(session.execute(select(Ticket.internal_ticket_id, func.count(Ticket.id)).where(Ticket.internal_ticket_id.in_([row.id for row in rows])).group_by(Ticket.internal_ticket_id)).all()) if rows else {}
     return [data.response(session, row, counts.get(row.id, 0)) for row in rows]
 
@@ -50,19 +61,40 @@ def export_list(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Ann
     return stream_ticket_export(session, format, filters, 'ticketyn-tickets-internos',
                                 export_pdf if format == 'pdf' else export_xlsx)
 
-@router.get('/api/internal-tickets/{id}', response_model=InternalTicketResponse)
-def detail(id: RootId, session: DBSession):
+@router.get('/api/internal-tickets/{id}', response_model=InternalTicketResponse | InternalLinkSummary)
+def detail(id: RootId, session: DBSession, request: Request):
+    permissions = request.state.principal.permissions
+    if 'internal_tickets.view' not in permissions:
+        # Candidate searches belong to link actions; read-only context must be
+        # backed by a real relationship to a module the caller can consult.
+        if not {'tickets.link', 'changes.link'} & permissions:
+            contexts = []
+            if 'tickets.view' in permissions:
+                contexts.append(select(Ticket.id).where(Ticket.internal_ticket_id == id).exists())
+            if 'changes.view' in permissions:
+                from ticketyn.models.change import ChangeTicket
+                contexts.append(select(ChangeTicket.change_id).where(ChangeTicket.internal_ticket_id == id).exists())
+            if not contexts or not session.scalar(select(or_(*contexts))):
+                raise HTTPException(403, 'No tienes permiso para consultar este ticket interno')
+        item = get_or_404(session, InternalTicket, id)
+        return {'id': item.id, 'reference': item.reference, 'title': item.title}
     return data.response(session, get_or_404(session, InternalTicket, id))
 
 @router.patch('/api/internal-tickets/{id}', response_model=InternalTicketResponse)
-def patch(id: RootId, payload: InternalTicketPatch, session: DBSession):
+def patch(id: RootId, payload: InternalTicketPatch, session: DBSession, request: Request):
+    item = session.scalar(select(InternalTicket).where(InternalTicket.id == id).with_for_update(of=InternalTicket))
+    if item is not None:
+        ticket_mutation(request.state.principal, 'internal_tickets', payload.model_dump(exclude_unset=True), item)
     return data.response(session, data.persist(session, payload.model_dump(exclude_unset=True), id))
 
 @router.get('/api/internal-tickets/{id}/related', response_model=dict)
-def related(id: RootId, session: DBSession, limit: Annotated[int, Query(ge=1, le=200)] = 50, offset: Annotated[int, Query(ge=0)] = 0):
+def related(id: RootId, session: DBSession, limit: Annotated[int, Query(ge=1, le=200)] = 50, offset: Annotated[int, Query(ge=0)] = 0, request: Request = None):
     get_or_404(session, InternalTicket, id)
     rows = session.execute(ticket_data.joined_ticket_statement({}).where(Ticket.internal_ticket_id == id).limit(limit).offset(offset))
-    return {'total': session.scalar(select(func.count(Ticket.id)).where(Ticket.internal_ticket_id == id)), 'items': [ticket_data.ticket_response(row).model_dump(mode='json') for row in rows]}
+    items = [ticket_data.ticket_response(row).model_dump(mode='json') for row in rows]
+    if 'tickets.view' not in request.state.principal.permissions:
+        items = [{key: row[key] for key in ('id', 'reference', 'title', 'status', 'customer')} for row in items]
+    return {'total': session.scalar(select(func.count(Ticket.id)).where(Ticket.internal_ticket_id == id)), 'items': items}
 
 @router.get('/api/internal-tickets/{id}/updates', response_model=list[TicketUpdateResponse] | TicketUpdatePage)
 def history(id: RootId, session: DBSession, limit: Annotated[int | None, Query(ge=1, le=100)] = None, cursor: Annotated[str | None, Query(max_length=1024)] = None, escalation_id: Annotated[int | None, Query(gt=0)] = None):

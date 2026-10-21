@@ -1,4 +1,4 @@
-import { fireEvent, render as renderReact, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render as renderReact, screen, waitFor, within } from '../test/render'
 import type { ReactElement } from 'react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
@@ -21,15 +21,19 @@ describe('listado de tickets', () => {
   })
   it('muestra tickets, estados, fin y duración', async () => {
     vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(jsonResponse(path.startsWith('/api/tickets?') ? [
-      ticket, { ...ticket, id: 2, reference: 'TEST-004', status: 'CLOSED', end_at: '2026-01-01T13:02:00Z', duration_seconds: 3720 },
+      ticket,
+      { ...ticket, id: 2, reference: 'TEST-004', status: 'CLOSED', end_at: '2026-01-01T13:02:00Z', duration_seconds: 3720 },
+      { ...ticket, id: 3, reference: 'TEST-005', status: 'CLOSED', end_at: null, duration_seconds: null },
     ] : []))))
     render(<Tickets />)
     expect(await screen.findByRole('table')).toBeInTheDocument()
     expect(screen.getByText('TEST-003')).toBeInTheDocument()
+    expect(screen.getByText('TEST-005')).toBeInTheDocument()
     expect(within(screen.getByRole('table')).getByText('Abierto')).toBeInTheDocument()
-    expect(within(screen.getByRole('table')).getByText('Cerrado')).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getAllByText('Cerrado')).toHaveLength(2)
     expect(screen.getByText('En curso')).toBeInTheDocument()
-    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.getByText('Sin fecha de fin')).toBeInTheDocument()
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     expect(screen.getByText('1 h 2 min')).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: 'id' })).not.toBeInTheDocument()
   })

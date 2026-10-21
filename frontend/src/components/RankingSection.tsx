@@ -4,12 +4,12 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { RankingChart } from './ReportCharts'
 import type { ReportRanking } from '../types/report'
 
-export function RankingSection<R extends Omit<ReportRanking, 'id'> & { id: number | null }>({ title, rows, destination, onSelect, countLabel = 'Incidencias', emptyText }: {
-  title: string; rows: R[]; destination?: (row: R) => string; onSelect?: (row: R) => void; countLabel?: string; emptyText?: string
+export function RankingSection<R extends Omit<ReportRanking, 'id'> & { id: number | null }>({ title, rows, destination, onSelect, countLabel = 'Incidencias', emptyText, className = '' }: {
+  title: string; rows: R[]; destination?: (row: R) => string; onSelect?: (row: R) => void; countLabel?: string; emptyText?: string; className?: string
 }) {
   const [expanded, setExpanded] = useState(false)
   const tableId = useId()
-  return <section className="ranking-section chart-card" aria-label={title}>
+  return <section className={`ranking-section chart-card ${className}`.trim()} aria-label={title}>
     <div className="mb-2 flex items-baseline justify-between gap-2"><h3 className="text-sm font-semibold">{title}</h3><span className="chip chip-primary shrink-0">Top 10</span></div>
     {rows.length === 0 ? <p className="py-4 text-sm text-muted">{emptyText ?? (countLabel === 'Incidencias' ? 'Sin incidencias.' : 'Sin escalamientos.')}</p> : <>
       <RankingChart rows={rows} title={title} countLabel={countLabel} />

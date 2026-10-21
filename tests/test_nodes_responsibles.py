@@ -23,8 +23,9 @@ def test_named_catalog_lifecycle(api_client, resource):
     assert api_client.post(path, json={'name': 'Centro'}).status_code == 409
     assert api_client.get(path, params={'search': 'CENT'}).json() == [item]
     inactive = api_client.patch(f'{path}/{item["id"]}', json={'name': 'Nuevo', 'active': False}).json()
-    assert api_client.get(path).json() == []
-    assert api_client.get(path, params={'include_inactive': True}).json() == [inactive]
+    from test_catalog_api import own_rows
+    assert own_rows(api_client, path) == []
+    assert own_rows(api_client, path, include_inactive=True) == [inactive]
     assert api_client.patch(f'{path}/{item["id"]}', json={'active': True}).json()['active']
     assert api_client.get(f'{path}/999999').status_code == 404
 
@@ -155,7 +156,10 @@ def test_list_query_count_no_n_plus_one(api_client, ticket_payload, db_session):
         assert len(api_client.get('/api/tickets').json()) == 4
     finally:
         event.remove(connection, 'before_cursor_execute', listener)
-    assert len(statements) == 1
+    selects = [sql for sql in statements if sql.lstrip().upper().startswith('SELECT')]
+    authentication = [sql for sql in selects if 'security_roles' in sql or 'security_config' in sql]
+    assert len(authentication) == 2
+    assert len(selects) - len(authentication) == 1
 
 
 def test_new_migration_roundtrip(postgres_engine):

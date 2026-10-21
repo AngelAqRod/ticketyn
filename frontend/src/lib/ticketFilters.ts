@@ -1,7 +1,7 @@
 import type { TicketQuery } from '../types/ticket'
 
 export const ticketFilterKeys = ['search', 'status', 'customer_id', 'circuit_id', 'sector_id', 'department_id', 'incident_type_id', 'node_id', 'responsible_id', 'from', 'to'] as const
-export const circuitFilterKeys = ['search', 'customer_id', 'node_id', 'active'] as const
+export const circuitFilterKeys = ['search', 'customer_id', 'sector_id', 'node_id', 'active'] as const
 
 export function localDateBoundary(value: string, nextDay = false): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Introduce fechas válidas para Desde y Hasta.')

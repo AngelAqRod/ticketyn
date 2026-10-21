@@ -7,6 +7,7 @@ class ResponsibleCreate(InputSchema):
     position_id: PositiveId | None = None
     name: NonEmptyString
     active: bool = True
+    operational_selectable: bool = True
 
 
 class ResponsibleUpdate(InputSchema):
@@ -15,9 +16,12 @@ class ResponsibleUpdate(InputSchema):
     position_id: PositiveId | None = None
     name: NonEmptyString | None = None
     active: bool | None = None
+    operational_selectable: bool | None = None
 
 
 class ResponsibleResponse(ResponseSchema):
+    operational_selectable: bool
+    can_change_active: bool | None = None
     # Legacy free text remains readable, never rewritten or inferred into a position.
     attention_level: str | None
     department_id: int | None

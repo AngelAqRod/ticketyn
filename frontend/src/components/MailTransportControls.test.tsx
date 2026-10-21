@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '../test/render'
 import { describe, expect, it, vi } from 'vitest'
 import { MailTransportControls } from './MailTransportControls'
 import type { OAuthConfig, SmtpConfig } from '../api/mailNotifications'

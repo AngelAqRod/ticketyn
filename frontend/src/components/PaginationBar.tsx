@@ -8,13 +8,13 @@ export function PaginationBar({ page, info, onPrevious, onNext, previousDisabled
   previousDisabled: boolean; nextDisabled: boolean; previousLabel?: string; nextLabel?: string; className?: string
 }) {
   return <div className={`pagination-bar ${className}`}>
-    <div className="pagination-info">{info}</div>
+    <div className="pagination-info text-slate-400 font-mono text-xs">{info}</div>
     <div className="pagination-controls" role="group" aria-label="Navegación de páginas">
-      <button type="button" className="button-secondary pagination-control" aria-label={previousLabel} title={previousLabel} disabled={previousDisabled} onClick={onPrevious}>
+      <button type="button" className="button-secondary pagination-control rounded-full shadow-xs" aria-label={previousLabel} title={previousLabel} disabled={previousDisabled} onClick={onPrevious}>
         <ChevronLeft size={15} aria-hidden="true" />
       </button>
-      <span className="pagination-current" aria-current="page" aria-label={`Página ${page}`}>{page}</span>
-      <button type="button" className="button-secondary pagination-control" aria-label={nextLabel} title={nextLabel} disabled={nextDisabled} onClick={onNext}>
+      <span className="pagination-current font-mono font-bold" aria-current="page" aria-label={`Página ${page}`}>{page}</span>
+      <button type="button" className="button-secondary pagination-control rounded-full shadow-xs" aria-label={nextLabel} title={nextLabel} disabled={nextDisabled} onClick={onNext}>
         <ChevronRight size={15} aria-hidden="true" />
       </button>
     </div>

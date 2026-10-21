@@ -1,8 +1,11 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from './test/render'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { jsonResponse, ticket } from './test/fixtures'
+
+// Route/layout regressions isolate authentication, tested independently in AuthGate.test.tsx.
+vi.mock('./auth/AuthGate', () => ({ AuthGate: ({ children }: { children: React.ReactNode }) => children }))
 
 function mockApi(healthy = true) {
   vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(path === '/health'

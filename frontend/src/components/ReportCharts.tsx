@@ -2,12 +2,12 @@ import { ResponsiveContainer, LineChart, Line, BarChart, Bar, CartesianGrid, XAx
 import { categoryColor, chartPalette, chartTheme } from './chartTheme'
 import type { ReportSummary, ReportRanking } from '../types/report'
 
-const tooltipSurface = { backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px', fontSize: 12, boxShadow: 'none' }
-const tooltipLabel = { color: 'var(--text-secondary)', fontSize: 11, marginBottom: 4 }
-const tooltipValue = { color: 'var(--text-primary)', fontSize: 13, fontWeight: 600 }
+const tooltipSurface = { backgroundColor: '#070d1a', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 12, padding: '10px 12px', fontSize: 12, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }
+const tooltipLabel = { color: '#94a3b8', fontSize: 11, marginBottom: 4 }
+const tooltipValue = { color: '#ffffff', fontSize: 13, fontWeight: 600 }
 const chartTick = { fontSize: 10, fill: chartTheme.label }
-const chartCursor = { stroke: 'var(--primary-border)', fill: 'var(--primary-soft)' }
-const activePoint = { r: 4, stroke: 'var(--surface)', strokeWidth: 2 }
+const chartCursor = { stroke: 'rgba(56, 189, 248, 0.3)', fill: 'rgba(56, 189, 248, 0.08)' }
+const activePoint = { r: 4, stroke: '#070d1a', strokeWidth: 2 }
 
 function RelevantPoint({ cx, cy, value, stroke }: { cx?: number; cy?: number; value?: number; stroke?: string }) {
   if (cx === undefined || cy === undefined || !value || value <= 0) return <g />

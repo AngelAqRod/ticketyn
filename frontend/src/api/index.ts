@@ -18,8 +18,8 @@ export const listCustomers = (signal?: AbortSignal, includeInactive = false) => 
 export const listSectors = (signal?: AbortSignal, includeInactive = false) => catalogList<Sector>('/api/sectors', signal, {}, includeInactive)
 export const listDepartments = (signal?: AbortSignal, includeInactive = false) => catalogList<Department>('/api/departments', signal, {}, includeInactive)
 export const listIncidentTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<IncidentType>('/api/incident-types', signal, {}, includeInactive)
-export const listCircuits = (customerId?: number, signal?: AbortSignal, includeInactive = false, filters: { search?: string; active?: boolean; node_id?: number } = {}) =>
-  catalogList<Circuit>('/api/circuits', signal, { ...(customerId === undefined ? {} : { customer_id: String(customerId) }), ...(filters.node_id === undefined ? {} : { node_id: String(filters.node_id) }), ...(filters.search ? { search: filters.search } : {}), ...(filters.active !== undefined ? { active: String(filters.active) } : {}) }, includeInactive)
+export const listCircuits = (customerId?: number, signal?: AbortSignal, includeInactive = false, filters: { search?: string; active?: boolean; node_id?: number; sector_id?: number } = {}) =>
+  catalogList<Circuit>('/api/circuits', signal, { ...(customerId === undefined ? {} : { customer_id: String(customerId) }), ...(filters.sector_id === undefined ? {} : { sector_id: String(filters.sector_id) }), ...(filters.node_id === undefined ? {} : { node_id: String(filters.node_id) }), ...(filters.search ? { search: filters.search } : {}), ...(filters.active !== undefined ? { active: String(filters.active) } : {}) }, includeInactive)
 
 export function createTicket(payload: TicketCreateInput, signal?: AbortSignal): Promise<Ticket> {
   return postJson<Ticket>('/api/tickets', payload, signal)

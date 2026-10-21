@@ -14,11 +14,11 @@ export function RequestState({ loading = false, error = null, empty = false, onR
   return <div id={id} role={error && !loading ? 'alert' : 'status'} className={`${compact ? 'request-state-compact' : 'panel p-6 text-center'} ${className}`}>
     <Icon size={compact ? 16 : 24} aria-hidden="true" className={`${compact ? 'mt-0.5 shrink-0' : 'mx-auto mb-3'} ${error && !loading ? 'text-red-600' : 'text-slate-400'}`} />
     <div className="min-w-0 text-sm">
-      {loading ? <p className="text-muted">{loadingText}</p> : error ? <>
-        {errorTitle && <h2 className="font-semibold text-slate-900">{errorTitle}</h2>}
-        <p className={errorTitle ? 'mt-1 text-muted' : 'text-muted'}>{error}</p>
+      {loading ? <p className="text-slate-400 font-mono text-xs">{loadingText}</p> : error ? <>
+        {errorTitle && <h2 className="font-semibold text-white font-mono text-sm">{errorTitle}</h2>}
+        <p className={errorTitle ? 'mt-1 text-slate-400 text-xs font-mono' : 'text-slate-400 text-xs font-mono'}>{error}</p>
         {onRetry && <RetryButton className="mt-2" onClick={onRetry}>{retryText}</RetryButton>}
-      </> : <><h2 className="font-semibold text-slate-900">{emptyTitle}</h2>{emptyDescription && <p className="mt-1 text-muted">{emptyDescription}</p>}</>}
+      </> : <><h2 className="font-semibold text-white font-mono text-sm">{emptyTitle}</h2>{emptyDescription && <p className="mt-1 text-slate-400 text-xs font-mono">{emptyDescription}</p>}</>}
       {children}
     </div>
   </div>

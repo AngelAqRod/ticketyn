@@ -13,7 +13,7 @@ Group=ticketyn
 WorkingDirectory=/opt/ticketyn/current
 EnvironmentFile=/etc/ticketyn/ticketyn.env
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/ticketyn/current/.venv/bin/uvicorn ticketyn.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+ExecStart=/opt/ticketyn/current/.venv/bin/uvicorn ticketyn.main:app --workers 1 --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=on-failure
 RestartSec=3s
 StandardOutput=journal

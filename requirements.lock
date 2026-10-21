@@ -37,3 +37,7 @@ typing_extensions==4.16.0
 uvicorn==0.54.0
 email-validator==2.3.0
 dnspython==2.9.0
+
+# Authentication foundation; Argon2id, resolved in the DEV environment.
+argon2-cffi==25.1.0
+argon2-cffi-bindings==26.1.0

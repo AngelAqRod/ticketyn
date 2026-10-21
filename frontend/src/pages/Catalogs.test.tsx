@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '../test/render'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Catalogs } from './Catalogs'
 
@@ -26,13 +26,13 @@ describe('selector de Catálogos', () => {
     render(<Catalogs />)
     const nav = screen.getByRole('navigation', { name: 'Catálogos' })
     const buttons = within(within(nav).getByRole('group',{name:'Categorías de catálogos'})).getAllByRole('button')
-    expect(buttons.map(button => button.textContent)).toEqual(['Sectores', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables', 'Puestos', 'Motivos de escalamiento', 'Tipos de servicio', 'Motivos de baja', 'Modelos de CPE', 'Tipos de incidencia interna', 'Proveedores', 'Tipos de finalización de cambios', 'Tipos de cambio'])
+    expect(buttons.map(button => button.textContent)).toEqual(['Sectores', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Puestos', 'Motivos de escalamiento', 'Tipos de servicio', 'Motivos de baja', 'Modelos de CPE', 'Tipos de incidencia interna', 'Proveedores', 'Tipos de finalización de cambios', 'Tipos de cambio'])
     expect(buttons[0]).toHaveAttribute('aria-pressed', 'true')
     buttons.forEach((button, index) => {
       fireEvent.click(button)
       expect(button).toHaveAttribute('aria-pressed', 'true')
       expect(buttons.filter(item => item.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
-      expect(screen.getByTestId('catalog-content')).toHaveTextContent(['sectors', 'departments', 'incident-types', 'nodes', 'responsibles', 'positions', 'escalation-reasons', 'service-types', 'deactivation-reasons', 'cpe-models', 'internal-incident-types', 'providers', 'change-completion-types', 'change-types'][index])
+      expect(screen.getByTestId('catalog-content')).toHaveTextContent(['sectors', 'departments', 'incident-types', 'nodes', 'positions', 'escalation-reasons', 'service-types', 'deactivation-reasons', 'cpe-models', 'internal-incident-types', 'providers', 'change-completion-types', 'change-types'][index])
     })
   })
   it('desplaza solo la barra y deshabilita flechas e indicadores en cada extremo',()=>{

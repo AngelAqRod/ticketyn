@@ -54,16 +54,23 @@ export function CatalogDeleteConfirmation({ item, onCancel, onDeleted, onBusyCha
     }
   }
 
-  return <dialog ref={dialog} className="quick-dialog fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-white text-ink backdrop:bg-slate-900/30" aria-modal="true" aria-labelledby="delete-catalog-title" aria-describedby="delete-catalog-record delete-catalog-description" onCancel={(event) => { event.preventDefault(); if (!sending.current) onCancel() }}>
-    <div className="p-5">
-      <h2 id="delete-catalog-title" className="text-lg font-semibold">Eliminar {singular}</h2>
-      <div id="delete-catalog-record"><p className="mt-3 break-words font-semibold">{code}</p>
-      <p className="mt-1 break-words text-sm text-slate-600">{description}</p></div>
-      <p id="delete-catalog-description" className="mt-3 text-sm text-slate-600">Esta acción es definitiva. Solo se eliminará el {singular} si no tiene registros asociados. Para conservarlo, puedes desactivarlo.</p>
+  return <dialog ref={dialog} className="quick-dialog fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-[#0b1426] text-white border border-red-500/30 rounded-2xl shadow-2xl backdrop:bg-slate-950/70 p-0" aria-modal="true" aria-labelledby="delete-catalog-title" aria-describedby="delete-catalog-record delete-catalog-description" onCancel={(event) => { event.preventDefault(); if (!sending.current) onCancel() }}>
+    <div className="p-6 space-y-4">
+      <div className="flex items-center gap-2.5 border-b border-red-500/20 pb-3">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10 border border-red-500/30 text-red-400" aria-hidden="true">
+          <Trash2 size={15} />
+        </span>
+        <h2 id="delete-catalog-title" className="text-base font-bold font-mono text-white uppercase tracking-wider">Eliminar {singular}</h2>
+      </div>
+      <div id="delete-catalog-record" className="p-3.5 rounded-xl bg-[#070d1a] border border-slate-800">
+        <p className="break-words font-mono font-bold text-white text-base">{code}</p>
+        <p className="mt-1 break-words text-sm text-slate-300">{description}</p>
+      </div>
+      <p id="delete-catalog-description" className="text-xs text-slate-400 font-mono leading-relaxed">Esta acción es definitiva. Solo se eliminará el {singular} si no tiene registros asociados. Para conservarlo, puedes desactivarlo.</p>
       {error && <FeedbackMessage variant="error" className="mt-3">{error}</FeedbackMessage>}
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <button ref={cancel} type="button" className="button-secondary" disabled={busy} onClick={onCancel}>Cancelar</button>
-        <button type="button" className="button-danger" disabled={busy} onClick={() => void remove()}><Trash2 size={15} aria-hidden="true" />{busy ? 'Eliminando...' : 'Eliminar definitivamente'}</button>
+      <div className="mt-5 flex flex-wrap justify-end gap-2.5 pt-2">
+        <button ref={cancel} type="button" className="button-secondary rounded-full shadow-xs" disabled={busy} onClick={onCancel}>Cancelar</button>
+        <button type="button" className="button-danger rounded-full shadow-sm" disabled={busy} onClick={() => void remove()}><Trash2 size={14} aria-hidden="true" />{busy ? 'Eliminando...' : 'Eliminar definitivamente'}</button>
       </div>
     </div>
   </dialog>

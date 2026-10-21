@@ -103,7 +103,7 @@ def test_internal_filters_and_validation(api_client):
     api_client.patch('/api/internal-incident-types/'+str(p['incident_type_id']),json={'active':False})
     assert api_client.post('/api/internal-tickets',json=p).status_code==422
     assert api_client.patch('/api/internal-tickets/'+str(t['id']),json={'description':'Corrección histórica'}).status_code==200
-    assert api_client.get('/api/internal-tickets/'+str(t['id'])+'/report/customer').status_code==404
+    assert api_client.get('/api/internal-tickets/'+str(t['id'])+'/report/customer').status_code==403
 
 
 def test_internal_concurrent_numbering(postgres_engine):

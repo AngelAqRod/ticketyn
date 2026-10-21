@@ -95,6 +95,9 @@ restore_validate() {
     CLIENT_VERSION=$(env -i PATH=/usr/bin:/bin pg_restore --version)
     python3 -I "$SUPPORT" compatibility "$CONTENT" "$RELEASE" "$HEAD" "$SERVER_NUMBER" "$CLIENT_VERSION" \
         || restore_fail 'Versión, metadata, Alembic o PostgreSQL incompatibles.'
+    AUTH_MODE=$(python3 -I "$SUPPORT" auth-mode "$RELEASE") \
+        || restore_fail 'No se pudo determinar el modo de autenticación de la release.'
+    [[ $AUTH_MODE == required || $AUTH_MODE == legacy ]] || restore_fail 'Modo de autenticación no reconocido.'
     ORIGINAL_OID=$(restore_oid ticketyn) || restore_fail 'No se pudo comprobar existencia de DB.'
     if [[ -n $ORIGINAL_OID ]]; then
         [[ $REPLACE == 1 ]] || restore_fail 'La DB ticketyn ya existe. Se requiere --replace; no se modifica.'
@@ -275,12 +278,26 @@ restore_http_checks() {
 restore_check_http() {
     local kind path attempt ready base="http://127.0.0.1:$HTTP_PORT"
     systemctl is-active --quiet ticketyn && systemctl is-active --quiet nginx || restore_fail 'Servicio Ticketyn/Nginx no activo.'
+    local auth_mode=${AUTH_MODE:-}
+    if [[ -z $auth_mode ]]; then
+        auth_mode=$(python3 -I "$SUPPORT" auth-mode "$RELEASE") || restore_fail 'No se pudo determinar el modo de autenticación de la release.'
+        [[ $auth_mode == required || $auth_mode == legacy ]] || restore_fail 'Modo de autenticación no reconocido.'
+    fi
     for kind in health api; do
         if [[ $kind == health ]]; then path=/health; else path=/api/customers; fi
         ready=0
         for attempt in {1..30}; do
-            if curl -fsS --max-time 3 "$base$path" > "$WORK/http.json" 2>/dev/null && \
-                python3 -I "$SUPPORT" http-valid "$WORK/http.json" "$kind" >/dev/null 2>&1; then ready=1; break; fi
+            if [[ $kind == api && $auth_mode == required ]]; then
+                if curl -sS --max-time 3 -o /dev/null -w '%{http_code}' "$base$path" > "$WORK/http.status" 2>/dev/null && \
+                    python3 -I "$SUPPORT" http-valid "$WORK/http.status" "$kind" "$auth_mode" >/dev/null 2>&1; then
+                    ready=1; break
+                fi
+            else
+                if curl -fsS --max-time 3 "$base$path" > "$WORK/http.json" 2>/dev/null && \
+                    python3 -I "$SUPPORT" http-valid "$WORK/http.json" "$kind" "$auth_mode" >/dev/null 2>&1; then
+                    ready=1; break
+                fi
+            fi
             sleep 1
         done
         [[ $ready == 1 ]] || restore_fail "$path no respondió correctamente mediante Nginx tras 30 intentos; revisar servicios/credenciales."
@@ -307,6 +324,9 @@ restore_finalize_validate() {
     client=$(env -i PATH=/usr/bin:/bin pg_restore --version)
     python3 -I "$SUPPORT" compatibility "$WORK/finalize-compat" "$RELEASE" "$HEAD" "$server" "$client" \
         || restore_fail 'Metadata/release/Alembic incompatibles con el estado.'
+    AUTH_MODE=$(python3 -I "$SUPPORT" auth-mode "$RELEASE") \
+        || restore_fail 'No se pudo determinar el modo de autenticación de la release.'
+    [[ $AUTH_MODE == required || $AUTH_MODE == legacy ]] || restore_fail 'Modo de autenticación no reconocido.'
     [[ $(restore_revision ticketyn) == "$HEAD" ]] || restore_fail 'Alembic activo no coincide con el estado.'
     restore_finalize_database_identity
     if [[ -n $FINAL_SAFETY && ! -d $WORK/finalize-safety ]]; then
@@ -413,7 +433,7 @@ restore_main() {
     STATE=$CONFIG_DIR/restore-state
     WORK=$(mktemp -d /tmp/ticketyn-restore.XXXXXXXX); chown root:root "$WORK"
     WORK_ID=$(backup_identity "$WORK"); CONTENT=$WORK/components
-    MUTATING=0; CUTOVER_ATTEMPTED=0; BLOCK_ATTEMPTED=0; WAS_ACTIVE=0; PHASE=validacion; SAFETY_BACKUP=''; STAGE_OID=''
+    MUTATING=0; CUTOVER_ATTEMPTED=0; BLOCK_ATTEMPTED=0; WAS_ACTIVE=0; PHASE=validacion; SAFETY_BACKUP=''; STAGE_OID=''; AUTH_MODE=''
     trap 'printf "Error: restore interrumpido en fase %s; no se declara éxito.\n" "$PHASE" >&2' ERR
     trap restore_cleanup EXIT
     trap 'exit 130' INT

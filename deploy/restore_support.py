@@ -183,10 +183,50 @@ def password(path):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
 
-def http_valid(path, kind):
-    data = json.loads(Path(path).read_text())
-    if (kind == 'health' and data != {'status': 'ok'}) or (kind == 'api' and not isinstance(data, list)):
-        fail('Respuesta HTTP inesperada.')
+def http_valid(path, kind, mode='legacy'):
+    path = Path(path)
+    if kind == 'health':
+        data = json.loads(path.read_text())
+        if data != {'status': 'ok'}:
+            fail('Respuesta health inesperada.')
+    elif kind == 'api':
+        if mode == 'required':
+            text = path.read_text().strip()
+            if text != '401':
+                fail('API con autenticación no devolvió HTTP 401.')
+        else:
+            data = json.loads(path.read_text())
+            if not isinstance(data, list):
+                fail('Respuesta API inesperada.')
+    else:
+        fail('Tipo de comprobación HTTP no reconocido.')
+
+
+def authentication(release):
+    """Share the installer's read-only detector, using this release's trusted helper."""
+    root = Path(release)
+    detector_path = Path(__file__).with_name('install_security.py')
+    if not detector_path.is_file():
+        fail('Detector de seguridad install_security.py no encontrado.')
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('install_security', detector_path)
+    if spec is None or spec.loader is None:
+        fail('No se pudo cargar el detector install_security.py.')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        mode = module.capability(root)
+    except module.CapabilityError as error:
+        fail(str(error))
+    except (ValueError, OSError, SyntaxError, TypeError):
+        fail('Release de seguridad incompleta o incompatible: revisar código, migraciones y bootstrap; no se omite autenticación.')
+    if mode not in ('required', 'legacy'):
+        fail('Modo de autenticación no reconocido.')
+    return mode
+
+
+def auth_mode(release):
+    print(authentication(release))
 
 
 def nginx_layout(root, config_dir, base):
@@ -473,7 +513,8 @@ if __name__ == '__main__':
                       'password': password, 'http-valid': http_valid, 'port': port, 'nginx-layout': nginx_layout,
                       'completion': completion, 'finalize-snapshot': finalize_snapshot,
                       'finalize-intent': finalize_intent, 'finalize-archive': finalize_archive,
-                      'finalize-history-validate': finalize_history_validate}
+                      'finalize-history-validate': finalize_history_validate,
+                      'auth-mode': auth_mode}
         operations[sys.argv[1]](*sys.argv[2:])
     except RestoreError as error:
         print('Error: ' + str(error), file=sys.stderr)

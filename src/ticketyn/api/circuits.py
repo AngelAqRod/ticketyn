@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query, Response
+from fastapi import Request, APIRouter, HTTPException, Path, Query, Response
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
@@ -19,7 +19,9 @@ router = APIRouter(prefix="/api/circuits", tags=["circuits"])
 
 
 @router.post("", response_model=CircuitResponse, status_code=201)
-def create_circuit(payload: CircuitCreate, session: DBSession):
+def create_circuit(payload: CircuitCreate, session: DBSession, request: Request):
+    from ticketyn.security.mutations import contextual_creation
+    contextual_creation(request.state.principal, 'circuits', payload.model_dump())
     validate_sector(session, payload.sector_id)
     validate_initial_capacity(payload.model_dump())
     get_or_404(session, Customer, payload.customer_id)
@@ -41,11 +43,13 @@ def list_circuits(
     offset: Annotated[int, Query(ge=0)] = 0,
     node_id: Annotated[int | None, Query(gt=0)] = None,
     customer_id: Annotated[int | None, Query(gt=0)] = None,
+    sector_id: Annotated[int | None, Query(gt=0)] = None,
 ):
     return list_items(
         session, Circuit, search=search, search_fields=('circuit_code', 'description'),
         order_field="circuit_code", include_inactive=include_inactive,
         limit=limit, offset=offset, customer_id=customer_id, active=active, node_id=node_id,
+        sector_id=sector_id,
     )
 
 
@@ -55,10 +59,12 @@ def get_circuit(id: Annotated[int, Path(gt=0)], session: DBSession):
 
 
 @router.patch("/{id}", response_model=CircuitResponse)
-def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, session: DBSession):
+def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, session: DBSession, request: Request):
     try:
         item = locked_circuit(session, id)
         values = payload.model_dump(exclude_unset=True)
+        from ticketyn.security.mutations import circuit_mutation
+        circuit_mutation(request.state.principal, item, values)
         sector_id = values.get('sector_id', item.sector_id)
         if sector_id is None:
             raise HTTPException(422, 'Selecciona un Sector para el circuito antes de guardar.')

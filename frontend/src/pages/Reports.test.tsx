@@ -1,7 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '../test/render'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { Reports } from './Reports'
+// Authentication is exercised in auth/AuthGate.test.tsx; these tests isolate operational routing.
+vi.mock('../auth/AuthGate', () => ({ AuthGate: ({ children }: { children: React.ReactNode }) => children }))
+
 import App from '../App'
 import { jsonResponse, ticket } from '../test/fixtures'
 import type { ReportSummary, ReportQuery } from '../types/report'

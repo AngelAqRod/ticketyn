@@ -1,6 +1,8 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Request
+from sqlalchemy import select
+from ticketyn.security.mutations import ticket_mutation
 from ticketyn.api.ticket_exports import export_ticket_pdf, export_ticket_xlsx, stream_ticket_export
 from ticketyn.schemas.ticket_export import TicketExportFilters
 
@@ -13,7 +15,8 @@ router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 
 
 @router.post("", response_model=TicketListResponse, status_code=201)
-def create_ticket(payload: TicketCreate, session: DBSession):
+def create_ticket(payload: TicketCreate, session: DBSession, request: Request):
+    ticket_mutation(request.state.principal, 'tickets', payload.model_dump())
     ticket = ticket_data.create_ticket(session, payload.model_dump())
     return ticket_data.get_ticket(session, ticket.id)
 
@@ -40,6 +43,9 @@ def get_ticket(id: Annotated[int, Path(gt=0)], session: DBSession):
 
 
 @router.patch("/{id}", response_model=TicketListResponse)
-def patch_ticket(id: Annotated[int, Path(gt=0)], payload: TicketUpdate, session: DBSession):
+def patch_ticket(id: Annotated[int, Path(gt=0)], payload: TicketUpdate, session: DBSession, request: Request):
+    item = session.scalar(select(Ticket).where(Ticket.id == id).with_for_update(of=Ticket))
+    if item is not None:
+        ticket_mutation(request.state.principal, 'tickets', payload.model_dump(exclude_unset=True), item)
     ticket = ticket_data.patch_ticket(session, id, payload.model_dump(exclude_unset=True))
     return ticket_data.get_ticket(session, ticket.id)

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type MetricColor = 'lilac' | 'amber' | 'mint' | 'ice' | 'indigo' | 'slate' | 'cyan'
+export type MetricColor = 'lilac' | 'amber' | 'mint' | 'ice' | 'indigo' | 'slate' | 'cyan' | 'rose'
 
 export interface MetricItem {
   label: string; value: ReactNode; tone?: 'primary' | 'muted'; icon?: ReactNode

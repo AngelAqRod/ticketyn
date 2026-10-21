@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '../test/render'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TicketReportDownload } from './TicketReportDownload'
 import { jsonResponse } from '../test/fixtures'

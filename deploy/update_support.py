@@ -26,6 +26,7 @@ def load(name):
 
 ri = load('release_identity')
 rs = load('restore_support')
+security_capabilities = load('install_security')
 ORIGIN = 'https://github.com/AngelAqRod/ticketyn.git'
 FILES = ('pyproject.toml', 'requirements.lock', 'LICENSE', 'README.md', 'alembic.ini')
 TREES = ('src', 'alembic', 'deploy', 'frontend/dist')
@@ -130,7 +131,7 @@ def forward(source, target):
 
 
 def selected(name):
-    return name in FILES or any(name == t or name.startswith(t+'/') for t in TREES) or name in ('install.sh', 'backup.sh', 'restore.sh', 'update.sh')
+    return name in FILES or any(name == t or name.startswith(t+'/') for t in TREES) or name in ('install.sh', 'backup.sh', 'restore.sh', 'update.sh', 'bootstrap-superadmin.sh')
 
 
 def extract_release(archive, destination):
@@ -164,6 +165,15 @@ def extract_release(archive, destination):
         if not (Path(destination)/name).is_file():
             fail('Falta contenido requerido: '+name)
     assets(Path(destination))
+    authentication(Path(destination))
+
+
+def authentication(release):
+    """Share the installer's read-only detector, using this updater's trusted helper."""
+    try:
+        return security_capabilities.capability(Path(release)) == 'required'
+    except (ValueError, OSError, SyntaxError, TypeError):
+        fail('Release de seguridad incompleta o incompatible: revisar código, migraciones y bootstrap; no se omite autenticación.')
 
 
 def assets(release):
@@ -645,6 +655,7 @@ class Updater:
         marker = json.loads((self.target/'.ticketyn-release.json').read_text())
         if marker['commit'] != evidence['commit'] or marker.get('operation') != evidence['operation']:
             fail('Manifiesto destino no corresponde a la operación.')
+        authentication(self.target)
 
     def revalidate(self):
         secure(self.env, private=True)
@@ -683,6 +694,7 @@ class Updater:
         self.archive_state()
 
     def healthy(self, release):
+        requires_auth = authentication(release)
         self.run(['systemctl', 'is-active', '--quiet', 'ticketyn'])
         self.run(['systemctl', 'is-active', '--quiet', 'nginx'])
         import time
@@ -690,13 +702,22 @@ class Updater:
             for attempt in range(30):
                 try:
                     # curl stderr captured: expected transient 502/connect failures silent.
-                    response = self.run(['curl', '-fsS', '--max-time', '3', 'http://127.0.0.1:'+self.port+path], binary=True)
+                    if kind == 'api' and requires_auth:
+                        # No body, session, password or token. HTTP 401 is expected.
+                        options = ['-sS', '-o', '/dev/null', '-w', '%{http_code}']
+                    else:
+                        options = ['-fsS']
+                    response = self.run(['curl', *options, '--max-time', '3', 'http://127.0.0.1:'+self.port+path], binary=True)
                     if isinstance(response, str):
                         response = response.encode()
                     if kind == 'health' and json.loads(response) != {'status': 'ok'}:
                         raise ValueError()
-                    if kind == 'api' and not isinstance(json.loads(response), list):
-                        raise ValueError()
+                    if kind == 'api':
+                        if requires_auth:
+                            if response.strip() != b'401':
+                                raise ValueError()
+                        elif not isinstance(json.loads(response), list):
+                            raise ValueError()
                     if kind == 'frontend' and response != (release/'frontend/dist/index.html').read_bytes():
                         raise ValueError()
                     if kind == 'asset' and response != (release/'frontend/dist'/path.lstrip('/')).read_bytes():
@@ -709,6 +730,16 @@ class Updater:
         self.check_socket()
         if self.current.resolve() != release:
             fail('current no coincide con la release verificada.')
+
+    def administrative_notice(self):
+        if authentication(self.target):
+            print('✓ Actualización técnica completada. Autenticación habilitada.')
+            print('Inicialización administrativa: pendiente de comprobación manual; no se ejecutó el bootstrap ni se crearon cuentas.')
+            print('Comprueba el Superadministrador con:')
+            print('  sudo /opt/ticketyn/current/bootstrap-superadmin.sh --check')
+            print('Si no existe (código 3), inicia el asistente:')
+            print('  sudo /opt/ticketyn/current/bootstrap-superadmin.sh')
+            print('Si ya existe uno válido (código 0), no requiere creación ni modificación de credenciales.')
 
     def check_socket(self):
         sockets = self.run(['ss', '-H', '-ltn', 'sport = :8000']).splitlines()
@@ -758,6 +789,7 @@ class Updater:
                 if self.state.exists():
                     self.archive_state()
                 print('La operación ya está completada y verificada; no se repite.')
+                self.administrative_notice()
                 return
             self.begin()
             if self.recover and getattr(self, 'resume_activation', False):
@@ -770,6 +802,8 @@ class Updater:
             self.record(self.data['phase'], workspace=str(self.work), workspace_inode=stamp(self.work))
             source = self.fetch(); self.prepare(source); self.backup(); self.activate()
             print('✓ Ticketyn actualizado a '+self.tag+'. Backup previo conservado; releases anteriores conservadas.')
+            if not self.recover:
+                self.administrative_notice()
         except BaseException:
             self.failure(); raise
         finally:
@@ -1041,6 +1075,7 @@ class Updater:
         self.run(['systemctl', 'enable', 'ticketyn'])
         self.record('complete', result='success'); self.archive_state()
         print('✓ Recovery completada. Operación original fallida y ambos backups conservados en update-history.')
+        self.administrative_notice()
 
     def publish_permissions(self):
         for root, dirs, files in os.walk(self.target, followlinks=False):
@@ -1362,7 +1397,9 @@ class MigrationRetryUpdater(Updater):
             self.preflight()
             if self.data['phase'] == 'complete':
                 self.archive_state()
-                print('✓ Reintento ya completado y verificado; historial archivado, sin repetir migración.'); return
+                print('✓ Reintento ya completado y verificado; historial archivado, sin repetir migración.')
+                self.administrative_notice()
+                return
             answer = input('Escribe exactamente "REINTENTAR MIGRACION" para autorizar (Enter cancela): ')
             if answer != 'REINTENTAR MIGRACION':
                 print('Reintento cancelado; instalación sin cambios.'); return

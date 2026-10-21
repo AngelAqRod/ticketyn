@@ -14,8 +14,13 @@ export function formatDate(value: string | null, timeZone?: string): string {
   return Number.isNaN(date.getTime()) ? 'Fecha no válida' : (timeZone ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short', timeZone }) : dateFormatter).format(date)
 }
 
-export function formatDuration(seconds: number | null): string {
-  if (seconds === null) return 'En curso'
+export function formatDuration(seconds: number | null, status?: string): string {
+  if (seconds === null) {
+    if (status === 'CLOSED') {
+      return 'Sin fecha de fin'
+    }
+    return 'En curso'
+  }
   const total = Math.floor(seconds)
   if (total < 60) return `${total} s`
   const minutes = Math.floor(total / 60)

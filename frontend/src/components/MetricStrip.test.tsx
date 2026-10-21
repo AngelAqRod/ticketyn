@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '../test/render'
 import { Clock3, CircleCheck, Tickets } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import { MetricStrip } from './MetricStrip'

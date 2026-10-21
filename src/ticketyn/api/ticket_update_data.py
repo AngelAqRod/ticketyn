@@ -35,6 +35,8 @@ def create_update(session: Session, ticket_id: int, values: dict, *, Ticket=Tick
                                          .with_for_update(read=True, of=Responsible))
             if responsible is None:
                 raise HTTPException(404, "El responsable indicado no existe")
+            from ticketyn.api.responsible_selection import selectable
+            selectable(responsible)
             if not responsible.active:
                 raise HTTPException(422, "El responsable indicado está inactivo")
         return save_item(session, TicketUpdate(ticket_id=ticket_id, **values))

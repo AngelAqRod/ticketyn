@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '../test/render'
 import { describe, it, expect, vi } from 'vitest'
 import { CpeConfiguration } from './CpeConfiguration'
 import { jsonResponse } from '../test/fixtures'

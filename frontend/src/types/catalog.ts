@@ -3,6 +3,7 @@ export interface NamedCatalog {
   name: string
   active: boolean
   created_at: string
+  operational_selectable?: boolean
 }
 
 export interface Customer extends NamedCatalog {
@@ -33,11 +34,12 @@ export interface Circuit {
 export type Node = NamedCatalog
 export interface Position extends NamedCatalog { department_id: number; description?: string | null; department: NamedCatalog }
 export interface Responsible extends NamedCatalog {
+  can_change_active?: boolean | null
   attention_level?: string | null // Preserved legacy value, read-only.
   department_id?: number | null; position_id?: number | null
   department?: NamedCatalog | null; position?: NamedCatalog | null
 }
-export interface ResponsibleInput extends NamedCatalogInput { department_id?: number | null; position_id?: number | null }
+export interface ResponsibleInput extends NamedCatalogInput { operational_selectable?: boolean; department_id?: number | null; position_id?: number | null }
 export interface PositionInput extends NamedCatalogInput { department_id: number }
 export interface EscalationReason extends NamedCatalog { description?: string | null }
 export type Sector = NamedCatalog

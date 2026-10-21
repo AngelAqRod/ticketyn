@@ -1,5 +1,5 @@
 from typing import Annotated, Literal
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Request
 from sqlalchemy import select, func
 from ticketyn.api.crud import DBSession, get_or_404, list_items, save_item, update_item
 from ticketyn.api import change_data as data
@@ -58,13 +58,13 @@ def listing(session:DBSession,filters:Annotated[ChangeFilters,Query()]):
     return {'total':session.scalar(select(func.count()).select_from(q.order_by(None).subquery())), 'items':[data.response(item) for item in session.scalars(q.limit(filters.limit).offset(filters.offset))]}
 
 @router.post('/api/changes',status_code=201)
-def create(payload:ChangeCreate,session:DBSession):return data.response(data.persist(session,payload.model_dump()))
+def create(payload:ChangeCreate,session:DBSession,request:Request):return data.response(data.persist(session,payload.model_dump(),actor=request.state.principal))
 
 @router.get('/api/changes/{id}')
 def detail(id:RootId,session:DBSession):return data.response(get_or_404(session,Change,id))
 
 @router.patch('/api/changes/{id}')
-def patch(id:RootId,payload:ChangePatch,session:DBSession):return data.response(data.persist(session,payload.model_dump(exclude_unset=True),id))
+def patch(id:RootId,payload:ChangePatch,session:DBSession,request:Request):return data.response(data.persist(session,payload.model_dump(exclude_unset=True),id,actor=request.state.principal))
 
 @router.get('/api/changes/{id}/updates')
 def updates(id:RootId,session:DBSession,limit:Annotated[int,Query(ge=1,le=200)]=50,offset:Annotated[int,Query(ge=0)]=0):

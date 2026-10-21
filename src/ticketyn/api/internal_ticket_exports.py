@@ -46,7 +46,7 @@ def export_rows(session, filters, *, excel=False):
                ticket.department.name, ticket.responsible.name if ticket.responsible else 'Sin asignar',
                ticket.incident_type.name, ticket.provider.name if ticket.provider else 'Ninguno',
                start.isoformat() if excel else start.strftime('%d/%m/%Y\n%H:%M'),
-               duration_text(ticket.duration_seconds) if ticket.duration_seconds is not None else 'En curso', related]
+               duration_text(ticket.duration_seconds) if ticket.duration_seconds is not None else ('En curso' if ticket.status == 'OPEN' else 'Sin fecha de fin'), related]
 
 
 def export_pdf(session, filters, output):

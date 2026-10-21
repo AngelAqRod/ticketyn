@@ -32,3 +32,5 @@ from ticketyn.models.change import ChangeType, ChangeCompletionType, ChangeNumbe
 
 from ticketyn.models.mail_notifications import MailTransportConfig, MailEventConfig
 from ticketyn.models.mail_jobs import MailProcessorControl, MailNotificationRequest
+
+from ticketyn.models.security import SecurityRole, SecurityPermission, SecurityRolePermission, SecurityConfig, SecurityAudit

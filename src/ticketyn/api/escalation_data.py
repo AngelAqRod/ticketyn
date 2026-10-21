@@ -13,6 +13,9 @@ def snapshot_destination(session, values, item=None):
         recipient = session.scalar(select(Responsible).where(Responsible.id == recipient_id).with_for_update(read=True, of=Responsible).execution_options(populate_existing=True))
         if recipient is None:
             raise HTTPException(404, 'Responsable no encontrado')
+        if item is None or recipient_id != item.recipient_id:
+            from ticketyn.api.responsible_selection import selectable
+            selectable(recipient)
         if not recipient.active:
             raise HTTPException(422, 'El responsable está inactivo')
         if department_id is None and item is None:
@@ -49,6 +52,8 @@ def create_escalation(session, ticket_id, values, *, Ticket=Ticket, TicketEscala
             requester = session.scalar(select(Responsible).where(Responsible.id == requester_id).with_for_update(read=True, of=Responsible))
             if requester is None:
                 raise HTTPException(404, 'Responsable no encontrado')
+            from ticketyn.api.responsible_selection import selectable
+            selectable(requester)
             if not requester.active:
                 raise HTTPException(422, 'El responsable está inactivo')
         destination = snapshot_destination(session, values)

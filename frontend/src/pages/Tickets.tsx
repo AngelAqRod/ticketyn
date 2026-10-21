@@ -1,3 +1,4 @@
+import { Can } from '../auth/permissions'
 import { PaginationBar } from '../components/PaginationBar'
 import { FeedbackMessage } from '../components/FeedbackMessage'
 import { useState } from 'react'
@@ -33,15 +34,48 @@ export function Tickets() {
     try { await downloadTickets(format, query) } catch (failure) { setExportError(failure instanceof Error ? failure.message : 'No se pudo exportar el listado.') } finally { setExporting(false) }
   }
   return <>
-    <PageHeading title="Tickets" description="Consulta las incidencias registradas, de la más reciente a la más antigua." action={<div className="flex flex-wrap gap-2"><button className="button-secondary" disabled={loading} onClick={() => setRefresh(refresh + 1)}><RefreshCw size={15} aria-hidden="true" />Actualizar</button><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('pdf')}><FileText size={15} aria-hidden="true" />Exportar PDF</button><button type="button" className="button-secondary" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('xlsx')}><FileSpreadsheet size={15} aria-hidden="true" />Exportar Excel</button><Link className="button-primary" to="/tickets/new"><Plus size={15} aria-hidden="true" />Nuevo ticket</Link></div>} />
+    <PageHeading
+      title="Tickets"
+      description="Consulta las incidencias registradas, de la más reciente a la más antigua."
+      telemetry={
+        !loading && !error && (
+          <span className="heading-telemetry">
+            <span>Total:</span>
+            <strong className="telemetry-value--blue">{tickets.length}</strong>
+          </span>
+        )
+      }
+      action={
+        <div className="flex flex-wrap gap-2">
+          <button className="button-secondary rounded-full shadow-xs" disabled={loading} onClick={() => setRefresh(refresh + 1)}>
+            <RefreshCw size={14} aria-hidden="true" />Actualizar
+          </button>
+          <Can permission="tickets.export">
+            <button type="button" className="button-secondary rounded-full shadow-xs" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('pdf')}>
+              <FileText size={14} aria-hidden="true" />Exportar PDF
+            </button>
+          </Can>
+          <Can permission="tickets.export">
+            <button type="button" className="button-secondary rounded-full shadow-xs" disabled={exporting || Boolean(filterError)} onClick={() => exportTickets('xlsx')}>
+              <FileSpreadsheet size={14} aria-hidden="true" />Exportar Excel
+            </button>
+          </Can>
+          <Can permission="tickets.create">
+            <Link className="button-primary rounded-full shadow-sm" to="/tickets/new">
+              <Plus size={15} aria-hidden="true" />Nuevo ticket
+            </Link>
+          </Can>
+        </div>
+      }
+    />
     {createdReference && <FeedbackMessage variant="success" className="mb-3">Ticket {createdReference} creado correctamente.</FeedbackMessage>}
     {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-3 workspace-caption" />}
     {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
     <TicketFilters params={params} change={change} clear={clear} />
-    <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-xs workspace-caption">
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-sm workspace-caption">
       <span>{params.get('status') === 'OPEN' ? 'Abiertos' : params.get('status') === 'CLOSED' ? 'Cerrados' : 'Todos los estados'}</span><span>Fechas en tu zona horaria local</span>
     </div>
     {loading || error || tickets.length === 0 ? <RequestState loading={loading} error={error} empty={tickets.length === 0} onRetry={() => setRefresh(refresh + 1)} /> : <TicketTable tickets={tickets} />}
-    <PaginationBar page={Math.floor(offset / 50) + 1} info={<p className="text-xs">Página {Math.floor(offset / 50) + 1}{!loading && !error && tickets.length > 0 ? ` · Registros ${offset + 1}–${offset + tickets.length}` : ''}</p>} previousDisabled={offset === 0 || loading} nextDisabled={loading || Boolean(error) || tickets.length < 50} onPrevious={() => setOffset(Math.max(0, offset - 50))} onNext={() => setOffset(offset + 50)} />
+    <PaginationBar page={Math.floor(offset / 50) + 1} info={<p className="text-sm">Página {Math.floor(offset / 50) + 1}{!loading && !error && tickets.length > 0 ? ` · Registros ${offset + 1}–${offset + tickets.length}` : ''}</p>} previousDisabled={offset === 0 || loading} nextDisabled={loading || Boolean(error) || tickets.length < 50} onPrevious={() => setOffset(Math.max(0, offset - 50))} onNext={() => setOffset(offset + 50)} />
   </>
 }

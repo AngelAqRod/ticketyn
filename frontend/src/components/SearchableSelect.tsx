@@ -83,16 +83,24 @@ export function SearchableSelect({ id, value, options, onChange, onSearchChange,
       <button type="button" className="combobox-action" disabled={disabled} aria-label={`${expanded ? 'Cerrar' : 'Abrir'} ${label}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (expanded) close(); else { input.current?.focus(); show() } }}><ChevronDown size={14} aria-hidden="true" /></button>
     </div>
     {expanded && <div className="combobox-menu">
-      {query && <button type="button" className="px-3 py-2 text-xs text-primary underline" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(''); onSearchChange?.(''); setActive(null); input.current?.focus() }}>Limpiar búsqueda</button>}
+      {query && <button type="button" className="px-3 py-2 text-xs text-sky-400 hover:text-sky-300 underline font-mono" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(''); onSearchChange?.(''); setActive(null); input.current?.focus() }}>Limpiar búsqueda</button>}
       <ul id={listId} role="listbox" aria-label={label} className="overflow-y-auto py-1">
         {matches.map((option, index) => <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={value === option.value} aria-disabled={option.disabled || undefined}
-          className={`px-3 py-2 text-sm ${option.disabled ? 'cursor-not-allowed text-slate-400' : `cursor-pointer hover:bg-primary-soft ${active === option.value ? 'bg-primary-soft text-ink' : 'text-slate-800'}`}`}
+          className={`mx-1 px-3 py-2 text-sm rounded-md transition-colors ${
+            option.disabled
+              ? 'cursor-not-allowed text-slate-500'
+              : active === option.value
+              ? 'bg-[#1e3a6d] text-white font-medium'
+              : value === option.value
+              ? 'bg-[#172a50] text-sky-300 font-semibold'
+              : 'cursor-pointer text-slate-100 hover:bg-[#152648] hover:text-white'
+          }`}
           onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => { if (!option.disabled) setActive(option.value) }} onClick={() => select(option)}>
-          {option.label}{option.disabled && <span className="ml-2 text-xs">(Inactivo)</span>}{value === option.value && <span aria-hidden="true" className="ml-2">✓</span>}
+          {option.label}{option.disabled && <span className="ml-2 text-xs text-slate-500">(Inactivo)</span>}{value === option.value && <span aria-hidden="true" className="ml-2 text-sky-400 font-bold">✓</span>}
         </li>)}
       </ul>
       {dropdownFooter}
-      {!matches.length && <p role="status" className="px-3 py-3 text-sm text-slate-500">{options.length ? noMatchMessage : emptyMessage}</p>}
+      {!matches.length && <p role="status" className="px-3 py-3 text-sm text-slate-400 font-mono">{options.length ? noMatchMessage : emptyMessage}</p>}
     </div>}
   </div>
 }

@@ -60,3 +60,12 @@ keys.json
 *.p12
 *.pfx
 *.pkcs12
+
+# Multi-agent handoff state
+/AGENT_HANDOFF.md
+
+# Herramientas locales de desarrollo e inspección visual
+/.agents/
+/.codex/
+/.impeccable/
+/frontend/.impeccable/

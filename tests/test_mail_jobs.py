@@ -66,7 +66,10 @@ def jobs_client(jobs_env, monkeypatch):
     def session_override():
         with Session(engine) as session: yield session
     app.dependency_overrides[get_session] = session_override
-    with TestClient(app) as client: yield client
+    with TestClient(app) as client:
+        from security_helpers import authenticate_test_client
+        authenticate_test_client(app, client, engine)
+        yield client
     get_settings.cache_clear()
 
 
@@ -354,7 +357,7 @@ def test_real_dump_restore_pauses_before_restart(postgres_engine, tmp_path, sent
         with admin.connect().execution_options(isolation_level='AUTOCOMMIT') as conn:
             for name in (source, target): conn.execute(text('CREATE DATABASE ' + name))
         original = create_engine(admin.url.set(database=source)); restored = create_engine(admin.url.set(database=target)); engines = [original, restored]
-        cli(original.url, 'upgrade', '0029_mail_requests')
+        cli(original.url, 'upgrade', 'head')
         with original.begin() as conn:
             conn.execute(text("UPDATE mail_transport_config SET host='smtp.example.com',sender_email='noc@example.com'"))
             conn.execute(text("UPDATE mail_event_config SET mode='AUTOMATIC',to_recipients='[\"to@example.com\"]'::jsonb,template=CAST(:template AS jsonb)"), {'template':json.dumps(TEMPLATE)})
@@ -399,6 +402,8 @@ restore_pause_mail
             with Session(restored) as session: yield session
         app.dependency_overrides[get_session] = override
         with TestClient(app) as client:
+            from security_helpers import authenticate_test_client
+            authenticate_test_client(app, client, restored)
             review = client.get(BASE + '/processor').json()
             assert review['counts']['UNCERTAIN'] == 2 and review['counts']['PENDING'] == 1
             assert client.post(BASE + '/processor/resume', json={'revision':review['revision'], 'confirmation':'REANUDAR'}).status_code == 200

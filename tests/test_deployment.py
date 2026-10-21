@@ -8,6 +8,7 @@ from uuid import uuid4
 from sqlalchemy import create_engine, inspect, text
 
 from ticketyn.db.base import Base
+from ticketyn.security.permissions import PERMISSIONS
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
@@ -45,6 +46,10 @@ def test_alembic_cli_from_empty_database(postgres_engine, tmp_path):
                 return result.stdout
             alembic('upgrade', 'head')
             assert f'{head} (head)' in alembic('current')
+            alembic('downgrade', '0030_security_foundation')
+            with engine.connect() as connection:
+                assert connection.scalar(text('SELECT count(*) FROM security_permissions')) == len(PERMISSIONS)
+            alembic('upgrade', 'head')
             inspector = inspect(engine)
             assert set(inspector.get_table_names()) == set(Base.metadata.tables) | {'alembic_version'}
             probe = next(item for item in inspector.get_columns('tickets') if item['name'] == '_ticketyn_e2e_update_probe')
@@ -62,7 +67,7 @@ def test_alembic_cli_from_empty_database(postgres_engine, tmp_path):
             with engine.connect() as connection:
                 assert connection.scalar(text('SELECT version_num FROM alembic_version')) == head
                 for table in Base.metadata.tables:
-                    assert connection.scalar(text(f'SELECT count(*) FROM "{table}"')) == {'change_types': 8, 'deactivation_reasons': 5, 'change_completion_types': 5, 'activation_number_config': 1, 'mail_transport_config': 1, 'mail_event_config': 1, 'mail_processor_control': 1}.get(table, 0)
+                    assert connection.scalar(text(f'SELECT count(*) FROM "{table}"')) == {'change_types': 8, 'deactivation_reasons': 5, 'change_completion_types': 5, 'activation_number_config': 1, 'mail_transport_config': 1, 'mail_event_config': 1, 'mail_processor_control': 1, 'security_roles': 4, 'security_config': 1, 'security_permissions': len(PERMISSIONS)}.get(table, 0)
         finally:
             if engine is not None:
                 engine.dispose()

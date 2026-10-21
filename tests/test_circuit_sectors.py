@@ -161,3 +161,53 @@ def test_legacy_ticket_edit_assigns_current_without_rewriting_history(api_client
     switched = api_client.patch(f"/api/tickets/{ticket['id']}", json={'circuit_id': other['id']})
     assert switched.status_code == 200
     assert switched.json()['sector_id'] == current
+
+
+def test_list_circuits_filtered_by_sector(api_client, ticket_payload):
+    s1 = sector(api_client, name='Sector Alpha')
+    s2 = sector(api_client, name='Sector Beta')
+    node_id = ticket_payload['node_id']
+    cust_id = ticket_payload['customer_id']
+
+    c1 = api_client.post('/api/circuits', json={'node_id': node_id, 'customer_id': cust_id, 'circuit_code': 'CIR-S1-A', 'description': 'Circuito 1 S1', 'sector_id': s1}).json()
+    c2 = api_client.post('/api/circuits', json={'node_id': node_id, 'customer_id': cust_id, 'circuit_code': 'CIR-S2', 'description': 'Circuito S2', 'sector_id': s2}).json()
+    c3 = api_client.post('/api/circuits', json={'node_id': node_id, 'customer_id': cust_id, 'circuit_code': 'CIR-S1-B', 'description': 'Circuito 2 S1', 'sector_id': s1, 'active': False}).json()
+
+    # Filter only by sector_id=s1 (active by default)
+    res_s1 = api_client.get(f'/api/circuits?sector_id={s1}')
+    assert res_s1.status_code == 200
+    codes_s1 = [c['circuit_code'] for c in res_s1.json()]
+    assert 'CIR-S1-A' in codes_s1
+    assert 'CIR-S2' not in codes_s1
+    assert 'CIR-S1-B' not in codes_s1  # Inactive by default
+
+    # Filter by sector_id=s1 with include_inactive=true
+    res_s1_all = api_client.get(f'/api/circuits?sector_id={s1}&include_inactive=true')
+    assert res_s1_all.status_code == 200
+    codes_s1_all = [c['circuit_code'] for c in res_s1_all.json()]
+    assert 'CIR-S1-A' in codes_s1_all
+    assert 'CIR-S1-B' in codes_s1_all
+    assert 'CIR-S2' not in codes_s1_all
+
+    # Filter by sector_id=s2
+    res_s2 = api_client.get(f'/api/circuits?sector_id={s2}')
+    assert res_s2.status_code == 200
+    codes_s2 = [c['circuit_code'] for c in res_s2.json()]
+    assert codes_s2 == ['CIR-S2']
+
+    # Filter by non-existent sector
+    res_none = api_client.get('/api/circuits?sector_id=999999')
+    assert res_none.status_code == 200
+    assert res_none.json() == []
+
+    # Pagination with sector filter
+    p1 = api_client.get(f'/api/circuits?sector_id={s1}&include_inactive=true&limit=1&offset=0').json()
+    p2 = api_client.get(f'/api/circuits?sector_id={s1}&include_inactive=true&limit=1&offset=1').json()
+    assert len(p1) == 1
+    assert len(p2) == 1
+    assert p1[0]['id'] != p2[0]['id']
+    assert {p1[0]['circuit_code'], p2[0]['circuit_code']} == {'CIR-S1-A', 'CIR-S1-B'}
+
+    # Combination of sector_id with node_id and customer_id
+    comb = api_client.get(f'/api/circuits?sector_id={s1}&node_id={node_id}&customer_id={cust_id}').json()
+    assert any(c['circuit_code'] == 'CIR-S1-A' for c in comb)

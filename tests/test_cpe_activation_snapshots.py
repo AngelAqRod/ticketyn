@@ -88,7 +88,8 @@ def test_old_or_optional_history_not_replaced(api_client, operation_payload, db_
     assert api_client.get(f"/api/activations/{activation['id']}/reports/pdf").status_code == 200
     assert 'NUEVO SERVICIO ACTUAL' not in ' '.join(pdf_strings)
     assert 'Sin registrar' in ' '.join(pdf_strings)
-    assert api_client.get('/api/system/version').json() == {'version':'0.5.0'}
+    from ticketyn.core.version import get_version
+    assert api_client.get('/api/system/version').json() == {'version': get_version()}
     assert api_client.get('/health').json() == {'status':'ok'}
 
 

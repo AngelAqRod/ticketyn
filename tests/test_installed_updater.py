@@ -122,10 +122,30 @@ def test_real_auxiliaries_resolve_and_backup_uses_bundle(layout):
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     assert module.ri.__file__ == str(bundle/'deploy/release_identity.py')
     assert module.rs.__file__ == str(bundle/'deploy/restore_support.py')
+    assert module.security_capabilities.__file__ == str(bundle/'deploy/install_security.py')
     updater = module.Updater('v0.2.0', base=base, config=base/'config', backups=base/'backups', lock=base/'lock')
     assert updater.scripts == bundle
     assert (updater.scripts/'backup.sh').read_bytes() == (ROOT/'backup.sh').read_bytes()
     assert module.Updater('v0.2.1', recover=True).recover is True
+
+
+def test_existing_five_file_bundle_can_be_replaced_without_losing_identity(layout):
+    source, base, command = layout
+    values = p.snapshot(source, p.LEGACY_FILES)
+    values['deploy/update_support.py'] = subprocess.check_output(['git', 'show', 'HEAD:deploy/update_support.py'], cwd=ROOT)
+    key, manifest = p.identity(values)
+    old = base / 'admin/updater' / key
+    (old / 'deploy').mkdir(parents=True, mode=0o755)
+    for name, content in values.items():
+        p.write(old / name, content, 0o755 if name.endswith('.sh') else 0o644)
+    p.write(old / 'manifest.json', json.dumps(manifest, sort_keys=True).encode(), 0o644)
+    p.write(command, p.launcher(old), 0o755)
+    assert p.validate_bundle(old) == key
+    new = p.install(source, base, command)
+    assert new != old and old.exists()
+    assert (new / 'deploy/install_security.py').read_bytes() == (ROOT / 'deploy/install_security.py').read_bytes()
+    assert str(new / 'update.sh') in command.read_text()
+    assert p.validate_bundle(old) == key
 
 
 def test_race_publishing_command_does_not_overwrite_foreign_file(layout, monkeypatch):

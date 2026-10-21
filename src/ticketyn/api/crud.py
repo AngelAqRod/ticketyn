@@ -72,6 +72,7 @@ def filtered_items(
     model: type[Model], *, search: str | None, search_fields: tuple[str, ...],
     order_field: str, include_inactive: bool, customer_id: int | None = None,
     active: bool | None = None, node_id: int | None = None, department_id: int | None = None,
+    sector_id: int | None = None,
 ):
     """Query reutilizable antes de paginar. active explícito prevalece sobre include_inactive."""
     statement = select(model)
@@ -89,6 +90,8 @@ def filtered_items(
         statement = statement.where(model.department_id == department_id)
     if node_id is not None:
         statement = statement.where(model.node_id == node_id)
+    if sector_id is not None:
+        statement = statement.where(model.sector_id == sector_id)
     return statement.order_by(getattr(model, order_field), model.id)
 
 
@@ -96,9 +99,11 @@ def list_items(
     session: Session, model: type[Model], *, search: str | None,
     search_fields: tuple[str, ...], order_field: str, include_inactive: bool,
     limit: int, offset: int, customer_id: int | None = None, active: bool | None = None, node_id: int | None = None, department_id: int | None = None,
+    sector_id: int | None = None,
 ) -> list[Model]:
     statement = filtered_items(model, search=search, search_fields=search_fields, order_field=order_field,
-                               include_inactive=include_inactive, customer_id=customer_id, active=active, node_id=node_id, department_id=department_id)
+                               include_inactive=include_inactive, customer_id=customer_id, active=active, node_id=node_id, department_id=department_id,
+                               sector_id=sector_id)
     return list(session.scalars(statement.limit(limit).offset(offset)))
 
 

@@ -60,7 +60,10 @@ def test_summaries_historical_and_single_sql_query(api_client, ticket_payload, d
     finally:
         event.remove(connection, 'before_cursor_execute', record)
     assert response.status_code == 200
-    assert len(statements) == 1
+    selects = [sql for sql in statements if sql.lstrip().upper().startswith('SELECT')]
+    authentication = [sql for sql in selects if 'security_roles' in sql or 'security_config' in sql]
+    assert len(authentication) == 2
+    assert len(selects) - len(authentication) == 1
     assert len(response.json()) == 3
     row = response.json()[0]
     assert row['customer'] == {key: expected['customer_id'][key] for key in ('id', 'customer_code', 'name')}

@@ -63,14 +63,20 @@ def audit_values(item):
 def active_relation(session, model, id):
     row=session.scalar(select(model).where(model.id==id).with_for_update(read=True,of=model))
     if row is None:raise HTTPException(422,f'{model.__name__} no existe')
+    if model is Responsible:
+        from ticketyn.api.responsible_selection import selectable
+        selectable(row)
     if not row.active:raise HTTPException(422,f'{model.__name__} está inactivo')
     return row
 
 
-def persist(session, supplied, id=None):
+def persist(session, supplied, id=None, actor=None):
     try:
         item=session.scalar(select(Change).where(Change.id==id).with_for_update(of=Change)) if id else None
         if id and item is None:raise HTTPException(404,'Cambio no encontrado')
+        if actor is not None:
+            from ticketyn.security.mutations import change_mutation
+            change_mutation(actor, supplied, item)
         before=audit_values(item) if item else {}
         values={**({field:getattr(item,field) for field in FIELDS} if item else {}),**{key:value for key,value in supplied.items() if key in FIELDS}}
         if not values.get('change_type_id') and (not item or any(key in supplied for key in FIELDS)):

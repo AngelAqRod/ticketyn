@@ -42,7 +42,7 @@ def create(api_client, path, payload):
 def test_create_and_get(api_client, resource):
     path, _, payload = resource
     item = create(api_client, path, payload)
-    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"cpe_model", "cpe_model_id", "node", "node_id", "initial_capacity", "initial_capacity_unit", "service_type_id", "service_type", "sector"} if path == "/api/circuits" else {"attention_level", "department_id", "position_id", "department", "position"} if path == "/api/responsibles" else {"description"} if path == "/api/escalation-reasons" else set())
+    assert set(item) == set(payload) | {"id", "active", "created_at"} | ({"cpe_model", "cpe_model_id", "node", "node_id", "initial_capacity", "initial_capacity_unit", "service_type_id", "service_type", "sector"} if path == "/api/circuits" else {"attention_level", "department_id", "position_id", "department", "position", "operational_selectable", "can_change_active"} if path == "/api/responsibles" else {"description"} if path == "/api/escalation-reasons" else set())
     assert item["id"] > 0
     assert item["active"] is True
     assert datetime.fromisoformat(item["created_at"]).tzinfo is not None
@@ -52,13 +52,21 @@ def test_create_and_get(api_client, resource):
     assert response.json() == item
 
 
+def own_rows(client, path, **params):
+    rows = client.get(path, params=params).json()
+    if path == '/api/responsibles':
+        rows = [row for row in rows if row['id'] != client.app.state.test_security_account_id]
+    return rows
+
+
 def test_list_and_order(api_client, resource):
     path, field, payload = resource
     items = [create(api_client, path, {**payload, field: value, **({"name": f"Empresa {value}"} if field == "customer_code" else {})}) for value in ("C", "A", "B")]
     response = api_client.get(path)
     assert response.status_code == 200
-    assert [item[field] for item in response.json()] == ["A", "B", "C"]
-    assert {item["id"] for item in response.json()} == {item["id"] for item in items}
+    rows = own_rows(api_client, path)
+    assert [item[field] for item in rows] == ["A", "B", "C"]
+    assert {item["id"] for item in rows} == {item["id"] for item in items}
 
 
 def test_partial_update(api_client, resource):
@@ -94,7 +102,7 @@ def test_duplicate_create_rolls_back(api_client, resource):
     assert "IntegrityError" not in response.text
     assert "uq_" not in response.text
     create(api_client, path, {**payload, field: "OTRO", **({"name": "Empresa distinta"} if field == "customer_code" else {})})
-    assert len(api_client.get(path).json()) == 2
+    assert len(own_rows(api_client, path)) == 2
 
 
 def test_duplicate_update_rolls_back(api_client, resource):
@@ -147,13 +155,13 @@ def test_active_inactive_and_reactivation(api_client, resource):
     response = api_client.patch(f"{path}/{inactive['id']}", json={"active": False})
     assert response.status_code == 200
     assert response.json()["active"] is False
-    assert api_client.get(path).json() == [active]
-    assert api_client.get(path, params={"include_inactive": False}).json() == [active]
-    all_items = api_client.get(path, params={"include_inactive": True}).json()
+    assert own_rows(api_client, path) == [active]
+    assert own_rows(api_client, path, include_inactive=False) == [active]
+    all_items = own_rows(api_client, path, include_inactive=True)
     assert {item["id"] for item in all_items} == {active["id"], inactive["id"]}
     assert api_client.get(f"{path}/{inactive['id']}").json()["active"] is False
     assert api_client.patch(f"{path}/{inactive['id']}", json={"active": True}).status_code == 200
-    assert len(api_client.get(path).json()) == 2
+    assert len(own_rows(api_client, path)) == 2
 
 
 def test_pagination(api_client, resource):
@@ -163,8 +171,8 @@ def test_pagination(api_client, resource):
     response = api_client.get(path, params={"limit": 1, "offset": 1})
     assert response.status_code == 200
     assert [item[field] for item in response.json()] == ["B"]
-    assert api_client.get(path, params={"offset": 3}).json() == []
-    assert len(api_client.get(path, params={"limit": 200}).json()) == 3
+    assert own_rows(api_client, path, offset=3) == []
+    assert len(own_rows(api_client, path, limit=200)) == 3
 
 
 @pytest.mark.parametrize("params", [
@@ -272,15 +280,15 @@ def test_docs_and_openapi(api_client):
 ])
 def test_services_endpoints_removed(api_client, method, path):
     kwargs = {"json": {"name": "Recurso eliminado"}} if method in {"post", "patch"} else {}
-    assert getattr(api_client, method)(path, **kwargs).status_code == 404
+    assert getattr(api_client, method)(path, **kwargs).status_code == 403
 
 
 def test_create_inactive_catalog(api_client, resource):
     path, _, payload = resource
     item = create(api_client, path, {**payload, "active": False})
     assert item["active"] is False
-    assert api_client.get(path).json() == []
-    assert api_client.get(path, params={"include_inactive": True}).json() == [item]
+    assert own_rows(api_client, path) == []
+    assert own_rows(api_client, path, include_inactive=True) == [item]
     assert api_client.get(f"{path}/{item['id']}").json() == item
 
 

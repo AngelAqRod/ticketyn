@@ -1,3 +1,4 @@
+import { usePermissions } from '../auth/permissions'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Mail } from 'lucide-react'
 import { getActivationNotification, requestActivationNotification } from '../api/mailNotifications'
@@ -15,6 +16,7 @@ const states: Record<NotificationState, string> = {
 const active = new Set<NotificationState>(['PENDING', 'PREPARING', 'SENDING'])
 
 export function ActivationNotificationActions({ activationId }: { activationId: number }) {
+  const mayNotify=usePermissions().can("activations.notify")
   const [status, setStatus] = useState<ActivationNotificationStatus | null>(null)
   const [loading, setLoading] = useState(true), [posting, setPosting] = useState(false)
   const [loadError, setLoadError] = useState(''), [sendError, setSendError] = useState(''), [message, setMessage] = useState('')
@@ -76,23 +78,23 @@ export function ActivationNotificationActions({ activationId }: { activationId: 
 
   return <section aria-label="Notificación por correo" aria-busy={loading || posting} className="min-w-0 max-w-sm space-y-2 text-sm text-white [overflow-wrap:anywhere]">
     <div className="flex flex-wrap items-center gap-2">
-      {status && status.mode !== 'DISABLED' && <button type="button" className="button-primary"
+      {mayNotify && status && status.mode !== 'DISABLED' && <button type="button" className="button-primary button-primary--emerald rounded-full shadow-sm text-xs"
         disabled={loading || posting || !status.can_request || (status.state === 'UNCERTAIN' && !confirmed)} onClick={() => void request()}>
-        <Mail size={16} aria-hidden="true" />{posting ? 'Solicitando…' : status.state === null ? 'Enviar notificación' : 'Enviar nuevamente'}
+        <Mail size={14} aria-hidden="true" />{posting ? 'Solicitando…' : status.state === null ? 'Enviar notificación' : 'Enviar nuevamente'}
       </button>}
-      <button type="button" className="button-secondary" disabled={loading || posting} onClick={() => { setSendError(''); setMessage(''); setConfirmed(false); void refresh() }}>Consultar estado</button>
+      <button type="button" className="button-secondary rounded-full shadow-xs text-xs" disabled={loading || posting} onClick={() => { setSendError(''); setMessage(''); setConfirmed(false); void refresh() }}>Consultar estado</button>
     </div>
-    {loading && <p role="status">Consultando notificación…</p>}
-    {status && <>
-      <p role="status" aria-live="polite">{status.state ? states[status.state] : 'Sin envío solicitado.'}</p>
-      {status.mode === 'DISABLED' && <p>Notificaciones desactivadas.</p>}
-      {status.processor_paused && <p>Procesador pausado. Las solicitudes pendientes esperarán la revisión y reanudación desde Administración.</p>}
+    {loading && <p role="status" className="text-xs font-mono text-slate-400">Consultando notificación…</p>}
+    {status && <div className="p-2.5 rounded-xl bg-[#070d1a] border border-slate-800/80 text-xs font-mono space-y-1.5">
+      <p role="status" aria-live="polite" className="text-slate-300">{status.state ? states[status.state] : 'Sin envío solicitado.'}</p>
+      {status.mode === 'DISABLED' && <p className="text-amber-300">Notificaciones desactivadas.</p>}
+      {status.processor_paused && <p className="text-amber-400">Procesador pausado. Las solicitudes pendientes esperarán la revisión y reanudación desde Administración.</p>}
       {status.configuration_error && <FeedbackMessage variant="error">{status.configuration_error}</FeedbackMessage>}
-      {status.mode !== 'DISABLED' && status.state === 'UNCERTAIN' && <label className="flex items-start gap-2">
+      {mayNotify && status.mode !== 'DISABLED' && status.state === 'UNCERTAIN' && <label className="flex items-start gap-2 text-slate-300">
         <input type="checkbox" className="mt-1" disabled={posting || loading} checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />
         Confirmo que reenviar puede duplicar el correo.
       </label>}
-    </>}
+    </div>}
     {loadError && <FeedbackMessage variant="error">{loadError}</FeedbackMessage>}
     {sendError && <FeedbackMessage variant="error">{sendError}</FeedbackMessage>}
     {message && <FeedbackMessage variant="success">{message}</FeedbackMessage>}

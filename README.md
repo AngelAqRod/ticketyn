@@ -10,7 +10,10 @@ que aparecen durante su uso.
 Está **en desarrollo**. Algunas funcionalidades se utilizan en un entorno
 operativo real, pero eso no significa que sea una plataforma terminada ni que
 cubra todas las necesidades de un NOC. La versión declarada en este repositorio
-es **0.5.0**; revisa y valida cada versión antes de incorporarla a tu entorno.
+es **0.7.0**, según `[project].version` en [pyproject.toml](pyproject.toml).
+Este README describe lo implementado en `development/v0.7.0`, sin implicar que
+la versión ya esté publicada o desplegada. Revisa y valida cada versión antes
+de incorporarla a tu entorno.
 
 ## Filosofía
 
@@ -39,10 +42,22 @@ herramientas especializadas como NetBox o Zabbix.
   y vínculos opcionales con tickets de clientes.
 - Clientes, circuitos y operaciones FMS: activaciones, cambios de capacidad,
   bajas y reactivaciones; consulta de configuración CPE.
+- Notificaciones por correo para el registro de activaciones FMS: modo Automático
+  al crear la activación, Manual desde su detalle y Desactivado sin envíos.
+  Incluyen reenvío manual, destinatarios configurados y plantillas con vista previa,
+  HTML y texto plano. La aceptación por SMTP no garantiza la entrega al buzón.
 - Control de cambios: planificación, ejecución, calendario, participantes,
   seguimiento, evaluación de duraciones y vínculos con tickets internos.
 - Dashboard, reportería, filtros y exportaciones según las capacidades de cada módulo.
 - Catálogos administrables y numeraciones independientes configurables.
+- Inicio de sesión, Mi perfil y cambio de contraseña. Los Responsables son los
+  usuarios de Ticketyn: su acceso y disponibilidad para asignaciones se gestionan
+  de forma independiente, sin duplicar personas ni alterar sus históricos.
+- Roles predeterminados y personalizados, con permisos granulares aplicados en
+  el backend para consultas, operaciones, exportaciones y administración.
+- Administración de sesiones propias y ajenas según permisos; auditoría de
+  seguridad con filtros, paginación y limpieza automática según la retención
+  configurada por el Superadministrador.
 
 Consulta el [alcance y las reglas de los módulos](docs/modules.md).
 
@@ -52,10 +67,11 @@ Los sectores son agrupaciones lógicas configurables; no representan necesariame
 zonas geográficas ni anillos de fibra. Los departamentos, responsables y demás
 catálogos no obligan a adoptar una estructura N1/N2/N3.
 
-**Actualmente no hay autenticación ni autorización individual.** La aplicación
-está pensada para un entorno interno de confianza, protegido mediante controles
-externos de acceso. No debe exponerse directamente a Internet. Una VPN, firewall
-o proxy no equivale a permisos por usuario dentro del backend.
+La autenticación y los permisos individuales no sustituyen los controles de
+seguridad del entorno. El proyecto sigue en desarrollo: requiere HTTPS, controles
+de red y acceso, y una configuración segura antes de cualquier exposición a Internet.
+Las sesiones se mantienen en memoria del backend; el despliegue requiere un único
+trabajador HTTP y reiniciarlo cierra las sesiones activas.
 
 No hay portal de clientes, adjuntos ni un motor de SLA. La configuración disponible
 no permite definir arbitrariamente nuevos campos o flujos de trabajo.
@@ -73,6 +89,10 @@ openpyxl. La interfaz utiliza el lenguaje visual Capsule NOC.
 - [Desarrollo local](docs/development.md): preparación, pruebas y compilación.
 - [Arquitectura](docs/architecture.md): componentes, relaciones y decisiones principales.
 - [Módulos](docs/modules.md): funcionamiento disponible y guías especializadas.
+- [Responsables, acceso y sesiones](docs/security-administration-v0.7.0.md),
+  [roles y permisos](docs/security-authorization-v0.7.0.md) y
+  [auditoría de seguridad](docs/security-audit-v0.7.0.md).
+- [Notificaciones FMS](docs/mail-jobs-v0.6.0.md): modalidades, solicitudes y reenvíos.
 - [Historial de cambios](CHANGELOG.md): notas de evolución; las entradas antiguas
   describen su momento y no sustituyen las guías actuales.
 

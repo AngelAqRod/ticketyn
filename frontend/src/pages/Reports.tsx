@@ -1,4 +1,5 @@
-import { useSearchParams } from 'react-router'
+import { Can, usePermissions } from '../auth/permissions'
+import { Navigate, useSearchParams } from 'react-router'
 import { ChangeReports } from './ChangeReports'
 import { Link } from 'react-router'
 import { InternalReportDetail } from '../components/InternalReportDetail'
@@ -29,11 +30,17 @@ import type { Sector } from '../types/catalog'
 const message = (error: unknown) => error instanceof Error ? error.message : 'Ocurrió un error inesperado.'
 export function Reports() {
   const [scope] = useSearchParams()
+  const access=usePermissions(), selected=scope.get('scope')==='changes'?'changes':scope.get('scope')==='internal'?'internal_tickets':'tickets'
+  if(!access.any('reports.'+selected+'.view','reports.'+selected+'.export')) {
+    const next=['tickets','internal_tickets','changes'].find(key=>access.any('reports.'+key+'.view','reports.'+key+'.export'))
+    return next?<Navigate replace to={next==='tickets'?'/reports':next==='internal_tickets'?'/reports?scope=internal':'/reports?scope=changes'}/>:<p>Sin permisos de reportería.</p>
+  }
   return scope.get('scope') === 'changes' ? <ChangeReports/> : <TicketReports/>
 }
 function TicketReports() {
   const { params, change } = useUrlFilters([...reportFilterKeys, 'scope', 'status', 'department_id', 'incident_type_id', 'provider_id'])
   const internal = params.get('scope') === 'internal'
+  const access=usePermissions(), module='reports.'+(internal?'internal_tickets':'tickets'), mayView=access.can(module+'.view')
   const [today] = useState(() => new Date())
   const filterKey = params.toString()
   const selection = useMemo(() => {
@@ -84,16 +91,16 @@ function TicketReports() {
   }, [retry, internal])
   useEffect(() => {
     setExportError(null)
-    if (invalid) { setSummary(null); setLoading(false); setError(null); return }
+    if (invalid||!mayView) { setSummary(null); setLoading(false); setError(null); return }
     const controller = new AbortController()
     setLoading(true); setSummary(null); setError(null)
     getReport(selection.query, controller.signal, internal).then((data) => { if (!controller.signal.aborted) { setSummary(data); setLoading(false) } }).catch((failure: unknown) => { if (!controller.signal.aborted) { setError(message(failure)); setLoading(false) } })
     return () => controller.abort()
-  }, [queryKey, invalid, retry])
+  }, [queryKey, invalid, retry, mayView])
   const offsetValue = Number(params.get('offset') ?? 0)
   const offset = Number.isInteger(offsetValue) && offsetValue >= 0 ? offsetValue : 0
   const { from, to, sector_id, node_id, responsible_id } = selection.query
-  const detail = useTickets(offset, retry, { from, to, sector_id, node_id, responsible_id }, internal ? 'Contexto interno' : invalid)
+  const detail = useTickets(offset, retry, { from, to, sector_id, node_id, responsible_id }, internal||!mayView ? 'Contexto sin consulta' : invalid)
   function period(value: string) {
     change({ period: value, ...(value === 'custom' ? { from: selection.from, to: selection.to } : { from: '', to: '' }) })
   }
@@ -108,12 +115,21 @@ function TicketReports() {
     return <RankingSection key={field} title={title} rows={rows} destination={(row) => view === 'general' && reportView ? `/reports?${new URLSearchParams({ view: reportView, period: selection.period === 'all' ? 'all' : 'custom', [field]: String(row.id), ...(selection.period === 'all' ? {} : { from: selection.from, to: selection.to }) })}` : ticketDrillDown(field, row.id, selection.from, selection.to, sector_id, node_id, responsible_id)} />
   }
   return <>
-    <nav className="segmented-control mb-4" aria-label="Ámbito de reportería"><Link className="segment-button" aria-current={!internal ? 'page' : undefined} to="/reports">Tickets</Link><Link className="segment-button" aria-current={internal ? 'page' : undefined} to="/reports?scope=internal">Tickets internos</Link><Link className="segment-button" to="/reports?scope=changes">Control de cambios</Link></nav>
-    <PageHeading title={internal ? 'Reportería de tickets internos' : 'Reportería de tickets'} description="Incidencias por período operativo de Inicio. Una incidencia corresponde a un ticket." action={<div className="flex flex-wrap gap-2"><button className="button-secondary" type="button" onClick={() => setRetry(retry + 1)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Actualizar</button><button className="button-secondary" type="button" disabled={loading || Boolean(invalid) || Boolean(error) || exporting || !summary} onClick={() => exportReport('pdf')}><FileText size={14} aria-hidden="true" />Exportar PDF</button><button className="button-secondary" type="button" disabled={loading || Boolean(invalid) || Boolean(error) || exporting || !summary} onClick={() => exportReport('xlsx')}><FileSpreadsheet size={14} aria-hidden="true" />Exportar Excel</button></div>} />
-    <section className="filter-toolbar" aria-label="Filtros de reportería">
+    <nav className="segmented-control segmented-control--soft segmented-control--blue mb-4" aria-label="Ámbito de reportería"><Can anyOf={["reports.tickets.view","reports.tickets.export"]}><Link className="segment-button" aria-current={!internal ? 'page' : undefined} to="/reports">Tickets</Link></Can><Can anyOf={["reports.internal_tickets.view","reports.internal_tickets.export"]}><Link className="segment-button" aria-current={internal ? 'page' : undefined} to="/reports?scope=internal">Tickets internos</Link></Can><Can anyOf={["reports.changes.view","reports.changes.export"]}><Link className="segment-button" to="/reports?scope=changes">Control de cambios</Link></Can></nav>
+    <PageHeading
+      title={internal ? 'Reportería de tickets internos' : 'Reportería de tickets'}
+      description="Incidencias por período operativo de Inicio. Una incidencia corresponde a un ticket."
+      telemetry={<span className="heading-telemetry"><span className="telemetry-value--blue font-mono font-bold">{internal ? 'Interno' : 'Clientes'}</span></span>}
+      action={<div className="flex flex-wrap gap-2">
+        <button className="button-secondary rounded-full shadow-xs" type="button" onClick={() => setRetry(retry + 1)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Actualizar</button>
+        <Can permission={module+".export"}><button className="button-secondary rounded-full shadow-xs" type="button" disabled={loading || Boolean(invalid) || Boolean(error) || exporting || (mayView&&!summary)} onClick={() => exportReport('pdf')}><FileText size={14} aria-hidden="true" />Exportar PDF</button></Can>
+        <Can permission={module+".export"}><button className="button-secondary rounded-full shadow-xs" type="button" disabled={loading || Boolean(invalid) || Boolean(error) || exporting || (mayView&&!summary)} onClick={() => exportReport('xlsx')}><FileSpreadsheet size={14} aria-hidden="true" />Exportar Excel</button></Can>
+      </div>}
+    />
+    <section className="filter-toolbar mb-5" aria-label="Filtros de reportería">
       <SectionHeading number="01" title="Período" icon={<SlidersHorizontal size={15} />} />
       <div className="flex flex-wrap items-center gap-4">
-        <div className="segmented-control" role="group" aria-label="Tipo de reporte">
+        <div className="segmented-control segmented-control--soft segmented-control--blue" role="group" aria-label="Tipo de reporte">
           {['general', 'sector', 'node', 'responsible'].map((view) => <button key={view} type="button" className="segment-button" aria-pressed={view === (params.get('view') ?? 'general')} onClick={() => change({ view, sector_id: '', node_id: '', responsible_id: '' })}>{view === 'general' ? 'General' : view === 'node' ? 'Por nodo' : view === 'responsible' ? 'Por responsable' : 'Por sector'}</button>)}
         </div>
         <PeriodShortcuts includeAll label="Período del reporte" value={selection.period} onChange={period} />
@@ -122,14 +138,14 @@ function TicketReports() {
         {scopedView && <div className="min-w-0 w-full basis-full flex-1 sm:min-w-64 sm:w-auto sm:basis-0"><FormField id="report-sector" label={dimension.label}><SearchableSelect id="report-sector" label={dimension.label} value={params.get(dimension.key) ?? ''} options={(view === 'node' ? nodes : view === 'responsible' ? responsibles : sectors).map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ [dimension.key]: value })} disabled={sectorLoading || Boolean(sectorError)} placeholder={`Selecciona un ${dimension.label.toLowerCase()}`} emptyMessage="No hay sectores." noMatchMessage="No se encontraron sectores." /></FormField></div>}
         {selection.period === 'custom' && <><FormField id="report-from" label="Desde"><input id="report-from" className="form-input" type="date" value={params.get('from') ?? selection.from} onChange={(event) => change({ period: 'custom', from: event.target.value })} /></FormField><FormField id="report-to" label="Hasta"><input id="report-to" className="form-input" type="date" value={params.get('to') ?? selection.to} onChange={(event) => change({ period: 'custom', to: event.target.value })} /></FormField></>}
         {internal && <><FormField id="internal-report-status" label="Estado"><select id="internal-report-status" className="form-input" value={params.get('status') ?? ''} onChange={e=>change({status:e.target.value})}><option value="">Todos</option><option value="OPEN">Abierto</option><option value="CLOSED">Cerrado</option></select></FormField>{[['sector_id','Sector',sectors],['node_id','Nodo',nodes],['responsible_id','Responsable',responsibles],['department_id','Departamento',extraCatalogs[0] ?? []],['incident_type_id','Tipo de incidencia interna',extraCatalogs[1] ?? []],['provider_id','Atribuible a proveedor',extraCatalogs[2] ?? []]].map(([field,label,rows])=>{const key=String(field); if(scopedView && key===dimension.key)return null; return <FormField key={key} id={`internal-report-${key}`} label={String(label)}><select id={`internal-report-${key}`} className="form-input" value={params.get(key) ?? ''} onChange={e=>change({[key]:e.target.value})}><option value="">Todos</option>{key==='provider_id'&&<option value="none">Ninguno</option>}{(rows as Sector[]).map(row=><option key={row.id} value={row.id}>{row.name}{row.active?'':' (Inactivo)'}</option>)}</select></FormField>})}</>}
-        <p className="chip chip-neutral">{selection.from} — {selection.to} · {selection.query.timezone}</p>
+        <p className="chip chip-neutral font-mono text-xs">{selection.from} — {selection.to} · {selection.query.timezone}</p>
       </div>
       {sectorError && scopedView && <RequestState compact error={sectorError} errorTitle="" retryText="Reintentar sectores" onRetry={() => setRetry(retry + 1)} />}
     </section>
     {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-2 workspace-caption" />}
     {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
-    {invalid ? <p role={missingSector ? 'status' : 'alert'} className="panel p-4 text-sm">{invalid}</p> : loading ? <RequestState loading loadingText="Cargando reporte..." /> : error ? <RequestState error={`Error al cargar reporte: ${error}`} errorTitle="" onRetry={() => setRetry(retry + 1)} /> : summary && <>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs workspace-caption"><h2 className="font-semibold text-slate-800">{summary.node ? `Reporte por Nodo — ${summary.node.name}` : summary.responsible ? `Reporte por Responsable — ${summary.responsible.name}` : summary.sector ? `Reporte por Sector — ${summary.sector.name}` : 'Reporte General'}</h2><span>Generado: {formatDate(summary.generated_at)}</span></div>
+    {invalid ? <p role={missingSector ? 'status' : 'alert'} className="panel p-4 text-sm rounded-2xl bg-[#0b1426] border border-amber-500/30 text-amber-300 font-mono shadow-xl">{invalid}</p> : loading ? <RequestState loading loadingText="Cargando reporte..." className="rounded-2xl bg-[#0b1426] border border-slate-800 shadow-xl p-8 text-center" /> : error ? <RequestState error={`Error al cargar reporte: ${error}`} errorTitle="" className="rounded-2xl bg-[#0b1426] border border-slate-800 shadow-xl p-8 text-center" onRetry={() => setRetry(retry + 1)} /> : summary && <>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-slate-400 font-mono"><h2 className="font-bold text-white text-sm">{summary.node ? `Reporte por Nodo — ${summary.node.name}` : summary.responsible ? `Reporte por Responsable — ${summary.responsible.name}` : summary.sector ? `Reporte por Sector — ${summary.sector.name}` : 'Reporte General'}</h2><span>Generado: {formatDate(summary.generated_at)}</span></div>
       <SectionHeading number="02" title="Resumen" />
       <MetricStrip variant="light" layout={internal ? 'internal-summary' : undefined} items={[
         { label: 'Incidencias iniciadas', value: summary.kpis.started, icon: <Tickets size={20} /> },

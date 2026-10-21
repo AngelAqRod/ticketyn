@@ -1,5 +1,7 @@
+import { operationalChoice } from '../lib/responsibles'
+import { Can } from '../auth/permissions'
 import { PaginationBar } from '../components/PaginationBar'
-import { FileDown } from 'lucide-react'
+import { FileDown, Zap, Cpu, History, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { getJson } from '../api/client'
@@ -38,16 +40,141 @@ export function ActivationDetail() {
   }, [id, offset, refresh])
   const [success, setSuccess] = useState(false)
   if (loading || error || !activation) return <RequestState loading={loading} error={error} onRetry={() => setRefresh(refresh + 1)} />
-  return <><PageHeading title={activation.reference ?? 'Activación'} description="Activación e intervenciones técnicas, independientes de tickets." action={<><button type="button" className="button-secondary" disabled={exporting} onClick={exportPdf}><FileDown size={16} aria-hidden="true" />Exportar PDF</button><ActivationNotificationActions key={id} activationId={id} /></>} />
+  return <>
+    <PageHeading
+      title={activation.reference ?? 'Activación'}
+      description="Activación e intervenciones técnicas, independientes de tickets."
+      telemetry={<span className="heading-telemetry"><span className="telemetry-value--emerald">{items.length}</span> intervenciones</span>}
+      action={<div className="flex flex-wrap items-center gap-2">
+        <Can permission="activations.export"><button type="button" className="button-secondary rounded-full shadow-xs text-xs" disabled={exporting} onClick={exportPdf}><FileDown size={14} aria-hidden="true" />Exportar PDF</button></Can>
+        <ActivationNotificationActions key={id} activationId={id} />
+      </div>}
+    />
     {exporting && <RequestState loading compact loadingText="Generando archivo..." className="mb-3 workspace-caption" />}
     {exportError && <FeedbackMessage variant="error" className="mb-3">{exportError}</FeedbackMessage>}
-    <section className="panel noc-panel mb-4 p-5" aria-label="Información de activación"><h2 className="section-label noc-section-title mb-4">Información de activación</h2><dl className="grid gap-3 sm:grid-cols-2"><div><dt className="text-xs text-muted">Circuito</dt><dd><Link to={`/circuits/${activation.circuit_id}`}>{activation.circuit.circuit_code}</Link></dd></div><div><dt className="text-xs text-muted">Descripción del circuito</dt><dd className="[overflow-wrap:anywhere] text-sm">{activation.circuit.description?.trim() || 'Sin descripción'}</dd></div><div><dt className="text-xs text-muted">Nodo</dt><dd className="text-sm">{activation.node?.name ?? 'Sin registrar'}</dd></div><div><dt className="text-xs text-muted">Sector</dt><dd className="text-sm">{activation.sector?.name ?? 'Sin registrar'}</dd></div><div><dt className="text-xs text-muted">Cliente</dt><dd className="text-sm">{customer?.name}</dd></div><div><dt className="text-xs text-muted">Fecha efectiva de activación</dt><dd className="text-sm">{formatDate(activation.effective_at, ticketynTimezone)}</dd></div><div><dt className="text-xs text-muted">Tipo de servicio</dt><dd className="[overflow-wrap:anywhere] text-sm">{activation.service_type_name || 'Sin registrar'}</dd></div><div><dt className="text-xs text-muted">CPE de activación</dt><dd className="[overflow-wrap:anywhere] text-sm">{activation.cpe_activation || 'Sin registrar'}</dd></div><div><dt className="text-xs text-muted">Capacidad inicial</dt><dd className="text-sm">{capacityLabel(activation.initial_capacity, activation.initial_capacity_unit)}</dd></div><div><dt className="text-xs text-muted">Responsable</dt><dd className="text-sm">{activation.responsible.name}</dd></div></dl></section>
-    <section className="panel noc-panel mb-4 p-5" aria-labelledby="activation-notes-title"><h2 id="activation-notes-title" className="section-label noc-section-title mb-3">Notas de activación</h2><p className={`text-sm whitespace-pre-wrap [overflow-wrap:anywhere]${activation.activation_notes ? '' : ' text-muted'}`}>{activation.activation_notes || 'Sin notas de activación.'}</p></section>
-    {success && <FeedbackMessage variant="success">Intervención registrada correctamente.</FeedbackMessage>}
-    <section className="panel noc-panel p-5" aria-labelledby="activation-log-title"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 id="activation-log-title" className="section-label noc-section-title">Bitácora de activación</h2><button className="button-primary" onClick={() => setShow(true)}>Nueva intervención</button></div>{!items.length ? <RequestState compact empty emptyTitle="Sin intervenciones registradas." /> : <ol className="space-y-3" aria-label="Intervenciones de activación">{items.map((item) => <li key={item.id} className="noc-log-entry border-b border-slate-100 pb-3"><p className="text-xs text-muted">{formatDate(item.occurred_at, ticketynTimezone)} · {item.responsible.name}</p><p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">{item.content}</p></li>)}</ol>}</section>
-    <PaginationBar page={Math.floor(offset / 50) + 1} info={<p className="text-xs">Página {Math.floor(offset / 50) + 1}</p>} previousDisabled={!offset} nextDisabled={items.length < 50} onPrevious={() => setOffset(Math.max(0, offset - 50))} onNext={() => setOffset(offset + 50)} />
-    {show && <ActivationInterventionModal id={id} people={people} onCancel={() => setShow(false)} onSaved={() => { setShow(false); setOffset(0); setSuccess(true); setRefresh(refresh + 1) }} />}</>
+    {success && <FeedbackMessage variant="success" className="mb-3">Intervención registrada correctamente.</FeedbackMessage>}
+
+    <div className="grid gap-6 lg:grid-cols-2 mb-6">
+      <section className="panel p-6 rounded-2xl bg-[#0b1426] border border-emerald-500/20 shadow-xl" aria-label="Información de activación">
+        <div className="flex items-center gap-2 border-b border-emerald-500/15 pb-3 mb-4">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
+            <Zap size={14} />
+          </span>
+          <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">Información de activación</h2>
+        </div>
+        <dl className="grid gap-4 sm:grid-cols-2 text-xs">
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Circuito</dt>
+            <dd className="mt-1 font-mono font-bold text-sky-400 text-sm">
+              <Can permission="circuits.view" fallback={activation.circuit.circuit_code}>
+                <Link to={`/circuits/${activation.circuit_id}`} className="hover:text-sky-300 hover:underline">{activation.circuit.circuit_code}</Link>
+              </Can>
+            </dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Cliente</dt>
+            <dd className="mt-1 text-white font-semibold text-sm">{customer?.name ?? '—'}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Descripción del circuito</dt>
+            <dd className="mt-1 [overflow-wrap:anywhere] text-slate-200 text-sm">{activation.circuit.description?.trim() || 'Sin descripción'}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Nodo</dt>
+            <dd className="mt-1 font-mono text-slate-300 text-sm">{activation.node?.name ?? 'Sin registrar'}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Sector</dt>
+            <dd className="mt-1 font-mono text-slate-300 text-sm">{activation.sector?.name ?? 'Sin registrar'}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Fecha efectiva de activación</dt>
+            <dd className="mt-1 font-mono text-slate-300 text-sm">{formatDate(activation.effective_at, ticketynTimezone)}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Tipo de servicio</dt>
+            <dd className="mt-1 font-mono text-emerald-300 text-sm">{activation.service_type_name || 'Sin registrar'}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Capacidad inicial</dt>
+            <dd className="mt-1">
+              <span className="font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-md text-xs inline-block">
+                {capacityLabel(activation.initial_capacity, activation.initial_capacity_unit)}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Responsable</dt>
+            <dd className="mt-1 text-slate-200 text-sm">{activation.responsible.name}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="panel p-6 rounded-2xl bg-[#0b1426] border border-emerald-500/20 shadow-xl flex flex-col gap-4" aria-labelledby="activation-notes-title">
+        <div className="flex items-center gap-2 border-b border-emerald-500/15 pb-3">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
+            <Cpu size={14} />
+          </span>
+          <h2 id="activation-notes-title" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Notas de activación</h2>
+        </div>
+        <div>
+          <span className="block font-mono text-xs uppercase tracking-wider text-slate-400 mb-1.5">CPE de activación</span>
+          <div className="p-3 rounded-xl bg-[#070d1a] border border-slate-800 text-sky-200 font-mono text-xs [overflow-wrap:anywhere]">
+            {activation.cpe_activation || 'Sin registrar'}
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col">
+          <span className="block font-mono text-xs uppercase tracking-wider text-slate-400 mb-1.5">Notas técnicas</span>
+          <div className="p-3.5 rounded-xl bg-[#070d1a] border border-slate-800 flex-1 min-h-[90px]">
+            <p className={`text-sm whitespace-pre-wrap [overflow-wrap:anywhere] font-mono ${activation.activation_notes ? 'text-slate-200' : 'text-slate-500'}`}>
+              {activation.activation_notes || 'Sin notas de activación.'}
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section className="panel p-6 rounded-2xl bg-[#0b1426] border border-emerald-500/20 shadow-xl" aria-labelledby="activation-log-title">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-emerald-500/15 pb-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
+            <History size={14} />
+          </span>
+          <h2 id="activation-log-title" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Bitácora de activación</h2>
+        </div>
+        <Can permission="activations.followup">
+          <button className="button-primary button-primary--emerald rounded-full shadow-sm text-xs" onClick={() => setShow(true)}>
+            <Plus size={14} aria-hidden="true" />
+            Nueva intervención
+          </button>
+        </Can>
+      </div>
+      {!items.length ? (
+        <RequestState compact empty emptyTitle="Sin intervenciones registradas." className="rounded-xl bg-[#070d1a] border border-slate-800/80 p-8 text-center text-slate-400 font-mono" />
+      ) : (
+        <ol className="space-y-3" aria-label="Intervenciones de activación">
+          {items.map((item) => (
+            <li key={item.id} className="p-4 rounded-xl bg-[#070d1a] border border-slate-800/80 hover:border-slate-700 transition-colors">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                <span className="text-emerald-400 font-semibold">{formatDate(item.occurred_at, ticketynTimezone)}</span>
+                <span className="text-slate-400">{item.responsible.name}</span>
+              </div>
+              <p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm text-slate-200 leading-relaxed font-mono">
+                {item.content}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="mt-4">
+        <PaginationBar page={Math.floor(offset / 50) + 1} info={<p className="text-xs font-mono text-slate-400">Página {Math.floor(offset / 50) + 1}</p>} previousDisabled={!offset} nextDisabled={items.length < 50} onPrevious={() => setOffset(Math.max(0, offset - 50))} onNext={() => setOffset(offset + 50)} />
+      </div>
+    </section>
+
+    {show && <Can permission="activations.followup"><ActivationInterventionModal id={id} people={people} onCancel={() => setShow(false)} onSaved={() => { setShow(false); setOffset(0); setSuccess(true); setRefresh(refresh + 1) }} /></Can>}
+  </>
 }
+
 function ActivationInterventionModal({ id, people, onCancel, onSaved }: { id: number; people: NamedCatalog[]; onCancel: () => void; onSaved: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null), sending = useRef(false)
   const [date, setDate] = useState(ticketynDateTimeValue), [person, setPerson] = useState(''), [content, setContent] = useState(''), [error, setError] = useState<string | null>(null), [saving, setSaving] = useState(false)
@@ -62,5 +189,30 @@ function ActivationInterventionModal({ id, people, onCancel, onSaved }: { id: nu
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo registrar la intervención.') }
     finally { sending.current = false; setSaving(false) }
   }
-  return <dialog ref={dialog} className="quick-dialog noc-modal fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-white p-5 text-ink backdrop:bg-slate-900/30" aria-labelledby="activation-intervention-title" onCancel={(event) => { event.preventDefault(); if (!sending.current) onCancel() }}><h2 id="activation-intervention-title" className="noc-section-title mb-4 text-xl font-semibold">Nueva intervención</h2><form onSubmit={submit} aria-label="Registrar intervención de activación" aria-describedby={error ? 'activation-intervention-error' : undefined}><fieldset disabled={saving} className="space-y-3"><FormField id="activation-intervention-date" label="Fecha y hora de intervención" required><input id="activation-intervention-date" className="form-input" type="datetime-local" required value={date} onChange={(event) => setDate(event.target.value)} /></FormField><FormField id="activation-intervention-person" label="Responsable" required><SearchableSelect placeholder="Selecciona una opción" emptyMessage="No hay registros disponibles." noMatchMessage="Sin coincidencias." required id="activation-intervention-person" label="Responsable" value={person} onChange={setPerson} options={people.map((item) => ({ value: String(item.id), label: item.name }))} /></FormField><FormField id="activation-intervention-content" label="Descripción" required><textarea id="activation-intervention-content" className="form-input" required maxLength={10000} value={content} onChange={(event) => setContent(event.target.value)} /></FormField></fieldset>{error && <FeedbackMessage id="activation-intervention-error" variant="error">{error}</FeedbackMessage>}<div className="mt-4 flex justify-end gap-2"><button className="button-secondary" type="button" disabled={saving} onClick={onCancel}>Cancelar</button><button className="button-primary" type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Registrar intervención'}</button></div></form></dialog>
+  return <dialog ref={dialog} className="quick-dialog noc-modal fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-[#0b1426] p-6 text-white border border-emerald-500/30 rounded-2xl shadow-2xl backdrop:bg-slate-950/70" aria-labelledby="activation-intervention-title" onCancel={(event) => { event.preventDefault(); if (!sending.current) onCancel() }}>
+    <div className="flex items-center gap-2 border-b border-emerald-500/20 pb-3 mb-4">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
+        <Plus size={14} />
+      </span>
+      <h2 id="activation-intervention-title" className="text-base font-bold font-mono text-white uppercase tracking-wider">Nueva intervención</h2>
+    </div>
+    <form onSubmit={submit} aria-label="Registrar intervención de activación" aria-describedby={error ? 'activation-intervention-error' : undefined}>
+      <fieldset disabled={saving} className="space-y-3">
+        <FormField id="activation-intervention-date" label="Fecha y hora de intervención" required>
+          <input id="activation-intervention-date" className="form-input" type="datetime-local" required value={date} onChange={(event) => setDate(event.target.value)} />
+        </FormField>
+        <FormField id="activation-intervention-person" label="Responsable" required>
+          <SearchableSelect placeholder="Selecciona una opción" emptyMessage="No hay registros disponibles." noMatchMessage="Sin coincidencias." required id="activation-intervention-person" label="Responsable" value={person} onChange={setPerson} options={people.filter(p => operationalChoice(p)).map((item) => ({ value: String(item.id), label: item.name }))} />
+        </FormField>
+        <FormField id="activation-intervention-content" label="Descripción" required>
+          <textarea id="activation-intervention-content" className="form-input" required maxLength={10000} rows={4} value={content} onChange={(event) => setContent(event.target.value)} />
+        </FormField>
+      </fieldset>
+      {error && <FeedbackMessage id="activation-intervention-error" variant="error" className="mt-3">{error}</FeedbackMessage>}
+      <div className="mt-5 flex justify-end gap-2">
+        <button className="button-secondary rounded-full" type="button" disabled={saving} onClick={onCancel}>Cancelar</button>
+        <button className="button-primary button-primary--emerald rounded-full shadow-sm" type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Registrar intervención'}</button>
+      </div>
+    </form>
+  </dialog>
 }

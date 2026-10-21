@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 from uuid import uuid4
 
 from alembic.config import Config
@@ -21,6 +22,7 @@ from ticketyn.db.base import Base
 from ticketyn.db.session import get_session
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_VERSION = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
 HEAD = '0007_e2e_recovery_probe'
 PREVIOUS = '0005_e2e_update_probe'
 
@@ -108,6 +110,8 @@ def test_probe_preserves_data_and_backend_and_roundtrip(postgres_engine, monkeyp
                 yield db
         app.dependency_overrides[get_session] = session
         with TestClient(app) as client:
+            from security_helpers import authenticate_test_client
+            authenticate_test_client(app, client, engine)
             for number in (1, 2):
                 response = client.get(f'/api/tickets/{number}')
                 assert response.status_code == 200
@@ -132,7 +136,7 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     tracked = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'v0.1.6', 'alembic'], cwd=ROOT).decode().splitlines()
     for name in tracked:
         assert (ROOT/name).read_bytes() == subprocess.check_output(['git', 'show', f'v0.1.6:{name}'], cwd=ROOT)
-    assert updater.ri.project_version(ROOT) == '0.6.1'
+    assert updater.ri.project_version(ROOT) == PROJECT_VERSION
     previous = tmp_path/'previous'; previous.mkdir()
     shutil.copytree(ROOT/'alembic', previous/'alembic', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copy2(ROOT/'alembic.ini', previous/'alembic.ini')
@@ -150,7 +154,7 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
                 output.add(ROOT/name, arcname=name, recursive=False)
     candidate = tmp_path/'candidate'
     updater.extract_release(archive, candidate)
-    assert updater.ri.project_version(candidate) == '0.6.1'
+    assert updater.ri.project_version(candidate) == PROJECT_VERSION
     assert updater.migration_plan(previous, candidate, HEAD) == current_head
     # Also demonstrate the exact stable production path v0.2.0 -> v0.3.0.
     stable = tmp_path/'stable020'; stable.mkdir()
@@ -167,13 +171,13 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     assert (candidate/'alembic/versions/0008_ticket_updates.py').is_file()
     assert (candidate/'alembic/versions/0009_ticket_resolution.py').is_file()
     assert (candidate/'alembic/versions/0010_ticket_escalations.py').is_file()
-    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == '0.6.1'
+    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == PROJECT_VERSION
     lock = json.loads((ROOT/'frontend/package-lock.json').read_text())
-    assert lock['version'] == lock['packages']['']['version'] == '0.6.1'
+    assert lock['version'] == lock['packages']['']['version'] == PROJECT_VERSION
     assert (candidate/'frontend/dist/index.html').is_file()
     installation = subprocess.run(['bash', '-c', 'source "$1/install.sh"; SOURCE="$2"; check_project; validate_release_source "$SOURCE"; project_version "$SOURCE"', 'release-check', str(ROOT), str(candidate)], capture_output=True, text=True)
     assert installation.returncode == 0, installation.stderr
-    assert installation.stdout.strip() == '0.6.1'
+    assert installation.stdout.strip() == PROJECT_VERSION
 
     assert (candidate/'update.sh').read_bytes() == (ROOT/'update.sh').read_bytes()
     assert (candidate/'deploy/update_support.py').read_bytes() == (ROOT/'deploy/update_support.py').read_bytes()

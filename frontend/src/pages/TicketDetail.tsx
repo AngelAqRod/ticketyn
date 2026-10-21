@@ -1,6 +1,6 @@
+import { Can } from '../auth/permissions'
 import { RelatedInternalTicket } from '../components/RelatedInternalTicket'
-import { Ticket as TicketIcon } from 'lucide-react'
-import { SevenSegmentNumber } from '../components/SevenSegmentNumber'
+import { Check, Clock, FileText, Pencil, Tag, Ticket as TicketIcon } from 'lucide-react'
 import { TicketEscalations } from '../components/TicketEscalations'
 import { RequestState } from '../components/RequestState'
 import { FeedbackMessage } from '../components/FeedbackMessage'
@@ -22,6 +22,7 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
   const [catalogs, setCatalogs] = useState<Awaited<ReturnType<typeof getTicketCatalogs>> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
+
   useEffect(() => {
     const controller = new AbortController()
     setTicket(null); setCatalogs(null); setError(null)
@@ -38,58 +39,211 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
     void load()
     return () => controller.abort()
   }, [id, edit, retry, location.key])
+
   if (error) return <RequestState error={error} errorTitle="" onRetry={() => setRetry(retry + 1)}><Link className="ml-4 text-primary underline" to="/tickets">Volver a tickets</Link></RequestState>
   if (!ticket) return <RequestState loading compact className="workspace-caption" loadingText="Cargando ticket..." />
   if (edit) return <TicketForm key={ticket.id} ticket={ticket} />
   if (!catalogs) return <RequestState loading compact className="workspace-caption" loadingText="Cargando catálogos..." />
+
   const state: unknown = location.state
-  const saved = state && typeof state === 'object' && 'saved' in state && state.saved === true
-  const classification = [
-    ['Cliente', `${catalogs.customer.customer_code} — ${catalogs.customer.name}`],
-    ['Circuito', `${catalogs.circuit.circuit_code} — ${catalogs.circuit.description}`],
-    ['Nodo', catalogs.node?.name ?? 'Sin asignar'], ['Responsable', catalogs.responsible?.name ?? 'Sin asignar'],
-    ['Sector', catalogs.sector.name], ['Departamento', catalogs.department.name],
-    ['Tipo de incidencia', catalogs.incidentType.name],
-  ]
-  const times = [
-    ['Inicio', formatDate(ticket.start_at)], ['Fin', formatDate(ticket.end_at)],
-    ['Duración', formatDuration(ticket.duration_seconds)],
-  ]
-  const metadata = [
-    ['Fecha de creación', formatDate(ticket.created_at)], ['Última actualización', formatDate(ticket.updated_at)],
-  ]
-  return <>
-    <div className="page-heading ticket-reading-heading">
-      <div className="flex min-w-0 max-w-full items-center gap-4"><span aria-hidden="true" className="heading-emblem"><TicketIcon size={28} /></span><div className="min-w-0 max-w-full [overflow-wrap:anywhere]"><p className="module-eyebrow">Operación <span aria-hidden="true">/ <SevenSegmentNumber value="02" /></span></p><div className="flex flex-wrap items-center gap-3"><h1 className="min-w-0 max-w-full font-mono text-3xl font-bold tracking-tight text-white">{ticket.reference}</h1><StatusBadge status={ticket.status} /></div><h2 className="mt-2 text-lg font-semibold ticket-reading-title">{ticket.title}</h2></div></div>
-      <div className="heading-actions"><TicketReportDownload ticketId={ticket.id} /><Link to="/tickets" className="button-secondary">Volver a tickets</Link><Link to={`/tickets/${ticket.id}/edit`} className="button-primary">Editar ticket</Link></div>
-    </div>
-    {saved && <FeedbackMessage variant="success" className="mb-3">Cambios guardados correctamente.</FeedbackMessage>}
-    <div className="ticket-reading-panels space-y-4">
-      <section aria-labelledby="description-heading" className="noc-panel p-4">
-        <h3 id="description-heading" className="section-label noc-section-title mb-2">Descripción</h3>
-        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{ticket.description}</p>
-      </section>
-      <section aria-labelledby="ticket-resolution-heading" className="noc-panel p-4">
-        <h3 id="ticket-resolution-heading" className="section-label noc-section-title mb-2">Resolución documentada</h3>
-        <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm leading-6 text-slate-700">{ticket.resolution || 'Sin resolución documentada.'}</p>
-      </section>
-      <div className="grid items-start gap-4 lg:grid-cols-3">
-        <section aria-labelledby="classification-heading" className="noc-panel p-4 lg:col-span-2">
-          <h3 id="classification-heading" className="section-label noc-section-title mb-3">Cliente y clasificación</h3>
-          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{classification.map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-slate-900">{value}</dd></div>)}</dl>
+  const saved = Boolean(state && typeof state === 'object' && 'saved' in state && (state as { saved?: unknown }).saved === true)
+  const durationText = formatDuration(ticket.duration_seconds, ticket.status)
+
+  return (
+    <div className="space-y-4">
+      {/* 1. CABECERA DEL REGISTRO (RECORD HEADER) */}
+      <div className="p-5 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/20" aria-hidden="true">
+            <TicketIcon size={24} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[11px] font-mono text-sky-400 font-bold uppercase tracking-wider">
+              <span>OPERACIÓN</span>
+              <span className="text-slate-600">/</span>
+              <span>TICKET DE CLIENTE</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 mt-0.5">
+              <h1 className="font-mono text-2xl sm:text-3xl font-bold tracking-tight text-white">{ticket.reference}</h1>
+              <StatusBadge status={ticket.status} />
+              {catalogs.circuit?.circuit_code && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-mono bg-slate-900 border border-slate-700 text-slate-300">
+                  <span className="text-slate-500">CID:</span> <strong className="text-sky-300">{catalogs.circuit.circuit_code}</strong>
+                </span>
+              )}
+            </div>
+            <h2 className="mt-1.5 text-base sm:text-lg font-semibold text-slate-200 truncate">{ticket.title}</h2>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Can permission="tickets.export">
+            <TicketReportDownload ticketId={ticket.id} />
+          </Can>
+          <Link to="/tickets" className="button-secondary rounded-full">
+            Volver a tickets
+          </Link>
+          <Can anyOf={["tickets.edit", "tickets.close", "tickets.link"]}>
+            <Link to={`/tickets/${ticket.id}/edit`} className="button-primary rounded-full">
+              <Pencil size={14} className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Editar ticket</span>
+            </Link>
+          </Can>
+        </div>
+      </div>
+
+      {saved && <FeedbackMessage variant="success" className="mb-3">Cambios guardados correctamente.</FeedbackMessage>}
+
+      {/* 2. PANELES DE LECTURA (DESCRIPCIÓN Y RESOLUCIÓN EN 2 COLUMNAS EN ESCRITORIO) */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <section aria-labelledby="description-heading" className="p-4 sm:p-5 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs" aria-hidden="true">
+              <FileText size={13} />
+            </span>
+            <h3 id="description-heading" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Descripción del incidente</h3>
+          </div>
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-200 m-0">{ticket.description}</p>
         </section>
-        <section aria-labelledby="times-heading" className="noc-panel p-4">
-          <h3 id="times-heading" className="section-label noc-section-title mb-3">Tiempos operativos</h3>
-          <dl className="space-y-3">{times.map(([label, value]) => <div key={label}><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 font-mono text-sm tabular-nums text-slate-900">{value}</dd></div>)}</dl>
+
+        <section aria-labelledby="ticket-resolution-heading" className="p-4 sm:p-5 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
+              <Check size={13} />
+            </span>
+            <h3 id="ticket-resolution-heading" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Resolución documentada</h3>
+          </div>
+          <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed m-0 ${ticket.resolution ? 'text-slate-200' : 'text-slate-400 italic'}`}>
+            {ticket.resolution || 'Sin resolución documentada todavía. El ticket se encuentra en atención activa.'}
+          </p>
         </section>
       </div>
-      <section aria-labelledby="metadata-heading" className="noc-panel p-4">
-        <h3 id="metadata-heading" className="section-label noc-section-title mb-2">Metadatos</h3>
-        <dl className="flex flex-wrap gap-x-8 gap-y-2">{metadata.map(([label, value]) => <div key={label} className="flex flex-wrap items-baseline gap-2"><dt className="text-xs text-slate-500">{label}</dt><dd className="text-xs tabular-nums text-slate-600">{value}</dd></div>)}</dl>
-      </section>
+
+      {/* 3. FICHA TÉCNICA Y TIEMPOS OPERATIVOS (3 COLUMNAS ASIMÉTRICAS) */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Clasificación y Entidades (2 cols) */}
+        <section aria-labelledby="classification-heading" className="p-5 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between border-b border-sky-500/15 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs" aria-hidden="true">
+                <Tag size={13} />
+              </span>
+              <h3 id="classification-heading" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Cliente y Clasificación Operativa</h3>
+            </div>
+            <span className="text-[11px] font-mono text-slate-500">Datos históricos inmutables</span>
+          </div>
+
+          <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2 text-xs">
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Cliente</dt>
+              <dd className="mt-1 text-sm font-semibold text-white flex items-center gap-2">
+                <span>{catalogs.customer.customer_code} — {catalogs.customer.name}</span>
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Circuito</dt>
+              <dd className="mt-1 text-sm font-semibold text-white flex items-center gap-2">
+                <span>{catalogs.circuit.circuit_code} — {catalogs.circuit.description}</span>
+              </dd>
+            </div>
+
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Nodo</dt>
+              <dd className="mt-1 text-sm text-slate-200 font-medium">{catalogs.node?.name ?? 'Sin asignar'}</dd>
+            </div>
+
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Responsable</dt>
+              <dd className="mt-1 text-sm text-slate-200 font-medium font-mono">{catalogs.responsible?.name ?? 'Sin asignar'}</dd>
+            </div>
+
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Sector</dt>
+              <dd className="mt-1 text-sm text-slate-200">{catalogs.sector.name}</dd>
+            </div>
+
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Departamento</dt>
+              <dd className="mt-1 text-sm text-slate-200">{catalogs.department.name}</dd>
+            </div>
+
+            <div className="sm:col-span-2">
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tipo de incidencia</dt>
+              <dd className="mt-1 text-sm text-slate-200 font-medium">{catalogs.incidentType.name}</dd>
+            </div>
+          </dl>
+        </section>
+
+        {/* Tiempos Operativos y Auditoría (1 col) */}
+        <section aria-labelledby="times-heading" className="p-5 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-sky-500/15 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs" aria-hidden="true">
+                <Clock size={13} />
+              </span>
+              <h3 id="times-heading" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Tiempos Operativos</h3>
+            </div>
+          </div>
+
+          <dl className="space-y-3.5 text-xs">
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Inicio</dt>
+              <dd className="mt-1 font-mono text-sm text-slate-200 tabular-nums">{formatDate(ticket.start_at)}</dd>
+            </div>
+
+            <div>
+              <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Fin</dt>
+              <dd className="mt-1 font-mono text-sm text-slate-300 tabular-nums">{formatDate(ticket.end_at)}</dd>
+            </div>
+
+            {/* Duración destacada semánticamente */}
+            <div className="p-3 rounded-xl bg-[#070d1a] border border-slate-800">
+              <dt className="font-mono text-[10px] font-bold text-slate-400 uppercase tracking-wider">Duración</dt>
+              <dd className={`mt-1 font-mono text-xl font-bold tracking-tight flex items-center gap-2 ${
+                durationText === 'En curso' ? 'text-amber-400' :
+                durationText === 'Sin fecha de fin' ? 'text-slate-400' :
+                'text-sky-300'
+              }`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${
+                  durationText === 'En curso' ? 'bg-amber-400 animate-pulse' :
+                  durationText === 'Sin fecha de fin' ? 'bg-slate-500' :
+                  'bg-sky-400'
+                }`} />
+                <span>{durationText}</span>
+              </dd>
+              <p className="text-[10px] font-mono text-slate-500 mt-1">
+                {durationText === 'En curso'
+                  ? 'Ticket abierto sin fecha de fin registrada.'
+                  : durationText === 'Sin fecha de fin'
+                  ? 'Ticket cerrado sin fecha de fin registrada.'
+                  : 'Tiempo total de atención documentado.'}
+              </p>
+            </div>
+          </dl>
+
+          {/* Metadatos de auditoría discretamente integrados */}
+          <div className="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500">
+            <dl className="space-y-1">
+              <div className="flex justify-between items-baseline">
+                <dt className="text-slate-400">Fecha de creación</dt>
+                <dd className="text-slate-300 tabular-nums">{formatDate(ticket.created_at)}</dd>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <dt className="text-slate-400">Última actualización</dt>
+                <dd className="text-slate-300 tabular-nums">{formatDate(ticket.updated_at)}</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      </div>
+
+      {/* 4. VÍNCULOS, ESCALAMIENTOS Y SEGUIMIENTO */}
+      <div className="space-y-4">
+        <RelatedInternalTicket id={ticket.internal_ticket_id} />
+        <TicketEscalations ticketId={ticket.id} />
+        <TicketFollowUp key={ticket.id} ticketId={ticket.id} />
+      </div>
     </div>
-    <RelatedInternalTicket id={ticket.internal_ticket_id} />
-    <TicketEscalations ticketId={ticket.id} />
-    <TicketFollowUp key={ticket.id} ticketId={ticket.id} />
-  </>
+  )
 }

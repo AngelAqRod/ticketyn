@@ -1,3 +1,4 @@
+import { authHeaders, expiredSession } from '../auth/session'
 export class ApiError extends Error {
   constructor(message: string, public readonly status?: number, public readonly fields: string[] = []) {
     super(message)
@@ -30,13 +31,16 @@ function detailMessage(detail: unknown): string | null {
 
 async function requestJson<T>(path: string, options: RequestInit): Promise<T> {
   let response: Response
+  const headers = authHeaders(options.headers)
+  const sentToken = headers.get('Authorization')?.replace(/^Bearer /, '') ?? null
   try {
-    response = await fetch(path, options)
+    response = await fetch(path, { ...options, headers })
   } catch (error) {
     if (options.signal?.aborted) throw error
     throw new ApiError('No se pudo conectar con la API. Comprueba que el backend esté disponible.')
   }
   if (!response.ok) {
+    if (response.status === 401 && path !== '/api/auth/login') expiredSession(sentToken)
     let message: string | null = null
     let fields: string[] = []
     try {
@@ -79,8 +83,11 @@ export function patchJson<T>(path: string, body: unknown, signal?: AbortSignal):
 
 export async function downloadFile(path: string, filename: string): Promise<void> {
   let response: Response
-  try { response = await fetch(path) } catch { throw new ApiError('No se pudo conectar con la API.') }
+  const headers = authHeaders()
+  const sentToken = headers.get('Authorization')?.replace(/^Bearer /, '') ?? null
+  try { response = await fetch(path, { headers }) } catch { throw new ApiError('No se pudo conectar con la API.') }
   if (!response.ok) {
+    if (response.status === 401 && path !== '/api/auth/login') expiredSession(sentToken)
     let message: string | null = null
     try { const body: unknown = await response.json(); if (body && typeof body === 'object' && 'detail' in body) message = detailMessage(body.detail) } catch { /* conservar HTTP */ }
     throw new ApiError(message ?? `Error HTTP ${response.status} al exportar.`, response.status)

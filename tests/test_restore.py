@@ -87,6 +87,9 @@ def environment(installation):
     binary.parent.mkdir(parents=True)
     binary.write_text(f'#!/bin/sh\necho {HEAD}\n')
     binary.chmod(0o755)
+    main_py = i['release']/'src/ticketyn/main.py'
+    main_py.parent.mkdir(parents=True, exist_ok=True)
+    main_py.write_text('# Ticketyn legacy entrypoint\n')
     i['db'] = i['root']/'db.json'
     i['db'].write_text(json.dumps({'ticketyn': '100'}))
     i['active'] = i['root']/'active'
@@ -159,6 +162,10 @@ curl() {{
     [[ ! -f $counter ]] || count=$(cat "$counter")
     count=$((count+1)); echo "$count" > "$counter"
     if [[ ${{HTTP_FAIL:-0}} == 1 || ${{HTTP_FAIL:-0}} == "$kind" || $count -le ${{HTTP_TRANSIENT:-0}} ]]; then echo '{SECRET}: HTTP 502' >&2; return 22; fi
+    if [[ "$*" == *'-w %{{http_code}}'* || "$*" == *"-w '%{{http_code}}'"* ]]; then
+        echo "${{HTTP_STATUS:-401}}"
+        return 0
+    fi
     if [[ $kind == health ]]; then echo '{{"status":"ok"}}'; else echo '[]'; fi
 }}
 sleep() {{ :; }}

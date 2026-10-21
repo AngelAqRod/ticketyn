@@ -1,6 +1,6 @@
 """Activation-specific manual intent; never connects to SMTP or changes FMS."""
 from typing import Annotated
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Request
 from pydantic import ValidationError
 from sqlalchemy import select
 from ticketyn.api.crud import DBSession
@@ -96,9 +96,11 @@ def status_response(session, control, activation, event, job, *, problem=None, c
 
 
 @router.get('/{id}/notification', response_model=ActivationNotificationStatus)
-def get_notification(id: Id, session: DBSession):
+def get_notification(id: Id, session: DBSession, request: Request):
     context = notification_context(session, id)
     result = status_response(session, *context)
+    if 'activations.notify' not in request.state.principal.permissions:
+        result = result.model_copy(update={'can_request': False})
     session.commit()  # Persist fail-closed restoration detection, if necessary.
     return result
 

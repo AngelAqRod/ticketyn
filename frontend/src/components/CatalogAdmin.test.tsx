@@ -1,6 +1,9 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '../test/render'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+// Authentication is exercised in auth/AuthGate.test.tsx; these tests isolate operational routing.
+vi.mock('../auth/AuthGate', () => ({ AuthGate: ({ children }: { children: React.ReactNode }) => children }))
+
 import App from '../App'
 import { jsonResponse } from '../test/fixtures'
 import type { CatalogKind } from '../types/catalog'
@@ -28,6 +31,7 @@ function mockApi(options: Options = {}) {
   }
   const mock = vi.fn((path: string, init?: RequestInit): Promise<Response> => {
     if (path === '/health') return Promise.resolve(jsonResponse({ status: 'ok' }))
+    if (path.startsWith('/api/responsibles/access')) return Promise.resolve(jsonResponse([]))
     const resource = path.split('/')[2]?.split('?')[0] as CatalogKind
     if (!(resource in rows)) return Promise.resolve(jsonResponse([]))
     if (init?.method === 'POST' || init?.method === 'PATCH') {
@@ -53,12 +57,12 @@ const settings = [
   ['sectors', '/catalogs', 'sector', 'Sectores', 'Nombre inicial'],
   ['departments', '/catalogs', 'departamento', 'Departamentos', 'Nombre inicial'],
   ['nodes', '/catalogs', 'nodo', 'Nodos', 'Nombre inicial'],
-  ['responsibles', '/catalogs', 'responsable', 'Responsables', 'Nombre inicial'],
+  ['responsibles', '/responsibles', 'responsable', 'Responsables', 'Nombre inicial'],
   ['incident-types', '/catalogs', 'tipo de incidencia', 'Tipos de incidencia', 'Nombre inicial'],
 ] as const
 function open(path: string) { render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>) }
 async function selectCatalog(title: string) {
-  if (['Modelos de CPE', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
+  if (['Modelos de CPE', 'Departamentos', 'Tipos de incidencia', 'Nodos'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
   await screen.findByRole('table', { name: title })
 }
 const field = (label: string) => screen.getByLabelText(new RegExp(`^${label}\\s*\\*?$`))
@@ -118,7 +122,7 @@ describe('administración de catálogos', () => {
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
     const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: 1 } : { name: 'Nuevo registro', active: true }
-    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null } : resource === 'circuits' ? { ...expected, sector_id: 1, cpe_model_id: null, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
+    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null, operational_selectable: true } : resource === 'circuits' ? { ...expected, sector_id: 1, cpe_model_id: null, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
     fireEvent.change(field(resource === 'circuits' ? 'Descripción' : 'Nombre'), { target: { value: 'Corregido' } })
@@ -152,6 +156,32 @@ describe('administración de catálogos', () => {
     } else fireEvent.change(screen.getByLabelText('Buscar circuitos'), { target: { value: search } })
     expect(await screen.findByText('LINK-A')).toBeInTheDocument()
     if (search !== 'empresa beta') expect(screen.queryByText('LINK-B')).not.toBeInTheDocument()
+  })
+  it('filtra circuitos por sector y respeta el orden canónico de controles', async () => {
+    mockApi(); open('/circuits'); await screen.findByRole('table')
+    expect(screen.getByLabelText('Buscar circuitos')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Filtrar por cliente' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Filtrar por sector' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Filtrar por nodo' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Estado de circuitos')).toBeInTheDocument()
+
+    const toolbar = screen.getByLabelText('Filtros de circuitos')
+    const labels = Array.from(toolbar.querySelectorAll('label')).map(l => l.textContent?.trim())
+    expect(labels).toEqual([
+      'Buscar circuitos',
+      'Filtrar por cliente',
+      'Filtrar por sector',
+      'Filtrar por nodo',
+      'Estado de circuitos',
+    ])
+
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Filtrar por sector' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
+    expect(await screen.findByText('1 filtro activo')).toBeInTheDocument()
+    expect(screen.getByText('LINK-A')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    expect(screen.queryByText('1 filtro activo')).not.toBeInTheDocument()
   })
   it('rechazar confirmación no envía PATCH ni cambia el registro', async () => {
     const mock = mockApi(); vi.mocked(window.confirm).mockReturnValue(false)
@@ -215,7 +245,7 @@ describe('administración de catálogos', () => {
   })
   it.each(settings)('%s muestra estado vacío', async (_resource, path, _singular, title) => {
     mockApi({ empty: true }); open(path)
-    if (['Modelos de CPE', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Responsables'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
+    if (['Modelos de CPE', 'Departamentos', 'Tipos de incidencia', 'Nodos'].includes(title)) fireEvent.click(screen.getByRole('button', { name: title }))
     expect(await screen.findByText(/^No hay .+ registrados\.$/)).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
@@ -294,7 +324,7 @@ it('crea Nodo desde CircuitForm sin guardar Circuito ni perder sus datos', async
 })
 
 it('selecciona puesto por departamento sin texto libre ni usuarios', async () => {
-  const mock = mockApi(); open('/catalogs'); await selectCatalog('Responsables')
+  const mock = mockApi(); open('/responsibles'); await selectCatalog('Responsables')
   fireEvent.click(screen.getByRole('button', { name: 'Nuevo responsable' }))
   fireEvent.change(field('Nombre'), { target: { value: 'Especialista IPv6' } })
   expect(screen.queryByLabelText('Nivel o cargo (opcional)')).not.toBeInTheDocument()
@@ -305,7 +335,7 @@ it('selecciona puesto por departamento sin texto libre ni usuarios', async () =>
   fireEvent.click(screen.getByRole('option', { name: 'Consultor de redes' }))
   fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
   await screen.findByText('Registro creado correctamente.')
-  expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ name: 'Especialista IPv6', department_id: 1, position_id: 1, active: true })
+  expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ name: 'Especialista IPv6', department_id: 1, position_id: 1, active: true, operational_selectable: true })
 })
 it('crea motivos con descripción opcional y no ofrece eliminación física', async () => {
   const mock = mockApi(); open('/catalogs')
@@ -346,7 +376,7 @@ it('crea y edita puestos con departamento obligatorio y filtra mediante API', as
 })
 
 it('limita puestos al departamento seleccionado y limpia el puesto al cambiarlo', async () => {
-  mockApi(); open('/catalogs'); await selectCatalog('Responsables')
+  mockApi(); open('/responsibles'); await selectCatalog('Responsables')
   fireEvent.click(screen.getByRole('button', { name: 'Nuevo responsable' }))
   fireEvent.click(screen.getByRole('combobox', { name: 'Departamento' }))
   fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))

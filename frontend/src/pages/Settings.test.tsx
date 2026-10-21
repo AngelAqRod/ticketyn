@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '../test/render'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { Settings } from './Settings'
@@ -86,5 +86,17 @@ describe('configuración de numeración', () => {
     setup(); await loaded()
     fireEvent.change(screen.getByLabelText('Longitud / Padding'), { target: { value: '20' } })
     expect(screen.getByLabelText('Próxima referencia')).toHaveTextContent('TEST-00000000000000000027')
+  })
+  it('permite contraer y expandir la sección de numeración de tickets', async () => {
+    setup(); await loaded()
+    expect(screen.getByRole('form', { name: 'Numeración de tickets' })).toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Numeración de tickets' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('form', { name: 'Numeración de tickets' })).not.toBeInTheDocument()
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(await screen.findByRole('form', { name: 'Numeración de tickets' })).toBeInTheDocument()
   })
 })

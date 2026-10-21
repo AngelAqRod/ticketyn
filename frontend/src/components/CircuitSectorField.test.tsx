@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '../test/render'
 import { describe, expect, it, vi } from 'vitest'
 import { CircuitSectorField } from './CircuitSectorField'
 import type { Circuit, Sector } from '../types/catalog'

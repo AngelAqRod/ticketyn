@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '../test/render'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { OperationModal } from '../components/OperationModal'

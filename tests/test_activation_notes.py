@@ -49,8 +49,8 @@ def test_notes_are_immutable_and_corrections_use_interventions(api_client, opera
     circuit_before = api_client.get(f'/api/circuits/{cid}').json()
     numbering = api_client.get('/api/settings/activation-number').json()
     for notes in ('Intento de editar', None, ''):
-        assert api_client.patch(path + '/notes', json={'activation_notes': notes}).status_code == 404
-        assert api_client.patch(path, json={'activation_notes': notes}).status_code == 405
+        assert api_client.patch(path + '/notes', json={'activation_notes': notes}).status_code == 403
+        assert api_client.patch(path, json={'activation_notes': notes}).status_code == 403
     assert api_client.get(path).json() == row
     assert api_client.get(path + '/interventions').json() == []
     correction = create(api_client, path + '/interventions', {

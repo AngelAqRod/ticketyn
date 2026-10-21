@@ -3,7 +3,7 @@ from ticketyn.api.fms_exports import stream_export
 from ticketyn.schemas.fms_export import OperationExportFilters, CapacityExportFilters, LifecycleExportFilters
 from typing import Annotated, Literal
 from pydantic import AwareDatetime
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import Request, APIRouter, HTTPException, Path, Query
 from sqlalchemy import func, select
 from ticketyn.api.crud import DBSession, get_or_404, list_items, save_item, update_item
 from ticketyn.api.fms_data import create_operation, locked_activation_config, operation_query, validate_active
@@ -91,7 +91,9 @@ def capacity_changes(session: DBSession, circuit_id: FilterId = None, customer_i
 
 
 @router.post('/circuit-lifecycle', response_model=LifecycleResponse, status_code=201)
-def create_lifecycle(payload: LifecycleCreate, session: DBSession):
+def create_lifecycle(payload: LifecycleCreate, session: DBSession, request: Request):
+    from ticketyn.security.roles import require
+    require(request.state.principal, 'lifecycle.deactivate' if payload.operation_type == 'DEACTIVATE' else 'lifecycle.reactivate')
     return create_operation(session, CircuitLifecycleOperation, payload.model_dump())
 
 
@@ -101,11 +103,11 @@ def lifecycle(session: DBSession, circuit_id: FilterId = None, customer_id: Filt
 
 
 @router.get('/circuits/{id}/operational-detail', response_model=CircuitOperationalDetail)
-def circuit_detail(id: Id, session: DBSession):
+def circuit_detail(id: Id, session: DBSession, request: Request):
     circuit = get_or_404(session, Circuit, id)
     last = session.scalar(select(CapacityChange).where(CapacityChange.circuit_id == id, CapacityChange.effective_at <= func.now()).order_by(CapacityChange.effective_at.desc(), CapacityChange.id.desc()).limit(1))
     first = session.scalar(select(Activation).where(Activation.circuit_id == id).order_by(Activation.effective_at, Activation.id).limit(1))
-    return {'circuit': circuit, 'customer': circuit.customer, 'current_capacity': last.new_capacity if last else circuit.initial_capacity, 'current_capacity_unit': last.new_unit if last else circuit.initial_capacity_unit, 'initial_activation': first}
+    return {'circuit': circuit, 'customer': circuit.customer, 'current_capacity': last.new_capacity if last else circuit.initial_capacity, 'current_capacity_unit': last.new_unit if last else circuit.initial_capacity_unit, 'initial_activation': first if 'activations.view' in request.state.principal.permissions else None}
 
 
 @router.get('/settings/activation-number', response_model=TicketNumberConfigResponse)

@@ -1,6 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '../test/render'
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
+// Authentication is exercised in auth/AuthGate.test.tsx; these tests isolate operational routing.
+vi.mock('../auth/AuthGate', () => ({ AuthGate: ({ children }: { children: React.ReactNode }) => children }))
+
 import App from '../App'
 import { jsonResponse } from '../test/fixtures'
 import { OperationModal } from '../components/OperationModal'
@@ -14,7 +17,7 @@ const operation = { id: 1, circuit_id: 1, circuit, responsible_id: 1, responsibl
 const oldShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal'), oldClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
 beforeAll(() => { Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value() { this.setAttribute('open', '') } }); Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value() { this.removeAttribute('open') } }) })
 afterAll(() => { for (const [key, descriptor] of [['showModal', oldShow], ['close', oldClose]] as const) if (descriptor) Object.defineProperty(HTMLDialogElement.prototype, key, descriptor); else Reflect.deleteProperty(HTMLDialogElement.prototype, key) })
-function mockApi(options: { history?: number; failWrite?: boolean; pending?: boolean; capacity?: string | null; capacityUnit?: string | null } = {}) {
+function mockApi(options: { people?: (typeof person & { operational_selectable?: boolean })[]; history?: number; failWrite?: boolean; pending?: boolean; capacity?: string | null; capacityUnit?: string | null } = {}) {
   const mock = vi.fn((path: string, init?: RequestInit) => {
     if (init?.method === 'POST' || init?.method === 'PATCH') {
       if (options.pending) return new Promise<Response>(() => {})
@@ -36,7 +39,7 @@ function mockApi(options: { history?: number; failWrite?: boolean; pending?: boo
     if (path.includes('/cpe-models?')) return Promise.resolve(jsonResponse([]))
     if (path.includes('/service-types?')) return Promise.resolve(jsonResponse([{ ...person, name: 'Internet' }]))
     if (path.includes('/customers?')) return Promise.resolve(jsonResponse([customer]))
-    if (path.includes('/responsibles?')) return Promise.resolve(jsonResponse([person]))
+    if (path.includes('/responsibles?')) return Promise.resolve(jsonResponse(options.people ?? [person]))
     if (path.includes('/deactivation-reasons?')) return Promise.resolve(jsonResponse([{ ...person, name: 'Falta de pago' }]))
     if (path.includes('/nodes?')) return Promise.resolve(jsonResponse([{ ...person, name: 'Nodo disponible' }]))
     return Promise.resolve(jsonResponse(Array.from({ length: options.history ?? 1 }, (_, index) => ({ ...operation, id: index + 1 }))))
@@ -44,6 +47,15 @@ function mockApi(options: { history?: number; failWrite?: boolean; pending?: boo
 }
 async function select(label: string, value: string) { fireEvent.click(screen.getByRole('combobox', { name: label })); fireEvent.click(await screen.findByRole('option', { name: value })) }
 const writes = (mock: ReturnType<typeof mockApi>) => mock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PATCH')
+
+it.each(['activations', 'capacity-changes', 'circuit-lifecycle'] as const)('filtra Responsables no seleccionables al registrar %s', async kind => {
+  mockApi({ people: [person, { ...person, id: 2, name: 'Admin sin asignaciones', operational_selectable: false }] })
+  render(<MemoryRouter><OperationModal kind={kind} circuit={circuit} onSaved={vi.fn()} onCancel={vi.fn()} /></MemoryRouter>)
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Responsable' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('combobox', { name: 'Responsable' }))
+  expect(screen.getByRole('option', { name: 'Operador' })).toBeVisible()
+  expect(screen.queryByRole('option', { name: 'Admin sin asignaciones' })).not.toBeInTheDocument()
+})
 
 describe('Gestión operativa de circuitos', () => {
   it('muestra ficha sin repetir tickets y pagina cada historial de forma independiente en 10', async () => {

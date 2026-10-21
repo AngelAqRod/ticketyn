@@ -175,7 +175,7 @@ def ticket_pdf_table(rows, zone, width):
             date = lambda value: value.astimezone(zone).strftime('%d/%m/%Y\n%H:%M') if value else '—'
             yield [ticket.reference, 'Abierto' if ticket.status == 'OPEN' else 'Cerrado', ticket.title,
                    f'{customer.customer_code}\n{customer.name}', circuit.circuit_code, ticket.node.name if ticket.node else "Sin asignar", ticket.responsible.name if ticket.responsible else "Sin asignar", sector.name,
-                   kind.name, date(ticket.start_at), f'{date(ticket.end_at)}\n{duration_text(ticket.duration_seconds) if ticket.duration_seconds is not None else "En curso"}']
+                   kind.name, date(ticket.start_at), f'{date(ticket.end_at)}\n{duration_text(ticket.duration_seconds) if ticket.duration_seconds is not None else ("En curso" if ticket.status == "OPEN" else "Sin fecha de fin")}']
     return modern_table(['Referencia', 'Estado', 'Título', 'Cliente', 'Circuito', 'Nodo', 'Responsable', 'Sector', 'Tipo', 'Inicio', 'Fin / Duración'],
         values(), [width * fraction for fraction in [.10, .06, .115, .115, .105, .075, .085, .07, .075, .10, .10]], reference=True)
 

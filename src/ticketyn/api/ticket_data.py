@@ -39,6 +39,8 @@ def validate_ticket_values(session: Session, values: dict, changed_relations: se
         responsible = session.scalar(select(Responsible).where(Responsible.id == values["responsible_id"]).with_for_update(read=True, of=Responsible))
         if responsible is None:
             raise HTTPException(404, "El responsable indicado no existe")
+        from ticketyn.api.responsible_selection import selectable
+        selectable(responsible)
         if not responsible.active:
             raise HTTPException(422, "El responsable indicado está inactivo")
     active_fields = set(changed_relations)

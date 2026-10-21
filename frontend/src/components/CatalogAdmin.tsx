@@ -1,3 +1,6 @@
+import { ResponsibleAccess } from './ResponsibleAccess'
+import { allPages, type Account } from '../api/security'
+import { Can, usePermissions, catalogModule } from '../auth/permissions'
 import { postJson, patchJson } from '../api/client'
 import { FilterHeading } from './FilterHeading'
 import { CircuitActions } from './CircuitActions'
@@ -9,7 +12,7 @@ import { FeedbackMessage } from './FeedbackMessage'
 import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { Network, Users, Ticket, Pencil, Power, Trash2 } from 'lucide-react'
+import { Network, Users, Ticket, Pencil, Power, Trash2, Plus, Layers3 } from 'lucide-react'
 import { CatalogDeleteConfirmation } from './CatalogDeleteConfirmation'
 import { QuickCatalogCreate } from './QuickCatalogCreate'
 import { SearchableSelect } from './SearchableSelect'
@@ -43,8 +46,8 @@ const labels = {
 }
 
 type CatalogItem = Customer | Circuit | NamedCatalog
-interface Draft { appliesEfficiency: boolean; sectorId: string; id: number | null; code: string; name: string; customerId: string; nodeId: string; active: boolean; detail: string; departmentId: string; positionId: string; capacity: string; capacityUnit: string; serviceTypeId: string; cpeModelId: string }
-const blank = (): Draft => ({ appliesEfficiency: false, sectorId: '', id: null, code: '', name: '', customerId: '', nodeId: '', active: true, detail: '', departmentId: '', positionId: '', capacity: '', capacityUnit: 'Mbps', serviceTypeId: '', cpeModelId: '' })
+interface Draft { appliesEfficiency: boolean; sectorId: string; id: number | null; code: string; name: string; customerId: string; nodeId: string; active: boolean; detail: string; departmentId: string; positionId: string; operationalSelectable: boolean; capacity: string; capacityUnit: string; serviceTypeId: string; cpeModelId: string }
+const blank = (): Draft => ({ operationalSelectable: true, appliesEfficiency: false, sectorId: '', id: null, code: '', name: '', customerId: '', nodeId: '', active: true, detail: '', departmentId: '', positionId: '', capacity: '', capacityUnit: 'Mbps', serviceTypeId: '', cpeModelId: '' })
 const message = (error: unknown) => error instanceof Error ? error.message : 'Ocurrió un error inesperado.'
 
 function list(kind: CatalogKind, signal: AbortSignal, filters?: URLSearchParams): Promise<CatalogItem[]> {
@@ -61,7 +64,7 @@ function list(kind: CatalogKind, signal: AbortSignal, filters?: URLSearchParams)
     case 'nodes': return api.listNodes(signal, true)
     case 'responsibles': return api.listResponsibles(signal, true)
     case 'customers': return api.listCustomers(signal, true)
-    case 'circuits': return api.listCircuits(filters?.get('customer_id') ? Number(filters.get('customer_id')) : undefined, signal, true, { search: filters?.get('search') || undefined, node_id: filters?.get('node_id') ? Number(filters.get('node_id')) : undefined, active: filters?.get('active') === 'true' ? true : filters?.get('active') === 'false' ? false : undefined })
+    case 'circuits': return api.listCircuits(filters?.get('customer_id') ? Number(filters.get('customer_id')) : undefined, signal, true, { search: filters?.get('search') || undefined, sector_id: filters?.get('sector_id') ? Number(filters.get('sector_id')) : undefined, node_id: filters?.get('node_id') ? Number(filters.get('node_id')) : undefined, active: filters?.get('active') === 'true' ? true : filters?.get('active') === 'false' ? false : undefined })
     case 'sectors': return api.listSectors(signal, true)
     case 'departments': return api.listDepartments(signal, true)
     case 'incident-types': return api.listIncidentTypes(signal, true)
@@ -82,7 +85,7 @@ function save(kind: CatalogKind, draft: Draft): Promise<CatalogItem> {
     case 'escalation-reasons': { const payload = { ...named, description: draft.detail.trim() || null }; return id === null ? api.createEscalationReason(payload) : api.updateEscalationReason(id, payload) }
     case 'positions': { const payload = { ...named, department_id: Number(draft.departmentId), description: draft.detail.trim() || null }; return id === null ? api.createPosition(payload) : api.updatePosition(id, payload) }
     case 'nodes': return id === null ? api.createNode(named) : api.updateNode(id, named)
-    case 'responsibles': { const payload = { ...named, department_id: draft.departmentId ? Number(draft.departmentId) : null, position_id: draft.positionId ? Number(draft.positionId) : null }; return id === null ? api.createResponsible(payload) : api.updateResponsible(id, payload) }
+    case 'responsibles': { const payload = { ...named, operational_selectable: draft.operationalSelectable, department_id: draft.departmentId ? Number(draft.departmentId) : null, position_id: draft.positionId ? Number(draft.positionId) : null }; return id === null ? api.createResponsible(payload) : api.updateResponsible(id, payload) }
     case 'customers': {
       const payload = { ...named, customer_code: draft.code.trim() }
       return id === null ? api.createCustomer(payload) : api.updateCustomer(id, payload)
@@ -121,11 +124,15 @@ function changeActive(kind: CatalogKind, id: number, active: boolean): Promise<C
 const catalogName = (item: CatalogItem) => 'circuit_code' in item ? item.description : item.name
 const catalogCode = (item: CatalogItem) => 'customer_code' in item ? item.customer_code : 'circuit_code' in item ? item.circuit_code : ''
 function draftFor(item: CatalogItem, kind: CatalogKind): Draft {
-  return { appliesEfficiency: 'applies_efficiency' in item && Boolean(item.applies_efficiency), cpeModelId: 'cpe_model_id' in item && item.cpe_model_id ? String(item.cpe_model_id) : '', sectorId: 'sector_id' in item && item.sector_id ? String(item.sector_id) : '', id: item.id, serviceTypeId: 'service_type_id' in item && item.service_type_id ? String(item.service_type_id) : '', capacity: 'initial_capacity' in item ? String(item.initial_capacity ?? '') : '', capacityUnit: 'initial_capacity_unit' in item ? item.initial_capacity_unit ?? 'Mbps' : 'Mbps', code: catalogCode(item), name: catalogName(item), nodeId: 'node_id' in item && item.node_id ? String(item.node_id) : '', customerId: 'customer_id' in item ? String(item.customer_id) : '', active: item.active, departmentId: 'department_id' in item && item.department_id ? String(item.department_id) : '', positionId: 'position_id' in item && item.position_id ? String(item.position_id) : '', detail: (kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && 'description' in item ? String(item.description ?? '') : '' }
+  return { operationalSelectable: !('operational_selectable' in item) || item.operational_selectable !== false, appliesEfficiency: 'applies_efficiency' in item && Boolean(item.applies_efficiency), cpeModelId: 'cpe_model_id' in item && item.cpe_model_id ? String(item.cpe_model_id) : '', sectorId: 'sector_id' in item && item.sector_id ? String(item.sector_id) : '', id: item.id, serviceTypeId: 'service_type_id' in item && item.service_type_id ? String(item.service_type_id) : '', capacity: 'initial_capacity' in item ? String(item.initial_capacity ?? '') : '', capacityUnit: 'initial_capacity_unit' in item ? item.initial_capacity_unit ?? 'Mbps' : 'Mbps', code: catalogCode(item), name: catalogName(item), nodeId: 'node_id' in item && item.node_id ? String(item.node_id) : '', customerId: 'customer_id' in item ? String(item.customer_id) : '', active: item.active, departmentId: 'department_id' in item && item.department_id ? String(item.department_id) : '', positionId: 'position_id' in item && item.position_id ? String(item.position_id) : '', detail: (kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && 'description' in item ? String(item.description ?? '') : '' }
 }
 
-export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: CatalogKind; embedded?: boolean; circuitEditor?: { item: Circuit; onSaved: (item: Circuit) => void; onCancel: () => void; onBusyChange: (busy: boolean) => void } }) {
+export function CatalogAdmin({ kind, embedded = false, administrativeAccess = false, circuitEditor }: { kind: CatalogKind; embedded?: boolean; administrativeAccess?: boolean; circuitEditor?: { item: Circuit; onSaved: (item: Circuit) => void; onCancel: () => void; onBusyChange: (busy: boolean) => void } }) {
+  const access=usePermissions(), permissionModule=catalogModule(kind)
   const info = labels[kind]
+  const manageAccess = kind === 'responsibles' && administrativeAccess && access.can('accounts.manage')
+  const [accessRows, setAccessRows] = useState<Account[]>([])
+  const [accessId, setAccessId] = useState<number | null>(null)
   const refreshedModule = kind === 'customers' || kind === 'circuits'
   const RecordIcon = kind === 'circuits' ? Network : Users
   const editorItem = circuitEditor?.item
@@ -171,13 +178,20 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true); setLoadError(null)
-    Promise.all([editorItem ? Promise.resolve([editorItem]) : list(kind, controller.signal, new URLSearchParams(filterKey)), kind === 'circuits' ? (customerCache.current ? Promise.resolve(customerCache.current) : api.listCustomers(controller.signal, true)) : Promise.resolve([]), kind === 'circuits' ? api.listNodes(controller.signal, true) : Promise.resolve([]), kind === 'positions' || kind === 'responsibles' ? api.listDepartments(controller.signal, true) : Promise.resolve([]), kind === 'responsibles' ? api.listPositions(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listServiceTypes(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listSectors(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listCpeModels(controller.signal, true) : Promise.resolve([])]).then(([rows, clients, nodeRows, departmentRows, positionRows, serviceRows, sectorRows, cpeRows]) => {
+    Promise.all([editorItem ? Promise.resolve([editorItem]) : (kind === 'responsibles' && !access.can('catalogs.responsibles.view') ? allPages<Account>('/api/responsibles/access', controller.signal) : list(kind, controller.signal, new URLSearchParams(filterKey))), kind === 'circuits' ? (customerCache.current ? Promise.resolve(customerCache.current) : api.listCustomers(controller.signal, true)) : Promise.resolve([]), kind === 'circuits' ? api.listNodes(controller.signal, true) : Promise.resolve([]), kind === 'positions' || kind === 'responsibles' && access.can('catalogs.departments.lookup') ? api.listDepartments(controller.signal, true) : Promise.resolve([]), kind === 'responsibles' && access.can('catalogs.positions.lookup') ? api.listPositions(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listServiceTypes(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listSectors(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listCpeModels(controller.signal, true) : Promise.resolve([])]).then(([rows, clients, nodeRows, departmentRows, positionRows, serviceRows, sectorRows, cpeRows]) => {
       if (!controller.signal.aborted) { setCpeModels(cpeRows); setSectors(sectorRows); setServiceTypes(serviceRows); setItems(rows); setCustomers(clients); setNodes(nodeRows); setDepartments(departmentRows); setPositions(positionRows); if (kind === 'circuits') customerCache.current = clients; setLoading(false) }
     }).catch((failure: unknown) => {
       if (!controller.signal.aborted) { setLoadError(message(failure)); setLoading(false) }
     })
     return () => controller.abort()
   }, [kind, retry, filterKey, editorItem])
+
+  useEffect(() => {
+    if (!manageAccess) { setAccessRows([]); setAccessId(null); return }
+    const controller = new AbortController()
+    allPages<Account>('/api/responsibles/access', controller.signal).then(rows => { if (!controller.signal.aborted) { setAccessRows(rows); setAccessId(current => current !== null && !rows.some(row => row.id === current) ? null : current) } }).catch(cause => { if (!controller.signal.aborted) setError(message(cause)) })
+    return () => controller.abort()
+  }, [manageAccess, retry, access.permissions.join('\0')])
 
   const customerLabel = (id: number) => {
     const customer = customers.find((item) => item.id === id)
@@ -189,6 +203,8 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
     if (!`${code(item)} ${name(item)}`.toLocaleLowerCase().includes((kind === 'circuits' ? search : search.trim()).toLocaleLowerCase())) return false
     if (kind !== 'circuits') return true
     if (params.get('customer_id') && (!('customer_id' in item) || String(item.customer_id) !== params.get('customer_id'))) return false
+    if (params.get('sector_id') && (!('sector_id' in item) || String(item.sector_id) !== params.get('sector_id'))) return false
+    if (params.get('node_id') && (!('node_id' in item) || String(item.node_id) !== params.get('node_id'))) return false
     return !params.get('active') || String(item.active) === params.get('active')
   })
   const ordered = [...visible].sort((a, b) => (code(a) || name(a)).localeCompare(code(b) || name(b)) || a.id - b.id)
@@ -230,66 +246,317 @@ export function CatalogAdmin({ kind, embedded = false, circuitEditor }: { kind: 
   }
 
   return <>
-    {!circuitEditor && (embedded ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="toolbar-heading">{info.title}</h2><button ref={newRecordButton} type="button" className="button-primary" disabled={busy || loading || Boolean(loadError)} onClick={() => edit()}>Nuevo {info.singular}</button></div> : <PageHeading title={info.title} description={info.description} action={<button ref={newRecordButton} type="button" className="button-primary" disabled={busy || loading || Boolean(loadError)} onClick={() => edit()}>Nuevo {info.singular}</button>} />)}
+    {!circuitEditor && (embedded ? (
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="toolbar-heading">{info.title}</h2>
+        <Can permission={permissionModule+".create"}>
+          <button ref={newRecordButton} type="button" className={`button-primary ${kind === 'customers' || kind === 'circuits' ? 'button-primary--blue' : 'button-primary--slate'} rounded-full shadow-sm`} disabled={busy || loading || Boolean(loadError)} onClick={() => edit()}>
+            <Plus size={15} aria-hidden="true" />
+            Nuevo {info.singular}
+          </button>
+        </Can>
+      </div>
+    ) : (
+      <PageHeading
+        title={info.title}
+        description={info.description}
+        telemetry={
+          !loading && !loadError && items.length > 0 && (
+            <span className="heading-telemetry">
+              <span>Total:</span>
+              <strong className={kind === 'customers' || kind === 'circuits' ? 'telemetry-value--blue' : 'telemetry-value--slate'}>
+                {items.length}
+              </strong>
+              {items.some((i) => !i.active) && (
+                <>
+                  <span className="text-slate-600">·</span>
+                  <span>Activos:</span>
+                  <strong className="text-emerald-400">
+                    {items.filter((i) => i.active).length}
+                  </strong>
+                </>
+              )}
+            </span>
+          )
+        }
+        action={
+          <Can permission={permissionModule+".create"}>
+            <button
+              ref={newRecordButton}
+              type="button"
+              className={`button-primary ${kind === 'customers' || kind === 'circuits' ? 'button-primary--blue' : 'button-primary--slate'} rounded-full shadow-sm`}
+              disabled={busy || loading || Boolean(loadError)}
+              onClick={() => edit()}
+            >
+              <Plus size={15} aria-hidden="true" />
+              Nuevo {info.singular}
+            </button>
+          </Can>
+        }
+      />
+    ))}
+    {accessId !== null && manageAccess && <ResponsibleAccess key={accessId} id={accessId} onClose={() => setAccessId(null)} onSaved={() => setRetry(value => value + 1)} />}
     {notice && <FeedbackMessage variant="success" className="mb-4">{notice}</FeedbackMessage>}
     {error && <FeedbackMessage id="catalog-form-error" variant="error" className="mb-4">{error}</FeedbackMessage>}
     {circuitEditor && <RequestState compact loading={loading} loadingText="Cargando catálogos del circuito..." errorTitle="" error={loadError} onRetry={() => setRetry(retry + 1)} />}
-    {draft && <form ref={expandedForm} className={`form-surface mb-4${kind === 'circuits' ? ' noc-panel noc-circuit-form' : ''}${refreshedModule ? '' : ' border-b border-slate-200'}`} aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`} onSubmit={submit} noValidate aria-describedby={error ? "catalog-form-error" : undefined}>
-      <h2 className={refreshedModule ? 'toolbar-heading gap-3' : 'mb-3 text-sm font-semibold'}>{refreshedModule && <span className="icon-surface" aria-hidden="true"><RecordIcon size={15} /></span>}{draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}</h2>
-      <fieldset disabled={busy || Boolean(circuitEditor && (loading || loadError))} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
-        {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.customerId.trim()) || apiInvalidFields.includes("customer_id")} id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
-        {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.nodeId) || apiInvalidFields.includes("node_id")} id="admin-node" required label="Nodo"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="admin-node" required label="Nodo" value={draft.nodeId} onChange={(value) => setDraft({ ...draft, nodeId: value })} options={nodes.filter((item) => item.active || String(item.id) === draft.nodeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Selecciona un nodo" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></div></FormField>}
-        {(kind === 'customers' || kind === 'circuits') && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.code.trim()) || apiInvalidFields.includes(kind === "circuits" ? "circuit_code" : "customer_code")} id="admin-code" label={kind === 'customers' ? 'Código de cliente' : 'Código de circuito'} required><input id="admin-code" className="form-input" required value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></FormField>}
-        <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.name.trim()) || apiInvalidFields.includes(kind === "circuits" ? "description" : "name")} id="admin-name" label={kind === 'circuits' ? 'Descripción' : 'Nombre'} required><input id="admin-name" className="form-input" required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></FormField>
-        {(kind === 'responsibles' || kind === 'positions') && <FormField id="admin-department" label="Departamento" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("department_id") || (kind === 'positions' && Boolean(error) && !draft.departmentId)} required={kind === 'positions'}><SearchableSelect id="admin-department" label="Departamento" required={kind === 'positions'} value={draft.departmentId} onChange={(value) => setDraft({ ...draft, departmentId: value, positionId: '', capacity: '', capacityUnit: 'Mbps' })} options={departments.filter((item) => item.active || String(item.id) === draft.departmentId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder={kind === 'positions' ? 'Selecciona un departamento' : 'Sin asignar'} emptyMessage="No hay departamentos activos." noMatchMessage="Sin coincidencias." /></FormField>}
-        {kind === 'responsibles' && <FormField id="admin-position" label="Puesto" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("position_id")}><SearchableSelect id="admin-position" label="Puesto" value={draft.positionId} disabled={!draft.departmentId} onChange={(value) => setDraft({ ...draft, positionId: value })} options={positions.filter((item) => String(item.department_id) === draft.departmentId && (item.active || String(item.id) === draft.positionId)).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay puestos activos en este departamento." noMatchMessage="Sin coincidencias." /></FormField>}
-        {kind === 'responsibles' && draft.id !== null && (() => { const item = items.find((row) => row.id === draft.id); return item && 'attention_level' in item && item.attention_level ? <p className="text-xs text-muted sm:col-span-2">Dato anterior conservado (solo lectura): {String(item.attention_level)}</p> : null })()}
-        {(kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && <FormField id="admin-detail" label="Descripción (opcional)"><input id="admin-detail" className="form-input" maxLength={10000} value={draft.detail} onChange={(event) => setDraft({ ...draft, detail: event.target.value })} /></FormField>}
-        {kind === 'circuits' && <FormField id="admin-sector" label="Sector" required describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.sectorId) || apiInvalidFields.includes("sector_id")}><select id="admin-sector" className="form-input" required value={draft.sectorId} onChange={event => setDraft({ ...draft, sectorId: event.target.value })}><option value="">Selecciona un sector</option>{sectors.filter(item => item.active || String(item.id) === draft.sectorId).map(item => <option key={item.id} value={item.id} disabled={!item.active}>{item.name}</option>)}</select></FormField>}
-        {kind === 'circuits' && <FormField id="admin-service-type" label="Tipo de servicio" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("service_type_id")}><SearchableSelect id="admin-service-type" label="Tipo de servicio" value={draft.serviceTypeId} onChange={(value) => setDraft({ ...draft, serviceTypeId: value })} options={serviceTypes.filter((item) => item.active || String(item.id) === draft.serviceTypeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay tipos de servicio activos." noMatchMessage="Sin coincidencias." /></FormField>}
-        {kind === 'circuits' && <FormField id="admin-cpe-model" label="Modelo de CPE actual" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("cpe_model_id")}><SearchableSelect id="admin-cpe-model" label="Modelo de CPE actual" value={draft.cpeModelId} onChange={(value) => setDraft({ ...draft, cpeModelId: value })} options={cpeModels.filter((item) => item.active || String(item.id) === draft.cpeModelId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay modelos de CPE activos." noMatchMessage="Sin coincidencias." /></FormField>}
-        {kind === 'circuits' && <div className="sm:col-span-2"><CapacityFields id="admin-initial-capacity" label="Capacidad inicial (opcional)" value={draft.capacity} unit={draft.capacityUnit} onChange={(capacity, capacityUnit) => setDraft({ ...draft, capacity, capacityUnit })} /></div>}
-        {kind === 'change-completion-types' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.appliesEfficiency} onChange={e=>setDraft({...draft,appliesEfficiency:e.target.checked})}/>Aplica para eficiencia</label>}
-        <div className="flex items-center gap-2 self-end pb-3"><input aria-describedby={error ? "catalog-form-error" : undefined} aria-invalid={apiInvalidFields.includes("active") || undefined} id="admin-active" type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /><label htmlFor="admin-active" className="text-sm">Activo</label></div>
-      </fieldset>
-      <p className="mt-3 text-xs text-slate-500">Desactivar conserva el registro y sus referencias históricas.</p>
-      <div className="mt-4 flex justify-end gap-3"><button type="button" className="button-secondary" disabled={busy} onClick={() => { if (circuitEditor) circuitEditor.onCancel(); else { setDraft(null); setError(null); setApiInvalidFields([]) } }}>Cancelar</button><button type="submit" className="button-primary" disabled={busy || Boolean(circuitEditor && (loading || loadError))}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button></div>
-    </form>}
+    {draft && access.can(permissionModule+(draft.id===null?".create":".edit")) && (
+      <form
+        ref={expandedForm}
+        className={`form-surface mb-5 ${
+          kind === 'customers' || kind === 'circuits'
+            ? 'p-6 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl space-y-4'
+            : 'p-6 rounded-2xl bg-[#0b1426] border border-slate-700/60 shadow-xl space-y-4'
+        }`}
+        aria-label={`${draft.id === null ? 'Crear' : 'Editar'} ${info.singular}`}
+        onSubmit={submit}
+        noValidate
+        aria-describedby={error ? "catalog-form-error" : undefined}
+      >
+        {kind === 'customers' || kind === 'circuits' ? (
+          <div className="flex items-center gap-2 border-b border-sky-500/15 pb-2.5 mb-4">
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs"
+              aria-hidden="true"
+            >
+              {kind === 'customers' ? <Users size={13} /> : <Network size={13} />}
+            </span>
+            <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">
+              {draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}
+            </h2>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 border-b border-slate-700/60 pb-2.5 mb-4">
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-800/80 border border-slate-700/80 text-slate-300 text-xs"
+              aria-hidden="true"
+            >
+              {kind === 'responsibles' ? <Users size={13} /> : <Layers3 size={13} />}
+            </span>
+            <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">
+              {draft.id === null ? 'Nuevo' : 'Editar'} {info.singular}
+            </h2>
+          </div>
+        )}
+        <fieldset disabled={busy || Boolean(circuitEditor && (loading || loadError))} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
+          {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.customerId.trim()) || apiInvalidFields.includes("customer_id")} id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
+          {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.nodeId) || apiInvalidFields.includes("node_id")} id="admin-node" required label="Nodo"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="admin-node" required label="Nodo" value={draft.nodeId} onChange={(value) => setDraft({ ...draft, nodeId: value })} options={nodes.filter((item) => item.active || String(item.id) === draft.nodeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Selecciona un nodo" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><Can anyOf={["catalogs.nodes.create","context.nodes.create"]}><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></Can></div></FormField>}
+          {(kind === 'customers' || kind === 'circuits') && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.code.trim()) || apiInvalidFields.includes(kind === "circuits" ? "circuit_code" : "customer_code")} id="admin-code" label={kind === 'customers' ? 'Código de cliente' : 'Código de circuito'} required><input id="admin-code" className="form-input font-mono" required value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></FormField>}
+          <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.name.trim()) || apiInvalidFields.includes(kind === "circuits" ? "description" : "name")} id="admin-name" label={kind === 'circuits' ? 'Descripción' : 'Nombre'} required><input id="admin-name" className="form-input" required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></FormField>
+          {(kind === 'responsibles' || kind === 'positions') && <FormField id="admin-department" label="Departamento" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("department_id") || (kind === 'positions' && Boolean(error) && !draft.departmentId)} required={kind === 'positions'}><SearchableSelect id="admin-department" label="Departamento" required={kind === 'positions'} value={draft.departmentId} onChange={(value) => setDraft({ ...draft, departmentId: value, positionId: '', capacity: '', capacityUnit: 'Mbps' })} options={departments.filter((item) => item.active || String(item.id) === draft.departmentId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder={kind === 'positions' ? 'Selecciona un departamento' : 'Sin asignar'} emptyMessage="No hay departamentos activos." noMatchMessage="Sin coincidencias." /></FormField>}
+          {kind === 'responsibles' && <FormField id="admin-position" label="Puesto" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("position_id")}><SearchableSelect id="admin-position" label="Puesto" value={draft.positionId} disabled={!draft.departmentId} onChange={(value) => setDraft({ ...draft, positionId: value })} options={positions.filter((item) => String(item.department_id) === draft.departmentId && (item.active || String(item.id) === draft.positionId)).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay puestos activos en este departamento." noMatchMessage="Sin coincidencias." /></FormField>}
+          {kind === 'responsibles' && <label className="flex items-center gap-2"><input type="checkbox" checked={draft.operationalSelectable} onChange={e => setDraft({ ...draft, operationalSelectable: e.target.checked })} />Seleccionable en operaciones</label>}
+          {kind === 'responsibles' && draft.id !== null && (() => { const item = items.find((row) => row.id === draft.id); return item && 'attention_level' in item && item.attention_level ? <p className="text-xs text-muted sm:col-span-2">Dato anterior conservado (solo lectura): {String(item.attention_level)}</p> : null })()}
+          {(kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && <FormField id="admin-detail" label="Descripción (opcional)"><input id="admin-detail" className="form-input" maxLength={10000} value={draft.detail} onChange={(event) => setDraft({ ...draft, detail: event.target.value })} /></FormField>}
+          {kind === 'circuits' && <FormField id="admin-sector" label="Sector" required describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.sectorId) || apiInvalidFields.includes("sector_id")}><select disabled={draft.id!==null&&!access.can("tickets.edit")} id="admin-sector" className="form-input" required value={draft.sectorId} onChange={event => setDraft({ ...draft, sectorId: event.target.value })}><option value="">Selecciona un sector</option>{sectors.filter(item => item.active || String(item.id) === draft.sectorId).map(item => <option key={item.id} value={item.id} disabled={!item.active}>{item.name}</option>)}</select></FormField>}
+          {kind === 'circuits' && <FormField id="admin-service-type" label="Tipo de servicio" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("service_type_id")}><SearchableSelect id="admin-service-type" label="Tipo de servicio" value={draft.serviceTypeId} onChange={(value) => setDraft({ ...draft, serviceTypeId: value })} options={serviceTypes.filter((item) => item.active || String(item.id) === draft.serviceTypeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay tipos de servicio activos." noMatchMessage="Sin coincidencias." /></FormField>}
+          {kind === 'circuits' && <FormField id="admin-cpe-model" label="Modelo de CPE actual" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("cpe_model_id")}><SearchableSelect id="admin-cpe-model" label="Modelo de CPE actual" value={draft.cpeModelId} onChange={(value) => setDraft({ ...draft, cpeModelId: value })} options={cpeModels.filter((item) => item.active || String(item.id) === draft.cpeModelId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay modelos de CPE activos." noMatchMessage="Sin coincidencias." /></FormField>}
+          {kind === 'circuits' && <div className="sm:col-span-2"><CapacityFields id="admin-initial-capacity" label="Capacidad inicial (opcional)" value={draft.capacity} unit={draft.capacityUnit} onChange={(capacity, capacityUnit) => setDraft({ ...draft, capacity, capacityUnit })} /></div>}
+          {kind === 'change-completion-types' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.appliesEfficiency} onChange={e=>setDraft({...draft,appliesEfficiency:e.target.checked})}/>Aplica para eficiencia</label>}
+          <div className="flex items-center gap-2 self-end pb-3"><input aria-describedby={error ? "catalog-form-error" : undefined} aria-invalid={apiInvalidFields.includes("active") || undefined} id="admin-active" disabled={kind==='circuits'&&draft.id!==null&&!access.can(draft.active?"lifecycle.deactivate":"lifecycle.reactivate") || kind === 'responsibles' && draft.id !== null && items.some(p => p.id === draft.id && 'can_change_active' in p && p.can_change_active === false)} type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /><label htmlFor="admin-active" className="text-sm font-medium text-slate-200">Activo</label></div>
+        </fieldset>
+        <p className="mt-3 text-xs text-slate-400 font-mono">Desactivar conserva el registro y sus referencias históricas.</p>
+        <div className="mt-4 flex justify-end gap-3">
+          <button type="button" className="button-secondary rounded-full shadow-xs" disabled={busy} onClick={() => { if (circuitEditor) circuitEditor.onCancel(); else { setDraft(null); setError(null); setApiInvalidFields([]) } }}>Cancelar</button>
+          <button type="submit" className={`button-primary ${kind === 'customers' || kind === 'circuits' ? 'button-primary--blue' : 'button-primary--slate'} rounded-full shadow-sm`} disabled={busy || Boolean(circuitEditor && (loading || loadError))}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button>
+        </div>
+      </form>
+    )}
     {!circuitEditor && <>
-    {kind === 'circuits' && <section aria-label="Filtros de circuitos" className="filter-toolbar grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-      <FilterHeading title="Filtros de circuitos" className="sm:col-span-2 xl:col-span-4" />
-      <FormField id="circuit-search" label="Buscar circuitos"><input id="circuit-search" className="form-input" type="search" placeholder="Código o descripción" value={search} onChange={(event) => setSearch(event.target.value)} /></FormField>
-      <FormField id="circuit-customer-filter" label="Filtrar por cliente"><SearchableSelect id="circuit-customer-filter" label="Cliente" value={params.get('customer_id') ?? ''} options={customers.map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}` }))} onChange={(value) => change({ customer_id: value })} disabled={loading && !customers.length} placeholder="Todos los clientes" emptyMessage="No hay clientes." noMatchMessage="No se encontraron clientes." /></FormField>
-      <FormField id="circuit-node-filter" label="Filtrar por nodo"><SearchableSelect id="circuit-node-filter" label="Nodo" value={params.get('node_id') ?? ''} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ node_id: value })} placeholder="Todos los nodos" emptyMessage="No hay nodos." noMatchMessage="No se encontraron nodos." /></FormField>
-      <FormField id="circuit-active-filter" label="Estado de circuitos"><select id="circuit-active-filter" className="form-input" value={params.get('active') ?? ''} onChange={(event) => change({ active: event.target.value })}><option value="">Todos</option><option value="true">Activos</option><option value="false">Inactivos</option></select></FormField>
-      <div className="flex items-end"><button type="button" className="button-secondary w-full" onClick={clear}>Limpiar filtros</button></div>
-    </section>}
-    {kind === 'circuits' && <FilterChips items={[
-      ...(params.get('search') ? [{ label: 'Búsqueda', value: params.get('search')! }] : []),
-      ...(params.get('customer_id') ? [{ label: 'Cliente', value: customerLabel(Number(params.get('customer_id'))) }] : []),
-      ...(params.get('node_id') ? [{ label: 'Nodo', value: nodes.find((item) => String(item.id) === params.get('node_id'))?.name ?? `#${params.get('node_id')}` }] : []),
-      ...(params.get('active') ? [{ label: 'Estado', value: params.get('active') === 'true' ? 'Activos' : params.get('active') === 'false' ? 'Inactivos' : params.get('active')! }] : []),
-    ]} />}
-    {(kind === 'customers' || kind === 'nodes' || kind === 'responsibles' || kind === 'positions') && <div className="filter-toolbar">
-      <FilterHeading title={`Filtros de ${info.empty}`} />
-    {kind === 'positions' && <div className="mb-3 max-w-md"><FormField id="position-department-filter" label="Filtrar por departamento"><SearchableSelect id="position-department-filter" label="Filtrar por departamento" value={departmentFilter} onChange={setDepartmentFilter} options={departments.map((item) => ({ value: String(item.id), label: item.name }))} placeholder="Todos los departamentos" emptyMessage="No hay departamentos." noMatchMessage="Sin coincidencias." /></FormField></div>}
-      <div className="max-w-md"><label htmlFor="admin-search" className={kind === 'customers' ? 'form-label' : 'mb-1 block text-xs font-medium'}>Buscar {info.empty}</label><input id="admin-search" type="search" className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-    </div>}
-    {loading || loadError || !ordered.length ? <RequestState loading={loading} loadingText={`Cargando ${info.empty}...`} error={loadError ? `Error al cargar ${info.empty}: ${loadError}` : null} errorTitle="" onRetry={() => setRetry(retry + 1)} empty={!ordered.length} emptyTitle={items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`} emptyDescription="" compact={!refreshedModule && loading} /> : <div className="panel table-surface overflow-x-auto"><table className="operation-table min-w-[650px]"><caption className="table-title">{info.title}</caption>
-      <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente', 'Nodo', 'Sector'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', ...(kind === 'change-types' ? ['Descripción'] : kind === 'change-completion-types' ? ['Descripción', 'Aplica para eficiencia'] : []), ...(kind === 'positions' || kind === 'responsibles' ? ['Departamento'] : []), ...(kind === 'responsibles' ? ['Puesto'] : []), 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+    {kind === 'circuits' && (() => {
+      const activeCount = (search.trim() ? 1 : 0) + (params.get('customer_id') ? 1 : 0) + (params.get('sector_id') ? 1 : 0) + (params.get('node_id') ? 1 : 0) + (params.get('active') ? 1 : 0)
+      return (
+        <section aria-label="Filtros de circuitos" className="filter-toolbar filter-toolbar--blue mb-5">
+          <div className="filter-toolbar-header">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <FilterHeading title="Filtros de circuitos" theme="blue" />
+              {activeCount > 0 && (
+                <span className="filter-count-badge filter-count-badge--blue">
+                  {activeCount} {activeCount === 1 ? 'filtro activo' : 'filtros activos'}
+                </span>
+              )}
+            </div>
+            <button type="button" className="button-secondary rounded-full text-xs" onClick={clear}>
+              Limpiar filtros
+            </button>
+          </div>
+          <div className="filter-toolbar-body pt-3 border-t border-slate-800/80 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <FormField id="circuit-search" label="Buscar circuitos"><input id="circuit-search" className="form-input rounded-xl text-xs" type="search" placeholder="Código o descripción..." value={search} onChange={(event) => setSearch(event.target.value)} /></FormField>
+            <FormField id="circuit-customer-filter" label="Filtrar por cliente"><SearchableSelect id="circuit-customer-filter" label="Cliente" value={params.get('customer_id') ?? ''} options={customers.map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}` }))} onChange={(value) => change({ customer_id: value })} disabled={loading && !customers.length} placeholder="Todos los clientes" emptyMessage="No hay clientes." noMatchMessage="No se encontraron clientes." /></FormField>
+            <FormField id="circuit-sector-filter" label="Filtrar por sector"><SearchableSelect id="circuit-sector-filter" label="Sector" value={params.get('sector_id') ?? ''} options={sectors.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ sector_id: value })} placeholder="Todos los sectores" emptyMessage="No hay sectores." noMatchMessage="No se encontraron sectores." /></FormField>
+            <FormField id="circuit-node-filter" label="Filtrar por nodo"><SearchableSelect id="circuit-node-filter" label="Nodo" value={params.get('node_id') ?? ''} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ node_id: value })} placeholder="Todos los nodos" emptyMessage="No hay nodos." noMatchMessage="No se encontraron nodos." /></FormField>
+            <FormField id="circuit-active-filter" label="Estado de circuitos"><select id="circuit-active-filter" className="form-input rounded-xl text-xs" value={params.get('active') ?? ''} onChange={(event) => change({ active: event.target.value })}><option value="">Todos</option><option value="true">Activos</option><option value="false">Inactivos</option></select></FormField>
+          </div>
+          {activeCount > 0 && (
+            <div className="mt-3">
+              <FilterChips items={[
+                ...(params.get('search') ? [{ label: 'Búsqueda', value: params.get('search')! }] : []),
+                ...(params.get('customer_id') ? [{ label: 'Cliente', value: customerLabel(Number(params.get('customer_id'))) }] : []),
+                ...(params.get('sector_id') ? [{ label: 'Sector', value: sectors.find((item) => String(item.id) === params.get('sector_id'))?.name ?? `#${params.get('sector_id')}` }] : []),
+                ...(params.get('node_id') ? [{ label: 'Nodo', value: nodes.find((item) => String(item.id) === params.get('node_id'))?.name ?? `#${params.get('node_id')}` }] : []),
+                ...(params.get('active') ? [{ label: 'Estado', value: params.get('active') === 'true' ? 'Activos' : params.get('active') === 'false' ? 'Inactivos' : params.get('active')! }] : []),
+              ]} />
+            </div>
+          )}
+        </section>
+      )
+    })()}
+    {kind === 'customers' && (
+      <section aria-label="Filtros de clientes" className="filter-toolbar filter-toolbar--blue mb-5">
+        <div className="filter-toolbar-header">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <FilterHeading title="Filtros de clientes" theme="blue" />
+            {search.trim() && (
+              <span className="filter-count-badge filter-count-badge--blue">
+                1 filtro activo
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="filter-toolbar-body pt-3 border-t border-slate-800/80">
+          <div className="max-w-md">
+            <FormField id="admin-search" label="Buscar clientes">
+              <input
+                id="admin-search"
+                type="search"
+                placeholder="Buscar por código o nombre..."
+                className="form-input rounded-full text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </FormField>
+          </div>
+          {search.trim() && (
+            <div className="mt-3">
+              <FilterChips items={[{ label: 'Búsqueda', value: search.trim() }]} />
+            </div>
+          )}
+        </div>
+      </section>
+    )}
+    {kind === 'responsibles' && (
+      <section aria-label="Filtros de responsables" className="filter-toolbar filter-toolbar--slate mb-5">
+        <div className="filter-toolbar-header">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <FilterHeading title="Filtros de responsables" theme="slate" />
+            {search.trim() && (
+              <span className="filter-count-badge filter-count-badge--slate filter-count-badge--active">
+                <span className="filter-count-dot" />
+                1 filtro activo
+              </span>
+            )}
+          </div>
+          {search.trim() && (
+            <button type="button" className="button-secondary rounded-full text-xs" onClick={() => setSearch('')}>
+              Limpiar filtro
+            </button>
+          )}
+        </div>
+        <div className="filter-toolbar-body pt-3 border-t border-slate-800/80">
+          <div className="max-w-md">
+            <FormField id="admin-search" label="Buscar responsables">
+              <input
+                id="admin-search"
+                type="search"
+                placeholder="Buscar por nombre..."
+                className="form-input rounded-full text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </FormField>
+          </div>
+          {search.trim() && (
+            <div className="mt-3">
+              <FilterChips theme="slate" items={[{ label: 'Búsqueda', value: search.trim() }]} />
+            </div>
+          )}
+        </div>
+      </section>
+    )}
+    {(kind === 'nodes' || kind === 'positions') && (() => {
+      const activeCount = (search.trim() ? 1 : 0) + (kind === 'positions' && departmentFilter ? 1 : 0)
+      return (
+        <section aria-label={`Filtros de ${info.empty}`} className="filter-toolbar filter-toolbar--slate mb-5">
+          <div className="filter-toolbar-header">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <FilterHeading title={`Filtros de ${info.empty}`} theme="slate" />
+              {activeCount > 0 && (
+                <span className="filter-count-badge filter-count-badge--slate filter-count-badge--active">
+                  <span className="filter-count-dot" />
+                  {activeCount} {activeCount === 1 ? 'filtro activo' : 'filtros activos'}
+                </span>
+              )}
+            </div>
+            {activeCount > 0 && (
+              <button
+                type="button"
+                className="button-secondary rounded-full text-xs"
+                onClick={() => {
+                  setSearch('')
+                  if (kind === 'positions') setDepartmentFilter('')
+                }}
+              >
+                Limpiar {activeCount === 1 ? 'filtro' : 'filtros'}
+              </button>
+            )}
+          </div>
+          <div className="filter-toolbar-body pt-3 border-t border-slate-800/80 grid gap-3 sm:grid-cols-2">
+            {kind === 'positions' && (
+              <FormField id="position-department-filter" label="Filtrar por departamento">
+                <SearchableSelect
+                  id="position-department-filter"
+                  label="Filtrar por departamento"
+                  value={departmentFilter}
+                  onChange={setDepartmentFilter}
+                  options={departments.map((item) => ({ value: String(item.id), label: item.name }))}
+                  placeholder="Todos los departamentos"
+                  emptyMessage="No hay departamentos."
+                  noMatchMessage="Sin coincidencias."
+                />
+              </FormField>
+            )}
+            <div className={kind === 'positions' ? '' : 'sm:col-span-2 max-w-md'}>
+              <FormField id="admin-search" label={`Buscar ${info.empty}`}>
+                <input
+                  id="admin-search"
+                  type="search"
+                  className="form-input rounded-full text-xs"
+                  placeholder={`Buscar por nombre...`}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FormField>
+            </div>
+          </div>
+          {activeCount > 0 && (
+            <div className="mt-3">
+              <FilterChips
+                theme="slate"
+                items={[
+                  ...(departmentFilter ? [{ label: 'Departamento', value: departments.find(d => String(d.id) === departmentFilter)?.name ?? `#${departmentFilter}` }] : []),
+                  ...(search.trim() ? [{ label: 'Búsqueda', value: search.trim() }] : []),
+                ]}
+              />
+            </div>
+          )}
+        </section>
+      )
+    })()}
+    {loading || loadError || !ordered.length ? <RequestState loading={loading} loadingText={`Cargando ${info.empty}...`} error={loadError ? `Error al cargar ${info.empty}: ${loadError}` : null} errorTitle="" onRetry={() => setRetry(retry + 1)} empty={!ordered.length} emptyTitle={items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`} emptyDescription="" compact={!refreshedModule && loading} /> : <div className={`panel table-surface overflow-x-auto rounded-2xl bg-[#0b1426] border ${kind === 'customers' || kind === 'circuits' ? 'border-sky-500/20' : 'table-surface--slate'} shadow-xl`}><table className="operation-table min-w-[650px]"><caption className="table-title">{info.title}</caption>
+      <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente', 'Nodo', 'Sector'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', ...(kind === 'change-types' ? ['Descripción'] : kind === 'change-completion-types' ? ['Descripción', 'Aplica para eficiencia'] : []), ...(kind === 'positions' || kind === 'responsibles' ? ['Departamento'] : []), ...(kind === 'responsibles' ? ['Puesto', 'Seleccionable en operaciones', ...(manageAccess ? ['Acceso a Ticketyn'] : [])] : []), 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
       <tbody>{ordered.map((item) => <tr key={item.id}>
-        {(kind === 'customers' || kind === 'circuits') && <th scope="row" className="record-code text-slate-900">{kind === 'circuits' ? <Link to={`/circuits/${item.id}`}>{code(item)}</Link> : code(item)}</th>}
-        {kind === 'circuits' && 'customer_id' in item && <td>{customerLabel(item.customer_id)}</td>}
-        {kind === 'circuits' && 'circuit_code' in item && <td>{item.node?.name ?? 'Sin asignar'}</td>}
-        {kind === 'circuits' && 'circuit_code' in item && <td>{item.sector?.name ?? 'Sin asignar'}</td>}
-        <td>{name(item)}</td>{kind === 'change-types' && <td>{'description' in item ? String(item.description ?? '—') : '—'}</td>}{kind === 'change-completion-types' && <><td>{'description' in item ? String(item.description ?? '—') : '—'}</td><td>{'applies_efficiency' in item && item.applies_efficiency ? 'Sí' : 'No'}</td></>}{(kind === 'positions' || kind === 'responsibles') && <td>{'department' in item && item.department ? (item.department as NamedCatalog).name : 'Sin asignar'}</td>}{kind === 'responsibles' && <td>{'position' in item && item.position ? (item.position as NamedCatalog).name : 'Sin asignar'}</td>}<td><span className={`status-badge ${item.active ? 'status-active' : 'status-neutral'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
-        <td className="whitespace-nowrap text-xs tabular-nums text-slate-600"><time dateTime={item.created_at} title={formatDate(item.created_at)}>{formatTableDate(item.created_at)}</time></td><td><div className="table-actions">
-          {kind === 'customers' && <><Link className="button-ghost table-action" to={`/circuits?customer_id=${item.id}`} aria-label={`Ver circuitos de ${code(item)}`}><Network size={14} aria-hidden="true" />Circuitos</Link><Link className="button-ghost table-action" to={`/tickets?customer_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}><Ticket size={14} aria-hidden="true" />Tickets</Link></>}
+        {(kind === 'customers' || kind === 'circuits') && <th scope="row" className="record-code">{kind === 'circuits' ? <Link to={`/circuits/${item.id}`} className="font-mono font-bold text-sky-400 hover:text-sky-300 hover:underline tracking-wide">{code(item)}</Link> : <span className="font-mono font-bold text-sky-400 tracking-wide">{code(item)}</span>}</th>}
+        {kind === 'circuits' && 'customer_id' in item && <td className="text-slate-300">{customerLabel(item.customer_id)}</td>}
+        {kind === 'circuits' && 'circuit_code' in item && <td className="text-slate-400 font-mono text-xs">{item.node?.name ?? 'Sin asignar'}</td>}
+        {kind === 'circuits' && 'circuit_code' in item && <td className="text-slate-400 font-mono text-xs">{item.sector?.name ?? 'Sin asignar'}</td>}
+        <td className={kind === 'customers' || kind === 'circuits' ? 'font-semibold text-white' : undefined}>{name(item)}</td>{kind === 'change-types' && <td>{'description' in item ? String(item.description ?? '—') : '—'}</td>}{kind === 'change-completion-types' && <><td>{'description' in item ? String(item.description ?? '—') : '—'}</td><td>{'applies_efficiency' in item && item.applies_efficiency ? 'Sí' : 'No'}</td></>}{(kind === 'positions' || kind === 'responsibles') && <td>{'department' in item && item.department ? (item.department as NamedCatalog).name : 'Sin asignar'}</td>}{kind === 'responsibles' && <td>{'position' in item && item.position ? (item.position as NamedCatalog).name : 'Sin asignar'}</td>}{kind === 'responsibles' && <td>{'operational_selectable' in item && item.operational_selectable === false ? 'No' : 'Sí'}</td>}{manageAccess && <td>{(() => { const row = accessRows.find(p => p.id === item.id); return row ? <>{row.username ?? 'Sin acceso configurado'}<span className="block text-xs text-muted">{row.effective_access ? 'Habilitado' : row.access_granted && !row.active ? 'Bloqueado por inactividad' : 'Deshabilitado'}{row.role_name ? ` · ${row.role_name}` : ''}</span></> : 'Administración de acceso restringida' })()}</td>}<td><span className={`status-badge ${item.active ? 'status-active' : 'status-neutral'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
+        <td className="whitespace-nowrap text-xs tabular-nums text-slate-400 font-mono"><time dateTime={item.created_at} title={formatDate(item.created_at)}>{formatTableDate(item.created_at)}</time></td><td><div className="table-actions">
+          {manageAccess && accessRows.some(p => p.id === item.id) && <button type="button" className="button-secondary table-action rounded-full" disabled={busy || Boolean(draft)} onClick={() => setAccessId(item.id)} aria-label={`Administrar acceso de ${name(item)}`}>{accessRows.find(p => p.id === item.id)?.account_exists ? 'Administrar acceso' : 'Configurar acceso'}</button>}
+          {kind === 'customers' && <><Can permission="circuits.view"><Link className="button-ghost table-action rounded-full text-sky-400 hover:text-sky-300 font-mono text-xs" to={`/circuits?customer_id=${item.id}`} aria-label={`Ver circuitos de ${code(item)}`}><Network size={13} aria-hidden="true" />Circuitos</Link></Can><Can permission="tickets.view"><Link className="button-ghost table-action rounded-full text-sky-400 hover:text-sky-300 font-mono text-xs" to={`/tickets?customer_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}><Ticket size={13} aria-hidden="true" />Tickets</Link></Can></>}
           {kind === 'circuits' && 'circuit_code' in item ? <CircuitActions circuit={item} disabled={busy || Boolean(draft)} onEdit={() => edit(item)} onToggle={() => toggle(item)} onDelete={() => { setError(null); setNotice(null); setDeleting(item) }} /> : <>
-          <button type="button" className="button-secondary table-action" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}><Pencil size={14} aria-hidden="true" />Editar</button><button type="button" className={`${item.active ? 'button-danger' : 'button-secondary'} table-action`} disabled={busy || Boolean(draft)} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}><Power size={14} aria-hidden="true" />{item.active ? 'Desactivar' : 'Activar'}</button>
-          {('customer_code' in item) && <button type="button" className="button-danger table-action" disabled={busy || Boolean(draft)} aria-label={`Eliminar ${code(item)}`} onClick={() => { setError(null); setNotice(null); setDeleting(item) }}><Trash2 size={14} aria-hidden="true" />Eliminar</button>}</>}</div></td>
+          <Can permission={permissionModule+".edit"}><button type="button" className="button-secondary table-action rounded-full" disabled={busy || Boolean(draft)} onClick={() => edit(item)} aria-label={`Editar ${code(item) || name(item)}`}><Pencil size={13} aria-hidden="true" />Editar</button></Can><Can permission={permissionModule+".edit"}><button type="button" className={`${item.active ? 'button-danger' : 'button-secondary'} table-action rounded-full`} disabled={busy || Boolean(draft) || kind === 'responsibles' && 'can_change_active' in item && item.can_change_active === false} onClick={() => toggle(item)} aria-label={`${item.active ? 'Desactivar' : 'Activar'} ${code(item) || name(item)}`}><Power size={13} aria-hidden="true" />{item.active ? 'Desactivar' : 'Activar'}</button></Can>
+          {('customer_code' in item) && <Can permission={permissionModule+".delete"}><button type="button" className="button-danger table-action rounded-full" disabled={busy || Boolean(draft)} aria-label={`Eliminar ${code(item)}`} onClick={() => { setError(null); setNotice(null); setDeleting(item) }}><Trash2 size={13} aria-hidden="true" />Eliminar</button></Can>}</>}</div></td>
       </tr>)}</tbody></table></div>}
-    {deleting && <CatalogDeleteConfirmation item={deleting} fallbackFocus={newRecordButton} onCancel={() => setDeleting(null)} onBusyChange={setBusy} onDeleted={() => {
+    {deleting && access.can(permissionModule+".delete") && <CatalogDeleteConfirmation item={deleting} fallbackFocus={newRecordButton} onCancel={() => setDeleting(null)} onBusyChange={setBusy} onDeleted={() => {
       setItems((current) => current.filter((row) => row.id !== deleting.id))
       setBusy(false)
       setNotice('Registro eliminado correctamente.')

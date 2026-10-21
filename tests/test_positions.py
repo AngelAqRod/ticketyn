@@ -31,7 +31,7 @@ def test_positions_scoped_catalog(api_client):
     assert p['id'] in [x['id'] for x in api_client.get('/api/positions', params={'include_inactive': True}).json()]
     assert api_client.patch(f"/api/positions/{p['id']}", json={'active': True, 'description': None}).json()['active']
     assert api_client.get('/api/positions/99999').status_code == 404
-    assert api_client.delete(f"/api/positions/{p['id']}").status_code == 405
+    assert api_client.delete(f"/api/positions/{p['id']}").status_code == 403
 
 
 @pytest.mark.parametrize('body', [{'name': ' '}, {'name': 'x'*101}, {'department_id': None}, {'department_id': 0}, {'description': ' '}])

@@ -22,6 +22,9 @@ def validate_active(session: Session, model, id: int):
     row = session.scalar(select(model).where(model.id == id).with_for_update(read=True, of=model))
     if row is None:
         raise HTTPException(404, 'El recurso relacionado no existe')
+    if model is Responsible:
+        from ticketyn.api.responsible_selection import selectable
+        selectable(row)
     if not row.active:
         raise HTTPException(422, 'El recurso relacionado está inactivo')
     return row

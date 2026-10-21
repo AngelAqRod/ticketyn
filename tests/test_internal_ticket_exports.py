@@ -104,6 +104,25 @@ def test_combined_filters_and_provider_semantics(api_client,format,provider_filt
             assert (item['reference'] in text)==any(row['id']==item['id'] for row in expected)
 
 
+def test_internal_exports_duration_semantics_for_closed_and_open(api_client, pdf_strings):
+    p = payload(api_client)
+    closed_no_end = api_client.post('/api/internal-tickets', json={**p, 'title': 'Int Cerrado sin fin', 'status': 'CLOSED', 'end_at': None}).json()
+    open_ticket = api_client.post('/api/internal-tickets', json={**p, 'title': 'Int Abierto sin fin', 'status': 'OPEN', 'end_at': None}).json()
+    closed_with_end = api_client.post('/api/internal-tickets', json={**p, 'title': 'Int Cerrado con fin', 'status': 'CLOSED', 'end_at': '2026-10-15T15:30:00Z'}).json()
+
+    book, rows = values(export(api_client, 'xlsx'))
+    exported = {row[0]: row for row in rows[1:]}
+    assert exported[closed_no_end['reference']][10] == 'Sin fecha de fin'
+    assert exported[open_ticket['reference']][10] == 'En curso'
+    assert exported[closed_with_end['reference']][10] == '1 h 30 min'
+
+    export(api_client, 'pdf')
+    text = ' '.join(pdf_strings)
+    assert 'Sin fecha de fin' in text
+    assert 'En curso' in text
+    assert '1 h 30 min' in text
+
+
 def test_export_parameters_and_literal_excel_text(api_client):
     p=payload(api_client)
     response=api_client.post('/api/internal-tickets',json={**p,'title':'=HYPERLINK("https://invalid")'})

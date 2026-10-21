@@ -1,6 +1,9 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '../test/render'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+// Authentication is exercised in auth/AuthGate.test.tsx; these tests isolate operational routing.
+vi.mock('../auth/AuthGate', () => ({ AuthGate: ({ children }: { children: React.ReactNode }) => children }))
+
 import App from '../App'
 import { jsonResponse, ticket } from '../test/fixtures'
 import type { Ticket } from '../types/ticket'
@@ -59,6 +62,16 @@ describe('detalle de tickets', () => {
     expect(screen.getByText('Fecha de creación')).toBeInTheDocument()
     expect(screen.getByText('Última actualización')).toBeInTheDocument()
     expect(mock).toHaveBeenCalledWith('/api/customers/1', expect.any(Object))
+  })
+  it('muestra "Sin fecha de fin" en detalle de ticket cerrado sin fin', async () => {
+    mockApi({ ...ticket, status: 'CLOSED', end_at: null, duration_seconds: null }); open()
+    await screen.findByRole('heading', { name: ticket.reference })
+    expect(screen.getByText('Duración').nextElementSibling).toHaveTextContent('Sin fecha de fin')
+  })
+  it('muestra duración formateada en detalle cuando el ticket tiene duración calculada', async () => {
+    mockApi({ ...ticket, status: 'CLOSED', end_at: '2026-01-01T13:00:00Z', duration_seconds: 3600 }); open()
+    await screen.findByRole('heading', { name: ticket.reference })
+    expect(screen.getByText('Duración').nextElementSibling).toHaveTextContent('1 h')
   })
   it('mantiene disponible el seguimiento en tickets cerrados', async () => {
     mockApi({ ...ticket, status: 'CLOSED', end_at: '2026-01-01T13:00:00Z' }); open()

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import Request, APIRouter, Path, Query, Response
 
 from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_items, save_item, update_item
 from ticketyn.models import Circuit, Customer, Ticket
@@ -10,7 +10,9 @@ router = APIRouter(prefix="/api/customers", tags=["customers"])
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)
-def create_customer(payload: CustomerCreate, session: DBSession):
+def create_customer(payload: CustomerCreate, session: DBSession, request: Request):
+    from ticketyn.security.mutations import contextual_creation
+    contextual_creation(request.state.principal, 'customers', payload.model_dump())
     return save_item(session, Customer(**payload.model_dump()))
 
 

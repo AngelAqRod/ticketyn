@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '../test/render'
 import { MemoryRouter } from 'react-router'
 import { describe, it, expect, vi } from 'vitest'
 import { FmsReports } from './FmsReports'

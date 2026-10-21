@@ -1,3 +1,4 @@
+import { operationalChoice } from '../lib/responsibles'
 import { listEscalations } from '../api/escalations'
 import type { Escalation } from '../types/escalation'
 import { useEffect, useRef, useState } from 'react'
@@ -108,7 +109,7 @@ export function TicketInterventionModal({ ticketId, onCreated, onCancel, interna
         <FormField id="follow-up-escalation" label="Escalamiento relacionado (opcional)"><SearchableSelect id="follow-up-escalation" label="Escalamiento relacionado" value={escalationId} onChange={setEscalationId} options={escalations.map((item) => ({ value: String(item.id), label: `#${item.id} · ${item.recipient?.name ?? 'Pendiente de asignación'} · ${item.reason.name}` }))} placeholder="Sin escalamiento" emptyMessage="Este ticket no tiene escalamientos." noMatchMessage="Sin coincidencias." /></FormField>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <FormField id="follow-up-responsible" label="Responsable de la intervención" {...fieldProps('responsible_id')}>
-            <SearchableSelect id="follow-up-responsible" label="Responsable de la intervención" value={responsibleId} options={responsibles.map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} onChange={setResponsibleId} disabled={saving || catalogLoading || Boolean(catalogError)} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="Sin coincidencias." />
+            <SearchableSelect id="follow-up-responsible" label="Responsable de la intervención" value={responsibleId} options={responsibles.filter(p => operationalChoice(p)).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} onChange={setResponsibleId} disabled={saving || catalogLoading || Boolean(catalogError)} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="Sin coincidencias." />
           </FormField>
           {!internal && <FormField id="follow-up-visibility" label="Visibilidad" {...fieldProps('visibility')}>
             <select id="follow-up-visibility" className="form-input" value={visibility} onChange={(event) => setVisibility(event.target.value as TicketUpdateVisibility)}><option value="INTERNAL">Interna</option><option value="PUBLIC">Pública</option></select>

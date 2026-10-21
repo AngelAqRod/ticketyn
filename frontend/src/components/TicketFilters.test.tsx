@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '../test/render'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TicketFilters } from './TicketFilters'
 import { ticketQuery, localDateBoundary } from '../lib/ticketFilters'
@@ -65,4 +65,47 @@ it('Ayer usa un día completo y al editar pasa a Personalizado', () => {
   expect(screen.getByLabelText('Hasta')).toHaveValue('2026-01-30')
   fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-01-31' } })
   expect(period('Personalizado')).toHaveAttribute('aria-pressed', 'true')
+})
+
+describe('panel colapsable de filtros', () => {
+  it('inicia expandido, muestra contador y permite contraer/expandir conservando chips y filtros', () => {
+    sessionStorage.clear()
+    setup('status=OPEN')
+    const toggleButton = screen.getByRole('button', { name: /contraer filtros de tickets/i })
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByLabelText('1 filtro activo')).toBeInTheDocument()
+
+    const content = document.getElementById('ticket-filters-content')
+    expect(content).not.toHaveAttribute('hidden')
+    expect(content).toHaveClass('block')
+    expect(screen.getByLabelText('Estado')).toHaveValue('OPEN')
+
+    fireEvent.click(toggleButton)
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'false')
+    expect(toggleButton).toHaveAccessibleName('Expandir filtros de tickets')
+    expect(content).toHaveAttribute('hidden')
+    expect(content).toHaveClass('hidden')
+
+    expect(screen.getByLabelText('1 filtro activo')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filtros activos')).toBeInTheDocument()
+    expect(screen.getByText('Estado: Abierto')).toBeInTheDocument()
+    expect(screen.getByTestId('query')).toHaveTextContent('{"status":"OPEN"}')
+
+    fireEvent.click(toggleButton)
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true')
+    expect(content).not.toHaveAttribute('hidden')
+    expect(content).toHaveClass('block')
+    expect(screen.getByLabelText('Estado')).toHaveValue('OPEN')
+  })
+
+  it('restaura el estado contraído guardado en sessionStorage dentro de la sesión', () => {
+    sessionStorage.setItem('ticketyn_ticket_filters_expanded', 'false')
+    setup('search=FOO')
+    const toggleButton = screen.getByRole('button', { name: /expandir filtros de tickets/i })
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'false')
+    const content = document.getElementById('ticket-filters-content')
+    expect(content).toHaveAttribute('hidden')
+    expect(screen.getByText('Búsqueda: FOO')).toBeInTheDocument()
+    sessionStorage.clear()
+  })
 })

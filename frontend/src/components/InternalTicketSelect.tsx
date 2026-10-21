@@ -1,3 +1,4 @@
+import { Can } from '../auth/permissions'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { getJson } from '../api/client'
@@ -30,7 +31,7 @@ export function InternalTicketSelect({ value, onChange, disabled }: { value: str
   const options = selected && String(selected.id) === value && !rows.some(row => row.id === selected.id) ? [selected, ...rows] : rows
   return <div className="min-w-0"><SearchableSelect id="related-internal-ticket" label="Ticket interno relacionado" value={value} disabled={disabled} onChange={onChange} remote onSearchChange={query => { setActivated(true); setSearch(query); setOffset(0) }} options={options.map(row => ({ value: String(row.id), label: `${row.reference} — ${row.title}` }))} placeholder="Sin ticket interno relacionado" emptyMessage={loading ? 'Buscando...' : 'No hay tickets internos.'} noMatchMessage="Sin coincidencias." dropdownFooter={<div className="flex flex-wrap gap-2 px-2">{offset > 0 && <button type="button" onMouseDown={event => event.preventDefault()} className="button-ghost" onClick={() => setOffset(Math.max(0, offset - 20))}>Resultados anteriores</button>}{more && <button type="button" onMouseDown={event => event.preventDefault()} className="button-ghost" disabled={loading} onClick={() => setOffset(offset + 20)}>Más resultados</button>}</div>} />
     <RequestState compact loading={loading} error={error} loadingText="Buscando tickets internos..." errorTitle="" onRetry={() => setRetry(retry + 1)} />
-    {selected && String(selected.id) === value && <p className="mt-1 text-xs text-muted whitespace-pre-wrap [overflow-wrap:anywhere]">{selected.description}</p>}
-    {value && <Link className="button-ghost" to={`/internal-tickets/${value}`}>Ver ticket interno</Link>}
+    {selected && String(selected.id) === value && <p className="mt-1.5 text-xs text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{selected.description}</p>}
+    {value && <Can permission="internal_tickets.view"><Link className="button-ghost rounded-full mt-1.5 inline-flex" to={`/internal-tickets/${value}`}>Ver ticket interno</Link></Can>}
   </div>
 }

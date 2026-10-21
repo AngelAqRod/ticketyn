@@ -19,8 +19,9 @@ _spec = importlib.util.spec_from_file_location('updater_release_identity', Path(
 ri = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ri)
 
-FILES = ('update.sh', 'backup.sh', 'deploy/update_support.py',
-         'deploy/restore_support.py', 'deploy/release_identity.py')
+LEGACY_FILES = ('update.sh', 'backup.sh', 'deploy/update_support.py',
+                'deploy/restore_support.py', 'deploy/release_identity.py')
+FILES = LEGACY_FILES + ('deploy/install_security.py',)
 FORMAT = 'ticketyn-admin-updater-v1'
 
 
@@ -45,9 +46,9 @@ def mkdir(path):
     secure(path, directory=True)
 
 
-def snapshot(source):
+def snapshot(source, files=FILES):
     values = {}
-    for name in FILES:
+    for name in files:
         path = Path(source)/name
         if any(parent.is_symlink() for parent in path.parents):
             raise ValueError('Symlink en fuente del updater: '+str(path))
@@ -70,13 +71,21 @@ def validate_bundle(bundle):
     secure(bundle, directory=True)
     secure(bundle/'deploy', directory=True)
     secure(bundle/'manifest.json')
-    for name in FILES:
+    # Existing five-file bundles stay verifiable while the new bundle adds the
+    # shared capability detector. Never accept arbitrary manifest file lists.
+    recorded = json.loads((bundle/'manifest.json').read_text())
+    if not isinstance(recorded, dict) or not isinstance(recorded.get('files'), dict):
+        raise ValueError('Manifiesto del bundle inválido.')
+    files = set(recorded.get('files', {}))
+    if files not in (set(FILES), set(LEGACY_FILES)):
+        raise ValueError('Inventario desconocido del bundle del updater.')
+    for name in files:
         secure(bundle/name)
-    expected = set(FILES) | {'deploy', 'manifest.json'}
+    expected = files | {'deploy', 'manifest.json'}
     if {str(p.relative_to(bundle)) for p in bundle.rglob('*')} != expected:
         raise ValueError('Contenido inesperado en bundle del updater.')
-    key, manifest = identity(snapshot(bundle))
-    if bundle.name != key or json.loads((bundle/'manifest.json').read_text()) != manifest:
+    key, manifest = identity(snapshot(bundle, files))
+    if bundle.name != key or recorded != manifest:
         raise ValueError('Bundle del updater modificado o identidad inválida.')
     return key
 

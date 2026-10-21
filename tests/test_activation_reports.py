@@ -97,7 +97,10 @@ def test_only_two_queries_for_complete_history(api_client, activation, db_sessio
     bind = db_session.get_bind(); event.listen(bind, 'before_cursor_execute', count)
     try: assert report(api_client, activation['id']).status_code == 200
     finally: event.remove(bind, 'before_cursor_execute', count)
-    assert len(statements) == 2
+    # Authentication reads are separate from the unchanged two-query report.
+    auth_queries = [sql for sql in statements if 'security_roles' in sql or 'security_config' in sql]
+    assert len(auth_queries) == 2
+    assert len(statements) - len(auth_queries) == 2
 
 
 def test_failure_is_controlled_and_temporary_file_closed(api_client, monkeypatch):

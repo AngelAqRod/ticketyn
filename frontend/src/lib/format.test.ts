@@ -8,6 +8,17 @@ describe('formatDuration', () => {
   ])('formatea %s como %s', (input, output) => {
     expect(formatDuration(input)).toBe(output)
   })
+
+  it('formatea null según el estado del ticket', () => {
+    expect(formatDuration(null, 'OPEN')).toBe('En curso')
+    expect(formatDuration(null, 'CLOSED')).toBe('Sin fecha de fin')
+    expect(formatDuration(null)).toBe('En curso')
+  })
+
+  it('respeta la duración calculada independientemente del estado', () => {
+    expect(formatDuration(3600, 'CLOSED')).toBe('1 h')
+    expect(formatDuration(3600, 'OPEN')).toBe('1 h')
+  })
 })
 
 it('formatea fechas sin modificar el timestamp original', () => {

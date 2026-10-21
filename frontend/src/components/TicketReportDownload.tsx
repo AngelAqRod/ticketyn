@@ -75,7 +75,7 @@ export function TicketReportDownload({ ticketId }: { ticketId: number }) {
   }
 
   return <div className="min-w-0" aria-busy={busy}>
-    <button ref={trigger} type="button" className="button-secondary" aria-expanded={open} aria-controls={open ? menuId : undefined}
+    <button ref={trigger} type="button" className="button-secondary rounded-full" aria-expanded={open} aria-controls={open ? menuId : undefined}
       onClick={() => setOpen((value) => !value)} onKeyDown={(event) => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true) }
       }}><FileDown size={16} aria-hidden="true" />Exportar PDF</button>

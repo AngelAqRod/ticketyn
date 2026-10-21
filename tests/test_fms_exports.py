@@ -120,7 +120,11 @@ def test_xlsx_query_count_does_not_grow_with_records(api_client, exported_operat
     event.listen(bind, 'before_cursor_execute', capture)
     try: assert api_client.get(f'/api/{kind}/export/xlsx').status_code == 200
     finally: event.remove(bind, 'before_cursor_execute', capture)
-    assert len(statements) == 1
+    # The protected request also validates the principal and security configuration.
+    selects = [sql for sql in statements if sql.lstrip().upper().startswith('SELECT ')]
+    auth = [sql for sql in selects if 'security_roles' in sql or 'security_config' in sql]
+    assert len(auth) == 2
+    assert len(selects) - len(auth) == 1
 
 
 def test_generation_failure_closes_private_temporary_file(api_client, monkeypatch):

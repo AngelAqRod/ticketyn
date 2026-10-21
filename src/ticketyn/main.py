@@ -24,24 +24,65 @@ from ticketyn.api.escalations import router as escalations_router
 from ticketyn.api.escalation_reasons import router as escalation_reasons_router
 from ticketyn.api.escalation_stats import router as escalation_stats_router
 from ticketyn.core.config import get_settings
+from ticketyn.core.version import get_version
 
 
-def create_app(*, start_notifications=True, notification_engine=None) -> FastAPI:
+def create_app(*, start_notifications=True, notification_engine=None, security_session_factory=None,
+               start_audit_retention=None, audit_retention_session_factory=None) -> FastAPI:
     get_settings()
     @asynccontextmanager
     async def lifespan(app):
+        from ticketyn.security.passwords import dummy_hash
+        await asyncio.to_thread(dummy_hash)
+        from ticketyn.security.http import cleanup_loop
+        retention, retention_engine = None, None
+        # Existing test apps disable background work with start_notifications=False.
+        # Retention can be enabled independently with an explicit ephemeral factory.
+        if start_audit_retention is True or (start_audit_retention is None and start_notifications):
+            from ticketyn.security.retention import AuditRetentionMaintenance
+            factory = audit_retention_session_factory or security_session_factory
+            if factory is None and notification_engine is not None:
+                from sqlalchemy.orm import sessionmaker
+                # Preserve any ephemeral schema mapping injected by job tests.
+                factory = sessionmaker(notification_engine)
+            if factory is None:
+                from sqlalchemy import create_engine
+                from sqlalchemy.orm import sessionmaker
+                from ticketyn.db.session import get_engine
+                # One bounded local pool; same configured database, no new service.
+                retention_engine = create_engine(get_engine().url, pool_size=1, max_overflow=0,
+                                                pool_timeout=1, connect_args={'connect_timeout': 3})
+                factory = sessionmaker(retention_engine)
+            retention = AuditRetentionMaintenance(factory)
+        cleanup = asyncio.create_task(cleanup_loop(app, retention))
         processor = None
-        if start_notifications:
-            from ticketyn.db.session import get_engine
-            from ticketyn.notifications.processor import NotificationProcessor
-            processor = NotificationProcessor(notification_engine if notification_engine is not None else get_engine())
-            processor.start()
         try:
+            if start_notifications:
+                from ticketyn.db.session import get_engine
+                from ticketyn.notifications.processor import NotificationProcessor
+                processor = NotificationProcessor(notification_engine if notification_engine is not None else get_engine())
+                processor.start()
             yield
         finally:
+            cleanup.cancel()
+            try:
+                await cleanup
+            except asyncio.CancelledError:
+                pass
             if processor is not None: await asyncio.to_thread(processor.stop)
+            if retention_engine is not None: retention_engine.dispose()
 
-    app = FastAPI(title="Ticketyn", version="0.5.0", lifespan=lifespan)
+    app = FastAPI(title="Ticketyn", version=get_version(), lifespan=lifespan)
+    from ticketyn.security.http import install_security
+    from ticketyn.api.auth import router as auth_router
+    install_security(app, security_session_factory)
+    app.include_router(auth_router)
+    from ticketyn.api.security_roles import router as security_roles_router
+    app.include_router(security_roles_router)
+    from ticketyn.api.security_accounts import router as security_accounts_router
+    app.include_router(security_accounts_router)
+    from ticketyn.api.security_audit import router as security_audit_router
+    app.include_router(security_audit_router)
     from ticketyn.api.mail_notifications import router as mail_notifications_router
     from ticketyn.api.mail_transport import install_callback_log_filter
     from ticketyn.api import mail_jobs  # registers operational controls on the mail router
@@ -80,6 +121,8 @@ def create_app(*, start_notifications=True, notification_engine=None) -> FastAPI
     app.include_router(ticket_updates_router)
     app.include_router(ticket_reports_router)
     app.include_router(reports_router)
+    from ticketyn.security.routes import validate_coverage
+    validate_coverage(app)
     return app
 
 

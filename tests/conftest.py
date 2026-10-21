@@ -76,6 +76,8 @@ def api_client(db_session, monkeypatch):
 
         app.dependency_overrides[get_session] = override_session
         with TestClient(app) as client:
+            from security_helpers import authenticate_test_client
+            authenticate_test_client(app, client, db_session.get_bind())
             yield client
     finally:
         get_settings.cache_clear()

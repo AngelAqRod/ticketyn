@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '../test/render'
 import { describe, expect, it } from 'vitest'
 import { SevenSegmentNumber } from './SevenSegmentNumber'
 import { identityFor } from './moduleIdentity'
@@ -19,7 +19,10 @@ describe('Siete segmentos', () => {
   it('mantiene la identidad del encabezado alineada con el orden de navegación', () => {
     expect(identityFor('/activations/1')?.number).toBe('07')
     expect(identityFor('/reports')?.number).toBe('10')
-    expect(identityFor('/catalogs')?.number).toBe('14')
-    expect(identityFor('/settings')?.number).toBe('15')
+    expect(identityFor('/responsibles')?.number).toBe('14')
+    expect(identityFor('/security-roles')?.number).toBe('15')
+    expect(identityFor('/security-sessions')?.number).toBe('16')
+    expect(identityFor('/catalogs')?.number).toBe('17')
+    expect(identityFor('/settings')?.number).toBe('18')
   })
 })

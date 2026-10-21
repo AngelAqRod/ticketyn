@@ -129,8 +129,8 @@ def test_concurrent_fk_insert_blocks_delete_and_preserves_both(postgres_engine):
 
 def test_delete_not_exposed_for_tickets_updates_or_other_catalogs(api_client):
     for resource in ['tickets', 'nodes', 'responsibles', 'sectors', 'departments', 'incident-types']:
-        assert api_client.delete(f'/api/{resource}/999999').status_code == 405
-    assert api_client.delete('/api/tickets/999999/updates').status_code == 405
+        assert api_client.delete(f'/api/{resource}/999999').status_code == 403
+    assert api_client.delete('/api/tickets/999999/updates').status_code == 403
 
 
 @pytest.mark.parametrize('sqlstate', ['40001', '40P01', '55P03'])

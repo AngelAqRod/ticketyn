@@ -130,6 +130,30 @@ Configuración: /etc/ticketyn"
         case "$answer" in ''|[SsYy]) return ;; [Nn]) info 'Instalación cancelada.'; exit 0 ;; *) info 'Responde S o N.' ;; esac
     done
 }
+fetch_install_source() {
+    # Run only the trusted local helper, never install.sh from the downloaded tag.
+    command -v python3 >/dev/null || fail 'La selección de releases requiere Python 3.11+ instalado previamente.'
+    python3 -c 'import sys; sys.version_info >= (3,11) or sys.exit("Se requiere Python >= 3.11 para consultar releases")'
+    local args=() previous status
+    if [[ -e $INSTALL_STATE || -L $INSTALL_STATE ]]; then
+        protected_path "$INSTALL_STATE" 700
+        [[ $(state_get format) == 1 ]] || fail 'Formato de recuperación desconocido.'
+        status=$(state_get status)
+        [[ $status != complete ]] || fail 'Ticketyn ya está instalado; utiliza el updater, no install.sh.'
+        [[ $status == partial || $status == failed ]] || fail 'Estado de recuperación inválido.'
+        previous=$(state_get version)
+        [[ $previous =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'Versión de recuperación inválida.'
+        args=(--resume-tag "v$previous")
+        info "Recuperación explícita de la instalación parcial v$previous; no se cambia a otra release."
+    else
+        info 'Consultando la última release estable pública de Ticketyn en GitHub...'
+    fi
+    SELECTED_TAG=$(python3 -I -B "$INSTALLER_SOURCE/deploy/install_release.py" "$WORK/source" "${args[@]}") \
+        || fail 'No se pudo obtener la release oficial. No se utilizará el checkout local ni otra versión.'
+    [[ $SELECTED_TAG =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'Tag de release inválido.'
+    SOURCE="$WORK/source"
+    info "Release seleccionada para instalar: $SELECTED_TAG (repositorio oficial AngelAqRod/ticketyn)."
+}
 # Estado de instalación: datos no secretos, nunca se ejecuta con source/eval.
 # Las rutas de producción se fijan en main; los helpers admiten rutas temporales en tests.
 protected_path() {
@@ -168,7 +192,7 @@ load_state() {
     RELEASE_READY=$(state_get release_ready)
     [[ $RELEASE_READY =~ ^[01]$ ]] || fail 'Estado del release inválido.'
     PHASE=$(state_get phase)
-    [[ $PHASE =~ ^(inicial|paquetes|database|release|servicios|comprobaciones|completa)$ ]] || fail 'Fase de recuperación inválida.'
+    [[ $PHASE =~ ^(inicial|paquetes|database|release|bootstrap|servicios|comprobaciones|completa)$ ]] || fail 'Fase de recuperación inválida.'
     local status
     status=$(state_get status)
     [[ $status == partial || $status == failed || $status == complete ]] || fail 'Estado de recuperación inválido.'
@@ -230,10 +254,13 @@ create_owned_link() {
     rmdir -- "$temporary"
 }
 release_tar() {
+    local extra=()
+    # Optional for legacy releases; part of source identity when supplied.
+    [[ ! -f $SOURCE/bootstrap-superadmin.sh ]] || extra+=(bootstrap-superadmin.sh)
     tar -C "$SOURCE" --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
         --exclude='__pycache__' --exclude='*.pyc' --exclude='.env*' --exclude='*.egg-info' \
         --exclude='.git' --exclude='node_modules' --exclude='.pytest_cache' --exclude='.mypy_cache' --exclude='.ruff_cache' \
-        -cf - src alembic alembic.ini pyproject.toml requirements.lock LICENSE README.md deploy frontend/dist
+        -cf - src alembic alembic.ini pyproject.toml requirements.lock LICENSE README.md deploy frontend/dist "${extra[@]}"
 }
 validate_release_source() {
     local root=$1 entry base
@@ -260,6 +287,51 @@ validate_release_source() {
     for entry in alembic.ini pyproject.toml requirements.lock LICENSE README.md; do
         [[ -f $root/$entry && ! -L $root/$entry ]] || fail "Archivo fuente inesperado: $root/$entry"
     done
+    if [[ -e $root/bootstrap-superadmin.sh || -L $root/bootstrap-superadmin.sh ]]; then
+        [[ -f $root/bootstrap-superadmin.sh && ! -L $root/bootstrap-superadmin.sh && \
+            $(stat -c %h "$root/bootstrap-superadmin.sh") == 1 ]] || fail 'Bootstrap no permitido: se requiere un archivo ordinario sin enlaces.'
+        bash -n "$root/bootstrap-superadmin.sh" || fail 'Sintaxis del bootstrap inválida.'
+    fi
+}
+detect_authentication() {
+    AUTH_MODE=$(python3 -I -B "$INSTALLER_SOURCE/deploy/install_security.py" "$SOURCE") \
+        || fail 'No se puede determinar con seguridad la compatibilidad de autenticación de la release.'
+    [[ $AUTH_MODE == required || $AUTH_MODE == legacy ]] || fail 'Modo de autenticación no reconocido.'
+    ADMIN_READY=0
+}
+bootstrap_pending() {
+    printf 'Inicialización administrativa pendiente. Para reanudar manualmente:\n  sudo "%s/bootstrap-superadmin.sh" --config "%s"\nDespués reejecuta el instalador desde la misma copia de confianza para completar las verificaciones.\n' "$RELEASE" "$ENV_FILE" >&2
+}
+run_bootstrap() {
+    # The candidate's interpreter is mandatory: never fall back to another release.
+    [[ -x $RELEASE/.venv/bin/python && -x $RELEASE/bootstrap-superadmin.sh ]] \
+        || { printf 'Error: falta el intérprete o el bootstrap de la release preparada.\n' >&2; return 2; }
+    "$RELEASE/bootstrap-superadmin.sh" --config "$ENV_FILE" "$@" 9>&-
+}
+initialize_administration() {
+    ADMIN_READY=0
+    case "$AUTH_MODE" in
+        legacy) info 'La release seleccionada no incorpora autenticación; no se ejecuta bootstrap.'; return ;;
+        required) ;;
+        *) fail 'No se comprobó el modo de autenticación de la release.' ;;
+    esac
+    [[ ${RELEASE_READY:-0} == 1 ]] || fail 'La instalación técnica y las migraciones deben completarse antes del bootstrap.'
+    info 'Instalación técnica completada: código, dependencias y esquema preparados.'
+    local code=0
+    # Capture only the exit code, never passwords, user input or bootstrap output.
+    run_bootstrap --check || code=$?
+    case "$code" in
+        0) ;;
+        3)
+            [[ -t 0 ]] || { bootstrap_pending; fail 'Se requiere una terminal interactiva para crear el Superadministrador.'; }
+            info 'Se requiere inicializar el primer Superadministrador.'
+            run_bootstrap || { bootstrap_pending; fail 'El bootstrap falló o fue interrumpido; no se iniciarán nuevos servicios.'; }
+            ;;
+        *) bootstrap_pending; fail 'No se pudo verificar el Superadministrador. Revisa PostgreSQL, migraciones y posibles inconsistencias administrativas.' ;;
+    esac
+    run_bootstrap --check || { bootstrap_pending; fail 'El bootstrap no confirmó un Superadministrador válido.'; }
+    ADMIN_READY=1
+    info 'Inicialización administrativa completada: existe un Superadministrador válido.'
 }
 check_existing() {
     allow_owned_or_absent current "$CURRENT_FILE"
@@ -519,19 +591,31 @@ final_checks() {
         curl -fsS --max-time 10 "$base$asset" > "$WORK/asset" || fail "No se sirve el asset $asset."
         cmp -s "$WORK/asset" "$RELEASE/frontend/dist$asset" || fail "Asset incorrecto: $asset."
     done
-    curl -fsS --max-time 10 "$base/api/customers" > "$WORK/customers.json" || fail 'La API/DB no responde mediante Nginx.'
-    python3 - "$WORK" <<'PY'
+    if [[ ${AUTH_MODE:-legacy} == required ]]; then
+        [[ ${ADMIN_READY:-0} == 1 ]] || fail 'La inicialización administrativa sigue pendiente.'
+        local status
+        status=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$base/api/customers") \
+            || fail 'No se pudo comprobar la protección de la API mediante Nginx.'
+        [[ $status == 401 ]] || fail "La API protegida debía rechazar acceso anónimo (401); respondió $status."
+        run_bootstrap --check || fail 'La comprobación final no confirmó un Superadministrador válido y conexión a PostgreSQL.'
+    else
+        curl -fsS --max-time 10 "$base/api/customers" > "$WORK/customers.json" || fail 'La API/DB no responde mediante Nginx.'
+    fi
+    python3 - "$WORK" "${AUTH_MODE:-legacy}" <<'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 if json.loads((root/'health.json').read_text()) != {'status': 'ok'}:
     raise SystemExit('Error: respuesta health inválida')
-if not isinstance(json.loads((root/'customers.json').read_text()), list):
+if sys.argv[2] == 'legacy' and not isinstance(json.loads((root/'customers.json').read_text()), list):
     raise SystemExit('Error: respuesta API inválida')
 PY
     check_backend_socket
     [[ $(readlink -f "$CURRENT_FILE") == "$RELEASE" && -s $CURRENT_FILE/frontend/dist/index.html ]] || fail 'Release activo/frontend incorrecto.'
 }
 show_success() {
+    if [[ ${AUTH_MODE:-legacy} == required && ${ADMIN_READY:-0} != 1 ]]; then
+        fail 'Ticketyn no está listo: inicialización administrativa pendiente.'
+    fi
     local address suffix
     address=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1);exit}}' || true)
     [[ -n $address && $address != 127.* ]] || address=$(hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i !~ /:/ && $i !~ /^127\./) {print $i;exit}}' || true)
@@ -546,11 +630,14 @@ show_success() {
 ✓ API verificada
 
 Ticketyn se instaló correctamente.
-URL: http://$address$suffix
-
-Esta instalación utiliza HTTP y no incorpora autenticación.
-Para exposición fuera de una red controlada configura HTTPS
-y los controles de acceso correspondientes."
+URL: http://$address$suffix"
+    if [[ ${AUTH_MODE:-legacy} == required ]]; then
+        info 'Autenticación habilitada e inicialización administrativa verificada.
+Inicia sesión con el Superadministrador configurado; cambia la contraseña temporal si corresponde.'
+    else
+        info 'La release instalada no incorpora autenticación.'
+    fi
+    info 'Esta instalación utiliza HTTP. Configura HTTPS y los controles de red correspondientes antes de exponer el servicio.'
 }
 policy_content() {
     printf '%s\n' '#!/bin/sh' '# Temporal Ticketyn v2; sin lock activo no bloquea servicios.' "# Instalación: $INSTALL_TOKEN" \
@@ -572,6 +659,9 @@ cleanup() {
         if [[ $code != 0 ]]; then
             state_put status failed || true
             printf 'Instalación parcial conservada (fase %s). Reejecuta el mismo install.sh/árbol; no borres la DB.\n' "${PHASE:-inicial}" >&2
+            if [[ ${PHASE:-} == bootstrap && ${AUTH_MODE:-legacy} == required && ${ADMIN_READY:-0} != 1 ]]; then
+                bootstrap_pending
+            fi
         fi
         if [[ ${OWN_POLICY:-0} == 1 ]]; then
             # Si alguien la cambió, nunca eliminarla basándose solo en el nombre.
@@ -613,7 +703,7 @@ main() {
     unset DATABASE_URL PYTHONPATH PYTHONHOME
     local variable
     for variable in "${!PG@}"; do unset "$variable"; done
-    SOURCE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+    INSTALLER_SOURCE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
     check_os
     command -v systemctl >/dev/null && [[ -d /run/systemd/system ]] || fail 'Se requiere systemd en ejecución.'
     systemctl show-environment >/dev/null || fail 'No se puede comunicar con systemd.'
@@ -631,10 +721,17 @@ main() {
     NGINX_DEFAULT_LINK=/etc/nginx/sites-enabled/default
     NGINX_DEFAULT_FILE=/etc/nginx/sites-available/default
     POLICY_FILE=/usr/sbin/policy-rc.d
+    WORK=$(mktemp -d /tmp/ticketyn-install.XXXXXXXX)
+    trap cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    fetch_install_source
     check_project
     validate_release_source "$SOURCE"
+    detect_authentication
     SOURCE_HASH=$(release_tar | sha256sum | cut -d ' ' -f1)
     VERSION=$(project_version "$SOURCE")
+    [[ $SELECTED_TAG == "v$VERSION" ]] || fail 'La versión descargada no coincide con la release seleccionada.'
     RELEASE="/opt/ticketyn/releases/$VERSION"
     load_state
     check_existing
@@ -645,10 +742,6 @@ main() {
     fi
     if [[ $RECOVERING == 0 ]]; then choose_port; fi
     confirm_install
-    WORK=$(mktemp -d /tmp/ticketyn-install.XXXXXXXX)
-    trap cleanup EXIT
-    trap 'exit 130' INT
-    trap 'exit 143' TERM
     [[ ! -L $INSTALL_LOCK ]] || fail 'Lock inesperado (symlink); no se abre.'
     if [[ -e $INSTALL_LOCK ]]; then
         [[ -f $INSTALL_LOCK && $(stat -c %u "$INSTALL_LOCK") == 0 ]] || fail 'Lock ajeno; no se modifica.'
@@ -682,6 +775,8 @@ main() {
     phase release
     info 'Preparando release, Python y migraciones...'
     prepare_release
+    phase bootstrap
+    initialize_administration
     info 'Instalando comando administrativo ticketyn-update...'
     install_admin_updater
     phase servicios

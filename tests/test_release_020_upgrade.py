@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
 from ticketyn.core.config import get_settings
+from ticketyn.core.version import get_version
 from ticketyn.db.session import get_session
 from test_e2e_update_migration import cli, snapshot
 
@@ -53,7 +54,9 @@ def test_016_to_020_preserves_domain_and_supports_followup(postgres_engine, monk
                 yield db
         app.dependency_overrides[get_session] = session
         with TestClient(app) as client:
-            assert app.version == '0.5.0'
+            from security_helpers import authenticate_test_client
+            authenticate_test_client(app, client, engine)
+            assert app.version == get_version()
             assert client.get('/health').json() == {'status': 'ok'}
             for id in [1, 2]:
                 before_ticket = client.get(f'/api/tickets/{id}').json()

@@ -1,6 +1,9 @@
-import { fireEvent,render,screen,waitFor,within } from '@testing-library/react'
+import { fireEvent,render,screen,waitFor,within } from '../test/render'
 import { MemoryRouter } from 'react-router'
 import { beforeEach,describe,expect,it,vi } from 'vitest'
+// Authentication is exercised in auth/AuthGate.test.tsx; these tests isolate operational routing.
+vi.mock('../auth/AuthGate', () => ({ AuthGate: ({ children }: { children: React.ReactNode }) => children }))
+
 import App from '../App'
 import { jsonResponse } from '../test/fixtures'
 import type { Change } from '../types/change'
@@ -8,7 +11,7 @@ vi.mock('../components/ReportCharts',()=>({TrendChart:()=> <div/>,DistributionCh
 const catalog={id:1,name:'NOC',active:true,created_at:'2026-01-01T00:00:00Z'}
 const person={...catalog,name:'Encargado NOC',department_id:1,department:catalog}
 const item:Change={change_type_id:1,change_type:catalog,id:1,reference:'CAM-0000001',ticket_number:1,title:'Actualización de transporte',description:'Configuración histórica',sector_id:1,node_id:null,manager_id:1,manager_name:person.name,department_id:1,department_name:'NOC',support:[],status:'FINISHED',proposed_start:'2026-10-15T17:00:00Z',proposed_end:'2026-10-15T21:00:00Z',actual_start:'2026-10-15T19:00:00Z',actual_end:'2026-10-15T21:00:00Z',completion_type_id:1,completion_name:'Finalizado con éxito',efficiency_eligible:true,final_notes:'Finalizado',created_at:'2026-10-16T00:00:00Z',updated_at:'2026-10-16T00:00:00Z',sector:catalog,node:null,internal_tickets:[],planned_seconds:14400,actual_seconds:7200,efficiency:'BETTER',efficiency_label:'Mayor eficiencia',variation_percent:50,saved_seconds:7200,exceeded_seconds:0,late_start:true}
-function setup(path='/changes',empty=false,initialSupport:Change['support']=[],overrides:Partial<Change>={}){
+function setup(path='/changes',empty=false,initialSupport:Change['support']=[],overrides:Partial<Change>={},unavailable=false){
  vi.stubGlobal('URL',class extends URL {static createObjectURL=vi.fn(()=> 'blob:changes');static revokeObjectURL=vi.fn()})
  const click=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{})
  const mock=vi.fn((url:string,init?:RequestInit)=>{
@@ -22,7 +25,7 @@ function setup(path='/changes',empty=false,initialSupport:Change['support']=[],o
   if(u.pathname.endsWith('/updates'))return Promise.resolve(jsonResponse({total:0,items:[]}))
   if(u.pathname.endsWith('/audit'))return Promise.resolve(jsonResponse([]))
   if(u.pathname==='/api/change-types')return Promise.resolve(jsonResponse([catalog,{...catalog,id:2,name:'Tipo inactivo',active:false}]))
-  if(u.pathname==='/api/responsibles')return Promise.resolve(jsonResponse([person,{...person,id:2,name:'Apoyo NOC'},{...person,id:3,name:'Segundo apoyo NOC'}]))
+  if(u.pathname==='/api/responsibles')return Promise.resolve(jsonResponse([{...person,operational_selectable:!unavailable},{...person,id:2,name:'Apoyo NOC',operational_selectable:!unavailable},{...person,id:3,name:'Segundo apoyo NOC'}]))
   if(u.pathname==='/api/change-completion-types')return Promise.resolve(jsonResponse([{...catalog,name:'Finalizado con éxito',applies_efficiency:true}]))
   if(u.pathname==='/api/settings/change-number')return Promise.resolve(jsonResponse({id:1,prefix:'CAM',separator:'-',next_number:1,padding:7}))
   if(u.pathname==='/api/settings/ticket-number')return Promise.resolve(jsonResponse({id:1,prefix:'T',separator:'-',next_number:1,padding:7}))
@@ -32,6 +35,21 @@ function setup(path='/changes',empty=false,initialSupport:Change['support']=[],o
  return {mock,click}
 }
 beforeEach(()=>localStorage.clear())
+it('excluye encargados no seleccionables en nuevas ventanas',async()=>{
+ setup('/changes/new',false,[],{},true)
+ const manager=await screen.findByLabelText(/Encargado de ejecución/)
+ await waitFor(()=>expect(within(manager).getByRole('option',{name:'Segundo apoyo NOC'})).toBeInTheDocument())
+ expect(within(manager).queryByRole('option',{name:'Encargado NOC'})).not.toBeInTheDocument()
+ expect(within(manager).queryByRole('option',{name:'Apoyo NOC'})).not.toBeInTheDocument()
+})
+it('conserva el encargado histórico no seleccionable al editar sin ofrecer nuevos no seleccionables',async()=>{
+ setup('/changes/1/edit',false,[{id:2,name:'Apoyo NOC'}],{},true)
+ const manager=await screen.findByLabelText(/Encargado de ejecución/)
+ await waitFor(()=>expect(manager).toHaveValue('1'))
+ expect(within(manager).getByRole('option',{name:'Encargado NOC'})).toBeInTheDocument()
+ expect(within(manager).queryByRole('option',{name:'Apoyo NOC'})).not.toBeInTheDocument()
+ expect(screen.getByRole('button',{name:/Quitar Apoyo NOC/})).toBeInTheDocument()
+})
 describe('Control de cambios',()=>{
  it('integra navegación, listado y resultados independientes de puntualidad',async()=>{
   const {click}=setup()

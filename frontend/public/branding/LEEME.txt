@@ -1,0 +1,18 @@
+TICKETYN — IDENTIDAD VISUAL / PROPUESTA REFINADA
+
+PNG con canal alfa (fondo transparente):
+- isotipo_claro / isotipo_oscuro: icono circular con T
+- logotipo_claro / logotipo_oscuro: solo texto
+- logo_horizontal_claro / logo_horizontal_oscuro: icono + texto
+- favicon_16 a favicon_512: tamaños para web y aplicaciones
+- favicon.ico: icono multiresolución para navegadores
+
+SVG: versiones editables del isotipo, logotipo y logo horizontal.
+
+Nota: Son recreaciones vectoriales del concepto visual aprobado, no una extracción
+exacta de la imagen generada. Revisar geometría y tipografía antes de uso final.
+No se ha modificado el código de Ticketyn.
+
+CORRECCION: se ajusto la separacion entre Ticket y yn en las cuatro versiones
+de logotipo y logo horizontal, manteniendo el nombre Ticketyn unido.
+Los nombres de archivos y los fondos transparentes se conservaron.

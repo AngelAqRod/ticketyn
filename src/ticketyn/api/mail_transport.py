@@ -106,10 +106,15 @@ def update_oauth(payload: OAuthUpdate, session: DBSession):
 
 
 @router.post('/oauth/authorize')
-def authorize_oauth(session: DBSession):
+def authorize_oauth(request: Request, session: DBSession):
     try:
         row = locked_transport(session); ensure_idle(row); require_oauth(row)
         url, binding = oauth.begin_authorization(row)
+        from ticketyn.security.memory import SessionLimit
+        try:
+            request.app.state.security.bind_flow(binding, request.state.login_session)
+        except SessionLimit:
+            raise HTTPException(429, 'Demasiados flujos OAuth2 pendientes') from None
         session.commit()
     except MailFailure as error:
         session.rollback(); raise HTTPException(422, str(error)) from None

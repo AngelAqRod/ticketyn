@@ -84,6 +84,8 @@ def activation_client(activation_env, monkeypatch):
     app.dependency_overrides[get_session] = session_override
     try:
         with TestClient(app) as client:
+            from security_helpers import authenticate_test_client
+            authenticate_test_client(app, client, activation_env[0])
             yield client
     finally:
         get_settings.cache_clear()
@@ -297,8 +299,8 @@ def test_history_immutable_notes_and_interventions_do_not_request_mail(activatio
         identity = original_job.id, original_job.revision, original_job.state
     for row in (historical, current):
         path = f"/api/activations/{row['id']}"
-        assert activation_client.patch(path, json={'activation_notes': 'No permitido'}).status_code == 405
-        assert activation_client.patch(path + '/notes', json={'activation_notes': 'No permitido'}).status_code == 404
+        assert activation_client.patch(path, json={'activation_notes': 'No permitido'}).status_code == 403
+        assert activation_client.patch(path + '/notes', json={'activation_notes': 'No permitido'}).status_code == 403
         response = activation_client.post(path + '/interventions', json={
             'responsible_id': payload['responsible_id'], 'occurred_at': payload['effective_at'],
             'content': 'Corrección histórica sin correo',

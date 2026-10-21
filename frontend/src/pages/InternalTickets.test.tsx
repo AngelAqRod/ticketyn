@@ -1,6 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '../test/render'
 import { MemoryRouter } from 'react-router'
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
+// Authentication is exercised in auth/AuthGate.test.tsx; these tests isolate operational routing.
+vi.mock('../auth/AuthGate', () => ({ AuthGate: ({ children }: { children: React.ReactNode }) => children }))
+
 import App from '../App'
 import type { InternalTicket } from '../types/internalTicket'
 import { jsonResponse } from '../test/fixtures'
@@ -82,6 +85,26 @@ describe('Tickets internos',()=>{
     expect(await screen.findByText('Sin tickets relacionados')).toBeInTheDocument()
     expect(screen.getByRole('button',{name:'Exportar PDF'})).toBeInTheDocument()
     expect(screen.getByRole('button',{name:'Nuevo escalamiento'})).toBeInTheDocument()
+  })
+  it('muestra "Sin fecha de fin" en listado y detalle de ticket interno cerrado sin fin',async()=>{
+    setup('/internal-tickets', { status: 'CLOSED', end_at: null, duration_seconds: null })
+    const table = await screen.findByRole('table', { name: 'Tickets internos' })
+    expect(within(table).getByText('Sin fecha de fin')).toBeInTheDocument()
+  })
+  it('muestra "En curso" en listado de ticket interno abierto sin fin',async()=>{
+    setup('/internal-tickets', { status: 'OPEN', end_at: null, duration_seconds: null })
+    const table = await screen.findByRole('table', { name: 'Tickets internos' })
+    expect(within(table).getByText('En curso')).toBeInTheDocument()
+  })
+  it('muestra duración formateada y "Sin fecha de fin" en detalle según corresponda',async()=>{
+    setup('/internal-tickets/7', { status: 'CLOSED', end_at: null, duration_seconds: null })
+    await screen.findByRole('heading', { name: 'INT-0000001' })
+    expect(screen.getByText('Duración').nextElementSibling).toHaveTextContent('Sin fecha de fin')
+  })
+  it('muestra duración calculada en detalle de ticket interno con fin',async()=>{
+    setup('/internal-tickets/7', { status: 'CLOSED', end_at: '2026-10-15T16:00:00Z', duration_seconds: 7200 })
+    await screen.findByRole('heading', { name: 'INT-0000001' })
+    expect(screen.getByText('Duración').nextElementSibling).toHaveTextContent('2 h')
   })
   it('búsqueda remota encuentra descripciones que no forman parte de la etiqueta',async()=>{
     const mock=vi.fn(()=>Promise.resolve(jsonResponse([ticket])))

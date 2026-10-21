@@ -73,7 +73,7 @@ def test_no_created_at_edit_or_delete_endpoint(api_client, ticket_payload):
     update = create(api_client, item)
     for method in ('patch', 'delete', 'put'):
         response = getattr(api_client, method)(url(item)+f"/{update['id']}")
-        assert response.status_code in (404, 405)
+        assert response.status_code == 403
     assert api_client.get(url(item)).json() == [update]
 
 
@@ -171,7 +171,9 @@ def test_history_has_no_responsible_n_plus_one(api_client, ticket_payload, db_se
     try:
         response = api_client.get(url(item))
         assert response.status_code == 200 and len(response.json()) == 5
-        assert len(statements) <= 2
+        authentication = [sql for sql in statements if 'security_roles' in sql or 'security_config' in sql]
+        assert len(authentication) == 2
+        assert len(statements) - len(authentication) <= 2
     finally:
         event.remove(connection, 'before_cursor_execute', capture)
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '../test/render'
 import { describe, expect, it, vi } from 'vitest'
 import { categoryColor, chartPalette } from './chartTheme'
 import { ActivityChart, DistributionChart, RankingChart, TrendChart } from './ReportCharts'

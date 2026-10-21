@@ -1,10 +1,11 @@
 """Mail administration under Ticketyn's existing trusted-network access model.
 
-There is no individual authorization mechanism. SMTP tests and persistent jobs
+Authentication and granular authorization are enforced at the HTTP boundary.
+SMTP tests and persistent jobs
 share the transport; FMS creation requests automatic work transactionally.
 """
 from dataclasses import asdict
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from sqlalchemy import select
@@ -117,15 +118,19 @@ def event_response(event_key, row):
 
 
 @router.get('/events', response_model=list[EventResponse])
-def events(session: DBSession):
+def events(session: DBSession, request: Request):
     rows = {row.event_key: row for row in session.scalars(select(MailEventConfig).where(MailEventConfig.event_key.in_(EVENTS)))}
-    return [event_response(key, rows.get(key)) for key in EVENTS]
+    results = [event_response(key, rows.get(key)) for key in EVENTS]
+    if 'mail.events.view' not in request.state.principal.permissions:
+        results = [row.model_copy(update={'to': [], 'cc': [], 'bcc': []}) for row in results]
+    return results
 
 
 @router.get('/events/{event_key}', response_model=EventResponse)
-def get_event(event_key: str, session: DBSession):
+def get_event(event_key: str, session: DBSession, request: Request):
     known_event(event_key)
-    return event_response(event_key, session.get(MailEventConfig, event_key))
+    result = event_response(event_key, session.get(MailEventConfig, event_key))
+    return result if 'mail.events.view' in request.state.principal.permissions else result.model_copy(update={'to': [], 'cc': [], 'bcc': []})
 
 
 @router.patch('/events/{event_key}', response_model=EventResponse)

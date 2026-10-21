@@ -217,7 +217,7 @@ def test_delegated_flow_pkce_encryption_callback_and_replay(api_client, oauth_co
     for path in ('/oauth', '/smtp'):
         assert all(secret not in api_client.get(BASE + path).text for secret in (SECRET, ACCESS, REFRESH))
     again = api_client.get(BASE + '/oauth/callback', params={'state': state, 'code': 'synthetic-code'}, follow_redirects=False)
-    assert again.headers['location'].endswith('error') and len(calls) == 1
+    assert again.status_code == 401 and len(calls) == 1
     assert SECRET not in caplog.text and ACCESS not in caplog.text
 
 
@@ -234,8 +234,11 @@ def test_invalid_callbacks_do_not_exchange(api_client, oauth_config, db_session,
     if invalid == 'missing_code': params = {'state': state}
     if invalid == 'duplicate': params = [('state', state), ('state', 'bad'), ('code', 'code')]
     response = api_client.get(BASE + '/oauth/callback', params=params, follow_redirects=False)
-    assert response.status_code == 303 and response.headers['location'].endswith('error')
-    assert SECRET not in response.text and SECRET not in response.headers['location']
+    if invalid == 'missing_cookie':
+        assert response.status_code == 401
+    else:
+        assert response.status_code == 303 and response.headers['location'].endswith('error')
+    assert SECRET not in response.text and SECRET not in response.headers.get('location', '')
 
 
 def test_refresh_and_revocation_are_safe(api_client, oauth_config, db_session, monkeypatch):

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query
+from fastapi import Request, APIRouter, Path, Query
 
 from ticketyn.api.crud import DBSession, get_or_404, list_items, save_item, update_item
 from ticketyn.models import Node
@@ -10,7 +10,9 @@ router = APIRouter(prefix="/api/nodes", tags=["nodes"])
 
 
 @router.post("", response_model=NodeResponse, status_code=201)
-def create_node(payload: NodeCreate, session: DBSession):
+def create_node(payload: NodeCreate, session: DBSession, request: Request):
+    from ticketyn.security.mutations import contextual_creation
+    contextual_creation(request.state.principal, 'nodes', payload.model_dump())
     return save_item(session, Node(**payload.model_dump()))
 
 

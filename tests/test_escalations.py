@@ -91,7 +91,7 @@ def test_reason_catalog_and_level(api_client):
     assert api_client.get(path, params={'include_inactive': True}).json()[0]['description'] == 'Detalle'
     assert api_client.patch(f"{path}/{item['id']}", json={'active': True, 'description': None}).status_code == 200
     assert api_client.get(path + '/99999').status_code == 404
-    assert api_client.delete(f"{path}/{item['id']}").status_code == 405
+    assert api_client.delete(f"{path}/{item['id']}").status_code == 403
     assert api_client.post('/api/responsibles', json={'name': 'Prueba', 'attention_level': 'x'*101}).status_code == 422
     person = api_client.post('/api/responsibles', json={'name': 'Director'}).json()
     assert api_client.patch(f"/api/responsibles/{person['id']}", json={'attention_level': None}).status_code == 422

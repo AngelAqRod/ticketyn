@@ -34,6 +34,9 @@ def persist(session, values, id=None):
             if field not in values or (ticket and values[field] == current[field]) or values[field] is None: continue
             related = session.scalar(select(model).where(model.id == values[field]).with_for_update(read=True, of=model))
             if related is None: raise HTTPException(404, f'{model.__name__} no encontrado')
+            if model is Responsible:
+                from ticketyn.api.responsible_selection import selectable
+                selectable(related)
             if not related.active: raise HTTPException(422, f'{model.__name__} está inactivo')
         if ticket is None:
             config = locked_number_config(session, InternalTicketNumberConfig)

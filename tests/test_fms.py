@@ -204,7 +204,11 @@ def test_operations_list_query_count(api_client, operation_payload, db_session):
         assert len(api_client.get('/api/activations').json()) == 4
     finally:
         event.remove(connection, 'before_cursor_execute', count)
-    assert len(queries) == 1
+    # The protected request also validates the principal and security configuration.
+    selects = [sql for sql in queries if sql.lstrip().upper().startswith('SELECT ')]
+    auth = [sql for sql in selects if 'security_roles' in sql or 'security_config' in sql]
+    assert len(auth) == 2
+    assert len(selects) - len(auth) == 1
 
 
 def test_deactivation_reason_database_uniqueness(api_client, db_session):
