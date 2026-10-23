@@ -299,6 +299,22 @@ function calendarDate(value: Date) {
   return value.toISOString().slice(0, 10)
 }
 
+function formatChangeInterval(proposedStart: string, proposedEnd: string): string {
+  const startVal = ticketynDateTimeValue(new Date(proposedStart))
+  const endVal = ticketynDateTimeValue(new Date(proposedEnd))
+  const startDay = startVal.slice(8, 10)
+  const startMonth = startVal.slice(5, 7)
+  const startTime = startVal.slice(11, 16)
+  const endDay = endVal.slice(8, 10)
+  const endMonth = endVal.slice(5, 7)
+  const endTime = endVal.slice(11, 16)
+  return `${startDay}/${startMonth} ${startTime} → ${endDay}/${endMonth} ${endTime}`
+}
+
+function formatTimeOnly(isoDate: string): string {
+  return ticketynDateTimeValue(new Date(isoDate)).slice(11, 16)
+}
+
 function ChangeCalendar({
   params,
   change,
@@ -398,163 +414,412 @@ function ChangeCalendar({
   )
     days.push(calendarDate(d))
   const padding = mode === 'month' ? (begin.getUTCDay() + 6) % 7 : 0
-  const weekdays = [
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-    'Domingo',
+  const calendarMonthsFull = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ]
+  const calendarMonthsShort = [
+    'ENE',
+    'FEB',
+    'MAR',
+    'ABR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AGO',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DIC',
+  ]
+  const weekdaysMeta = [
+    { fullName: 'Lunes', abbr: 'LUNES', isWeekend: false },
+    { fullName: 'Martes', abbr: 'MARTES', isWeekend: false },
+    { fullName: 'Miércoles', abbr: 'MIÉRCOLES', isWeekend: false },
+    { fullName: 'Jueves', abbr: 'JUEVES', isWeekend: false },
+    { fullName: 'Viernes', abbr: 'VIERNES', isWeekend: false },
+    { fullName: 'Sábado', abbr: 'SÁBADO', isWeekend: true },
+    { fullName: 'Domingo', abbr: 'DOMINGO', isWeekend: true },
   ]
   const weekday = (date: string) =>
-    weekdays[(new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7]
+    weekdaysMeta[(new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7].fullName
   const today = ticketynDateTimeValue(new Date()).slice(0, 10)
+
+  function getIsoWeek(date: Date): number {
+    const target = new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    )
+    const dayNr = (target.getUTCDay() + 6) % 7
+    target.setUTCDate(target.getUTCDate() - dayNr + 3)
+    const firstThursday = target.getTime()
+    target.setUTCMonth(0, 1)
+    if (target.getUTCDay() !== 4) {
+      target.setUTCMonth(0, 1 + ((4 - target.getUTCDay() + 7) % 7))
+    }
+    return 1 + Math.ceil((firstThursday - target.getTime()) / 604800000)
+  }
+
+  const currentDayNumber = anchor.getUTCDate()
+  const currentShortMonth = calendarMonthsShort[anchor.getUTCMonth()]
+  const currentMonthYear = `${calendarMonthsFull[anchor.getUTCMonth()]} ${anchor.getUTCFullYear()}`
+  const currentWeekdayName = weekday(day)
+  const currentWeekNumber = getIsoWeek(anchor)
+  const isTodayActive = day === today
+
+  const headerDays = weekdaysMeta
+
+  const currentDayEvents = items.filter(
+    (row) =>
+      ticketynDateTimeValue(new Date(row.proposed_start)).slice(0, 10) === day
+  )
+  const sortedDayEvents = [...currentDayEvents].sort((a, b) => {
+    const diff =
+      new Date(a.proposed_start).getTime() - new Date(b.proposed_start).getTime()
+    if (diff !== 0) return diff
+    return (a.reference || '').localeCompare(b.reference || '') || a.id - b.id
+  })
+
+  function formatDayHeading(dateStr: string): string {
+    const d = new Date(dateStr + 'T12:00:00Z')
+    const dayOfWeek = (d.getUTCDay() + 6) % 7
+    const weekdayName = weekdaysMeta[dayOfWeek].fullName.toUpperCase()
+    const dayNum = parseInt(dateStr.slice(8), 10)
+    const monthIdx = parseInt(dateStr.slice(5, 7), 10) - 1
+    const monthName = calendarMonthsFull[monthIdx].toUpperCase()
+    const year = dateStr.slice(0, 4)
+    return `${weekdayName} · ${dayNum} ${monthName} ${year}`
+  }
 
   return (
     <section className="p-5 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/15 pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            className="button-secondary rounded-full w-8 h-8 p-0 flex items-center justify-center font-bold text-slate-300 hover:text-white"
-            onClick={() => move(-1)}
-            aria-label="Período anterior"
-          >
-            ‹
-          </button>
-          <FormField id="calendar-date" label="Fecha del calendario">
-            <input
-              className="form-input rounded-full text-xs font-mono bg-[#070d1a] border-slate-700 text-slate-200"
-              id="calendar-date"
-              type="date"
-              value={day}
-              onChange={(e) => {
-                if (e.target.value) change({ day: e.target.value })
-              }}
-            />
-          </FormField>
-          <button
-            className="button-secondary rounded-full w-8 h-8 p-0 flex items-center justify-center font-bold text-slate-300 hover:text-white"
-            onClick={() => move(1)}
-            aria-label="Período siguiente"
-          >
-            ›
-          </button>
+      {/* 1. Cabecera principal: Industrial Split Cut 2.0 */}
+      <div className="industrial-split-cut-header" aria-label="Cabecera del calendario">
+        <div className="isc-top-accent" aria-hidden="true" />
+        <div className="isc-diagonal-border" aria-hidden="true" />
+
+        {/* Nivel superior: información temporal */}
+        <div className="isc-level-top">
+          <div className="isc-temporal-group">
+            <div className="isc-date-block" aria-label="Fecha activa">
+              <div className="isc-date-block-digits">
+                <span className="isc-date-block-month">{currentShortMonth}</span>
+                <span className="isc-date-block-day">{currentDayNumber}</span>
+              </div>
+              {isTodayActive && (
+                <span className="isc-date-block-today">HOY</span>
+              )}
+            </div>
+
+            <div>
+              <h2 className="isc-info-title capitalize">{currentMonthYear}</h2>
+              <p className="isc-info-subtitle">
+                {currentWeekdayName} · Semana {currentWeekNumber}
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="segmented-control segmented-control--soft segmented-control--amber">
-          {[
-            ['month', 'Mes'],
-            ['week', 'Semana'],
-            ['day', 'Día'],
-          ].map(([value, label]) => (
+
+        {/* Nivel inferior: controles existentes */}
+        <div className="isc-level-bottom">
+          <div className="isc-controls-nav">
             <button
-              className="segment-button"
-              key={value}
-              aria-pressed={mode === value}
-              onClick={() => change({ calendar: value })}
+              type="button"
+              className="button-secondary rounded-full w-8 h-8 p-0 flex items-center justify-center font-bold text-slate-300 hover:text-white"
+              onClick={() => move(-1)}
+              aria-label="Período anterior"
             >
-              {label}
+              ‹
             </button>
-          ))}
+            <button
+              type="button"
+              className={`button-secondary rounded-full px-3 h-8 text-xs font-semibold transition-colors ${
+                isTodayActive
+                  ? 'border-amber-500/50 text-amber-300 bg-amber-500/10 shadow-xs'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+              onClick={() => change({ day: today })}
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              className="button-secondary rounded-full w-8 h-8 p-0 flex items-center justify-center font-bold text-slate-300 hover:text-white"
+              onClick={() => move(1)}
+              aria-label="Período siguiente"
+            >
+              ›
+            </button>
+
+            <div className="isc-date-picker">
+              <CalendarIcon size={14} className="text-sky-400 shrink-0" aria-hidden="true" />
+              <FormField id="calendar-date" label="Fecha del calendario">
+                <input
+                  className="form-input rounded-full text-xs font-mono bg-[#070d1a] border-slate-700 text-slate-200"
+                  id="calendar-date"
+                  type="date"
+                  value={day}
+                  onChange={(e) => {
+                    if (e.target.value) change({ day: e.target.value })
+                  }}
+                />
+              </FormField>
+            </div>
+          </div>
+
+          <div className="segmented-control segmented-control--soft segmented-control--amber">
+            {[
+              ['month', 'Mes'],
+              ['week', 'Semana'],
+              ['day', 'Día'],
+            ].map(([value, label]) => (
+              <button
+                className="segment-button"
+                key={value}
+                aria-pressed={mode === value}
+                onClick={() => change({ calendar: value })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
       <p className="text-xs text-slate-400 font-mono flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
         <span>Ubicación por Inicio propuesto · {ticketynTimezone}. La ventana propuesta se conserva aunque cambie la ejecución real.</span>
       </p>
       <RequestState loading={loading} error={error} />
       {!loading && !error && (
-        <div
-          className={
-            'change-calendar ' +
-            (mode === 'day' ? 'change-calendar-day' : '')
-          }
-          aria-label="Calendario de cambios"
-        >
+        mode === 'day' ? (
           <div
-            className="change-calendar-weekdays"
-            aria-label="Días de la semana"
+            className="change-calendar-day-timeline"
+            aria-label="Calendario de cambios"
           >
-            {(mode === 'day' ? [weekday(day)] : weekdays).map((name) => (
-              <span key={name}>{name}</span>
-            ))}
-          </div>
-          {Array.from({ length: padding }, (_, i) => (
-            <div
-              className="change-calendar-placeholder"
-              key={'empty' + i}
-              aria-hidden="true"
-            />
-          ))}
-          {days.map((date) => (
-            <section key={date} className="change-calendar-cell">
-              <div className="change-calendar-date-heading">
-                <Can
-                  permission="changes.create"
-                  fallback={
-                    <span
-                      className="change-calendar-date text-xs font-semibold"
-                      aria-current={date === today ? 'date' : undefined}
-                    >
-                      {date.slice(8)} / {date.slice(5, 7)}
-                    </span>
-                  }
-                >
-                  <Link
-                    className="change-calendar-date text-xs font-semibold"
-                    aria-label={weekday(date) + ', ' + date}
-                    aria-current={date === today ? 'date' : undefined}
-                    to={`/changes/new?date=${date}`}
-                  >
-                    {date.slice(8)} / {date.slice(5, 7)}
-                  </Link>
-                </Can>
-                <span
-                  className="change-calendar-mobile-weekday"
-                  aria-hidden="true"
-                >
-                  {weekday(date)}
+            {/* Encabezado de jornada */}
+            <div className="timeline-day-header" aria-label="Encabezado de jornada">
+              <div className="timeline-day-header-title">
+                <span className="timeline-day-header-indicator" aria-hidden="true" />
+                <span>{formatDayHeading(day)}</span>
+              </div>
+              {isTodayActive && (
+                <span className="isc-date-block-today font-mono text-[10px] font-bold px-2 py-0.5 rounded text-amber-300 bg-amber-500/15 border border-amber-500/30">
+                  HOY
                 </span>
+              )}
+            </div>
+
+            {/* Cronología vertical o Estado vacío */}
+            {sortedDayEvents.length === 0 ? (
+              <div className="timeline-empty-state">
+                <span className="timeline-empty-indicator" aria-hidden="true" />
+                <p className="timeline-empty-message">
+                  Sin ventanas de mantenimiento programadas para este día
+                </p>
               </div>
-              <div className="mt-2 space-y-1.5">
-                {items
-                  .filter(
-                    (row) =>
-                      ticketynDateTimeValue(new Date(row.proposed_start)).slice(
-                        0,
-                        10
-                      ) === date
+            ) : (
+              <div className="timeline-stream" aria-label="Cronología de cambios">
+                {sortedDayEvents.map((row) => {
+                  const startTime = formatTimeOnly(row.proposed_start)
+                  const endTime = formatTimeOnly(row.proposed_end)
+                  const fullInterval = formatChangeInterval(
+                    row.proposed_start,
+                    row.proposed_end
                   )
-                  .map((row) => (
-                    <Link
-                      key={row.id}
-                      className={
-                        'change-calendar-event change-status-' + row.status
-                      }
-                      to={`/changes/${row.id}`}
-                    >
-                      <span className="font-mono text-[10px] text-slate-300">
-                        {ticketynDateTimeValue(
-                          new Date(row.proposed_start)
-                        ).slice(11, 16)}{' '}
-                        —{' '}
-                        {ticketynDateTimeValue(
-                          new Date(row.proposed_end)
-                        ).replace('T', ' ')}
-                      </span>
-                      <strong className="font-mono text-xs">
-                        {row.reference}
-                      </strong>
-                      <span className="truncate">{row.title}</span>
-                      <span className="font-mono text-[10px] opacity-90">
-                        {changeStatuses[row.status]}
-                      </span>
-                    </Link>
-                  ))}
+
+                  return (
+                    <div key={row.id} className="timeline-item">
+                      {/* Columna izquierda: horas */}
+                      <div className="timeline-time-col">
+                        <span className="timeline-time-start font-mono text-base sm:text-lg font-bold text-white">
+                          {startTime}
+                        </span>
+                        <span className="timeline-time-end font-mono text-xs text-slate-400">
+                          Fin: {endTime}
+                        </span>
+                      </div>
+
+                      {/* Columna central: nodo y espina técnica */}
+                      <div className="timeline-spine-col" aria-hidden="true">
+                        <span className={`timeline-node timeline-node-${row.status}`} />
+                        <span className="timeline-line" />
+                      </div>
+
+                      {/* Columna derecha: tarjeta Technical Cut expandida */}
+                      <div className="timeline-card-col">
+                        <Link
+                          className={`change-calendar-event technical-cut-card timeline-expanded-card change-status-${row.status}`}
+                          to={`/changes/${row.id}`}
+                        >
+                          {/* Jerarquía 1: Código y estado */}
+                          <div className="timeline-card-header">
+                            <strong className="change-card-ref font-mono text-xs sm:text-sm font-bold">
+                              {row.reference}
+                            </strong>
+                            <span className="change-card-status font-mono text-[11px] font-semibold px-2 py-0.5 rounded border border-current">
+                              {changeStatuses[row.status]}
+                            </span>
+                          </div>
+
+                          {/* Jerarquía 2: Título */}
+                          <span className="change-card-title text-sm sm:text-base font-medium text-slate-100 line-clamp-2">
+                            {row.title}
+                          </span>
+
+                          {/* Jerarquía 3: Intervalo propuesto */}
+                          <div className="timeline-card-footer">
+                            <span className="change-card-time font-mono text-xs text-slate-300 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" aria-hidden="true" />
+                              <span>{fullInterval}</span>
+                            </span>
+                          </div>
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </section>
-          ))}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div
+            className={`change-calendar ${mode === 'week' ? 'change-calendar-week' : ''}`.trim()}
+            aria-label="Calendario de cambios"
+          >
+            {/* 2. Encabezados LUN–DOM: Technical Frame B */}
+            <div
+              className="change-calendar-weekdays"
+              aria-label="Días de la semana"
+            >
+              {headerDays.map((item) => (
+                <div
+                  key={item.abbr}
+                  className={`technical-frame-b ${
+                    item.isWeekend
+                      ? 'technical-frame-b--weekend'
+                      : 'technical-frame-b--weekday'
+                  }`}
+                  title={item.fullName}
+                  aria-label={item.fullName}
+                >
+                  <span className="tf-b-bracket-tl" aria-hidden="true" />
+                  <span className="tf-b-top-line" aria-hidden="true" />
+                  <span className="tf-b-diagonal-line" aria-hidden="true" />
+                  <span className="tf-b-bracket-br" aria-hidden="true" />
+                  <span className="tf-b-text">{item.abbr}</span>
+                </div>
+              ))}
+            </div>
+
+            {Array.from({ length: padding }, (_, i) => (
+              <div
+                className="change-calendar-placeholder"
+                key={'empty' + i}
+                aria-hidden="true"
+              />
+            ))}
+
+            {/* 3. Celdas de los días: Corner Frame E */}
+            {days.map((date) => {
+              const dayOfWeek = (new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7
+              const isWeekend = dayOfWeek >= 5
+              const isCurrentDay = date === today
+              const dayEvents = items.filter(
+                (row) =>
+                  ticketynDateTimeValue(new Date(row.proposed_start)).slice(
+                    0,
+                    10
+                  ) === date
+              )
+              const hasChanges = dayEvents.length > 0
+
+              return (
+                <section
+                  key={date}
+                  className={`change-calendar-cell corner-frame-e ${
+                    isWeekend ? 'corner-frame-e--weekend' : ''
+                  } ${isCurrentDay ? 'corner-frame-e--today' : ''} ${
+                    hasChanges
+                      ? 'corner-frame-e--has-changes'
+                      : 'corner-frame-e--no-changes'
+                  }`}
+                >
+                  <span className="cf-e-bracket-tl" aria-hidden="true" />
+                  <span className="cf-e-top-line" aria-hidden="true" />
+                  <span className="cf-e-diagonal-line" aria-hidden="true" />
+                  <span className="cf-e-bracket-br" aria-hidden="true" />
+
+                  <div className="change-calendar-date-heading">
+                    <Can
+                      permission="changes.create"
+                      fallback={
+                        <span
+                          className="change-calendar-date text-xs font-semibold"
+                          aria-current={isCurrentDay ? 'date' : undefined}
+                        >
+                          {date.slice(8)} / {date.slice(5, 7)}
+                        </span>
+                      }
+                    >
+                      <Link
+                        className="change-calendar-date text-xs font-semibold"
+                        aria-label={weekday(date) + ', ' + date}
+                        aria-current={isCurrentDay ? 'date' : undefined}
+                        to={`/changes/new?date=${date}`}
+                      >
+                        {date.slice(8)} / {date.slice(5, 7)}
+                      </Link>
+                    </Can>
+                    <span
+                      className="change-calendar-mobile-weekday"
+                      aria-hidden="true"
+                    >
+                      {weekday(date)}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1.5 change-calendar-events">
+                    {dayEvents.map((row) => (
+                      <Link
+                        key={row.id}
+                        className={
+                          'change-calendar-event technical-cut-card change-status-' +
+                          row.status
+                        }
+                        to={`/changes/${row.id}`}
+                      >
+                        <span className="change-card-time font-mono text-[10px] text-slate-300">
+                          {formatChangeInterval(
+                            row.proposed_start,
+                            row.proposed_end
+                          )}
+                        </span>
+                        <strong className="change-card-ref font-mono text-xs">
+                          {row.reference}
+                        </strong>
+                        <span className="change-card-title truncate text-[11px] text-slate-200">
+                          {row.title}
+                        </span>
+                        <span className="change-card-status font-mono text-[10px] opacity-90">
+                          {changeStatuses[row.status]}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
+        )
       )}
     </section>
   )

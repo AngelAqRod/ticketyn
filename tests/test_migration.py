@@ -41,10 +41,10 @@ def historical_metadata():
         if table.name in {'customers', 'circuits', 'sectors', 'departments',
                           'incident_types', 'ticket_number_config', 'tickets'}:
             table.to_metadata(metadata)
-    for table_name, field in [('tickets', 'internal_ticket_id'), ('circuits', 'cpe_model_id'), ('circuits', 'cpe_configuration'), ('circuits', 'sector_id'), ('circuits', 'service_type_id'), ('circuits', 'initial_capacity'), ('circuits', 'initial_capacity_unit'), ('circuits', 'node_id'), ('tickets', 'node_id'), ('tickets', 'responsible_id'), *[('tickets', field) for field in ('resolution', 'customer_description', 'customer_resolution')]]:
+    for table_name, field in [('circuits', 'cpe_management_ip'), ('circuits', 'distribution_port_id'), ('circuits', 'distribution_device_id'), ('tickets', 'internal_ticket_id'), ('circuits', 'cpe_model_id'), ('circuits', 'cpe_configuration'), ('circuits', 'sector_id'), ('circuits', 'service_type_id'), ('circuits', 'initial_capacity'), ('circuits', 'initial_capacity_unit'), ('circuits', 'node_id'), ('tickets', 'node_id'), ('tickets', 'responsible_id'), *[('tickets', field) for field in ('resolution', 'customer_description', 'customer_resolution')]]:
         table = metadata.tables[table_name]
         for constraint in list(table.constraints):
-            if constraint.name == "ck_circuits_initial_capacity_valid" or field in constraint.columns or constraint.name == f"ck_tickets_{field}_content":
+            if constraint.name in {"ck_circuits_cpe_management_ip_host", "ck_circuits_initial_capacity_valid", "ck_circuits_distribution_node_required", "ck_circuits_distribution_device_required"} or field in constraint.columns or constraint.name == f"ck_tickets_{field}_content":
                 table.constraints.remove(constraint)
         for index in list(table.indexes):
             if field in index.columns:

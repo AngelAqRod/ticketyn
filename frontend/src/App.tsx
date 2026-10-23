@@ -7,6 +7,8 @@ import { Changes, ChangeForm, ChangeDetail } from './pages/Changes'
 import { InternalTickets, InternalTicketDetail, InternalTicketEditor } from './pages/InternalTickets'
 import { Operations } from './pages/Operations'
 import { CircuitDetail } from './pages/CircuitDetail'
+import { DistributionDevices } from './pages/DistributionDevices'
+import { DistributionDeviceDetail } from './pages/DistributionDeviceDetail'
 import { ActivationDetail } from './pages/ActivationDetail'
 import { RequestState } from './components/RequestState'
 import { lazy, Suspense } from 'react'
@@ -39,6 +41,8 @@ export default function App() {
     <Route path="customers" element={<CatalogAdmin key="customers" kind="customers" />} />
     <Route path="circuits" element={<CatalogAdmin key="circuits" kind="circuits" />} />
     <Route path="circuits/:id" element={<CircuitDetail />} />
+    <Route path="distribution-devices" element={<DistributionDevices />} />
+    <Route path="distribution-devices/:id" element={<DistributionDeviceDetail />} />
     <Route path="activations" element={<Operations key="activations" kind="activations" />} />
     <Route path="activations/:id" element={<ActivationDetail />} />
     <Route path="capacity-changes" element={<Operations key="capacity-changes" kind="capacity-changes" />} />

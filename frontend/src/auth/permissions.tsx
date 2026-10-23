@@ -20,7 +20,7 @@ export function Can({ permission, anyOf, children, fallback = null }: { permissi
   return (permission ? access.can(permission) : anyOf ? access.any(...anyOf) : false) ? children : fallback
 }
 
-const catalogs = ['sectors', 'departments', 'incident_types', 'nodes', 'positions', 'escalation_reasons', 'service_types', 'deactivation_reasons', 'cpe_models', 'internal_incident_types', 'providers', 'change_completion_types', 'change_types']
+const catalogs = ['sectors', 'departments', 'incident_types', 'nodes', 'positions', 'escalation_reasons', 'service_types', 'deactivation_reasons', 'cpe_models', 'internal_incident_types', 'providers', 'change_completion_types', 'change_types', 'port_nomenclatures']
 export function catalogModule(kind: string) { return ['customers', 'circuits'].includes(kind) ? kind : 'catalogs.' + kind.replaceAll('-', '_') }
 export function routeAllowed(path: string, access: Access): boolean {
   if (path === '/profile' || path === '/login') return true
@@ -44,6 +44,7 @@ export function routeAllowed(path: string, access: Access): boolean {
   if (root === 'reports') return access.any(...['tickets', 'internal_tickets', 'changes'].flatMap(key => [`reports.${key}.view`, `reports.${key}.export`]))
   const reports: Record<string, string> = { 'activation-reports': 'activations', 'capacity-reports': 'capacity_changes', 'lifecycle-reports': 'lifecycle' }
   if (root in reports) return access.any(`reports.${reports[root]}.view`, `reports.${reports[root]}.export`)
+  if (root === 'distribution-devices') return access.any('distribution_devices.view', 'distribution_devices.lookup')
   return false
 }
 export const MODULE_PATHS = ['/', '/tickets', '/internal-tickets', '/changes', '/customers', '/circuits', '/activations', '/capacity-changes', '/circuit-lifecycle', '/reports', '/activation-reports', '/capacity-reports', '/lifecycle-reports', '/catalogs', '/settings', '/mail-notifications', '/mail-templates', '/responsibles', '/security-roles', '/security-sessions', '/security-audit']

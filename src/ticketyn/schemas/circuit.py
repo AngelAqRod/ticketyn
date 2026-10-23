@@ -1,15 +1,34 @@
 from typing import ClassVar, Literal
 from decimal import Decimal
-from pydantic import Field, BaseModel, ConfigDict
+from ipaddress import ip_address
+from pydantic import Field, BaseModel, ConfigDict, IPvAnyAddress, field_validator
 from typing import Annotated
 
 from ticketyn.schemas.common import AssignmentSummary, InputSchema, NonEmptyString, PositiveId, ResponseSchema
 
 
-class CircuitCreate(InputSchema):
+class CircuitAddressInput(InputSchema):
+    cpe_management_ip: str | None = None
+
+    @field_validator('cpe_management_ip', mode='before')
+    @classmethod
+    def normalize_management_ip(cls, value):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        if not isinstance(value, str) or '/' in value or '%' in value:
+            raise ValueError('Introduce una dirección IPv4 o IPv6 individual, sin CIDR ni nombres DNS')
+        try:
+            return str(ip_address(value.strip()))
+        except ValueError:
+            raise ValueError('Introduce una dirección IPv4 o IPv6 válida') from None
+
+
+class CircuitCreate(CircuitAddressInput):
+    distribution_device_id: PositiveId | None = None
+    distribution_port_id: PositiveId | None = None
     cpe_model_id: PositiveId | None = None
     sector_id: PositiveId
-    nullable_fields: ClassVar[set[str]] = {"initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id"}
+    nullable_fields: ClassVar[set[str]] = {"cpe_management_ip", "initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id", "distribution_device_id", "distribution_port_id"}
     initial_capacity: Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=6, allow_inf_nan=False)] | None = None
     initial_capacity_unit: Literal['Mbps', 'Gbps'] | None = None
     service_type_id: PositiveId | None = None
@@ -20,10 +39,12 @@ class CircuitCreate(InputSchema):
     active: bool = True
 
 
-class CircuitUpdate(InputSchema):
+class CircuitUpdate(CircuitAddressInput):
+    distribution_device_id: PositiveId | None = None
+    distribution_port_id: PositiveId | None = None
     cpe_model_id: PositiveId | None = None
     sector_id: PositiveId | None = None
-    nullable_fields: ClassVar[set[str]] = {"initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id"}
+    nullable_fields: ClassVar[set[str]] = {"cpe_management_ip", "initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id", "distribution_device_id", "distribution_port_id"}
     initial_capacity: Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=6, allow_inf_nan=False)] | None = None
     initial_capacity_unit: Literal['Mbps', 'Gbps'] | None = None
     service_type_id: PositiveId | None = None
@@ -35,6 +56,11 @@ class CircuitUpdate(InputSchema):
 
 
 class CircuitResponse(ResponseSchema):
+    cpe_management_ip: IPvAnyAddress | None
+    distribution_device_id: int | None
+    distribution_port_id: int | None
+    distribution_device: AssignmentSummary | None
+    distribution_port: AssignmentSummary | None
     cpe_model_id: int | None
     cpe_model: AssignmentSummary | None
     sector_id: int | None

@@ -7,8 +7,12 @@ export class ApiError extends Error {
 }
 
 const fieldLabels: Record<string, string> = {
+  cpe_management_ip: 'IP de gestión CPE',
   name: 'Nombre', customer_code: 'Código de cliente', circuit_code: 'Código de circuito',
   title: 'Título', description: 'Descripción', node_id: 'Nodo de distribución', responsible_id: 'Responsable', customer_id: 'Cliente', circuit_id: 'Circuito',
+  distribution_device_id: 'Equipo de distribución', distribution_port_id: 'Puerto de distribución',
+  nomenclature_id: 'Nomenclatura', numbering_format: 'Formato numérico', positions: 'Posiciones numéricas', number_components: 'Numeración',
+  prefix: 'Prefijo', formats: 'Formatos habilitados', start: 'Número inicial', end: 'Número final', preview_token: 'Vista previa',
   sector_id: 'Sector', department_id: 'Departamento', incident_type_id: 'Tipo de incidencia',
   content: 'Descripción de la intervención', occurred_at: 'Fecha/hora de intervención', visibility: 'Visibilidad',
   resolution: 'Resolución documentada', customer_description: 'Descripción del incidente', customer_resolution: 'Resolución del incidente',

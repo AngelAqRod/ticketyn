@@ -1,4 +1,4 @@
-import type { NamedCatalog } from '../types/catalog'
+import type { NamedCatalog, DistributionDevice, DistributionPort } from '../types/catalog'
 import { getJson, postJson, patchJson, deleteResource, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
 import type { ServiceType, Position, PositionInput, ResponsibleInput, EscalationReason, Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
@@ -65,6 +65,13 @@ export const updateCustomer = (id: number, payload: Partial<CustomerInput>, sign
 export const createCircuit = (payload: CircuitInput, signal?: AbortSignal) => postJson<Circuit>('/api/circuits', payload, signal)
 export const updateCircuit = (id: number, payload: Partial<CircuitInput>, signal?: AbortSignal) => patchJson<Circuit>(`/api/circuits/${id}`, payload, signal)
 
+export const listDistributionDevices = (nodeId: number, signal?: AbortSignal, includeInactive = false) =>
+  catalogList<DistributionDevice>('/api/distribution-devices', signal, { node_id: String(nodeId) }, includeInactive)
+export const listDistributionPorts = (deviceId: number, signal?: AbortSignal, includeInactive = false) =>
+  catalogList<DistributionPort>('/api/distribution-ports', signal, { distribution_device_id: String(deviceId) }, includeInactive)
+export const createDistributionDevice = (payload: { node_id: number; name: string; description?: string | null }, signal?: AbortSignal) =>
+  postJson<DistributionDevice>('/api/distribution-devices', payload, signal)
+
 export const createSector = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Sector>('/api/sectors', payload, signal)
 export const updateSector = (id: number, payload: Partial<NamedCatalogInput>, signal?: AbortSignal) => patchJson<Sector>(`/api/sectors/${id}`, payload, signal)
 
@@ -111,3 +118,5 @@ export const listProviders = (signal?: AbortSignal, includeInactive = false) => 
 export const listChangeCompletionTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & {description: string | null; applies_efficiency: boolean}>('/api/change-completion-types', signal, {}, includeInactive)
 
 export const listChangeTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & {description:string|null}>('/api/change-types', signal, {}, includeInactive)
+
+export * from './distribution'

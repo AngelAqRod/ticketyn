@@ -3,34 +3,41 @@ from typing import Annotated
 from fastapi import Request, APIRouter, HTTPException, Path, Query, Response
 
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
-from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_items, save_item, update_item
-from ticketyn.models import Circuit, Customer, Node, Ticket, ServiceType, CpeModel
+from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_items, update_item
+from ticketyn.models import Circuit, Customer, Ticket, ServiceType, CpeModel
 from ticketyn.api.fms_data import validate_active, validate_initial_capacity
 from ticketyn.models.fms import Activation, CapacityChange, CircuitLifecycleOperation
 from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate, CpeConfigurationInput, CpeConfigurationResponse
 
 from ticketyn.api.circuit_sector import locked_circuit, validate_sector, validate_node
 from ticketyn.api.circuit_ticket_sectors import synchronize_recent_ticket_sectors
+from ticketyn.api.distribution_data import distribution_write, record, snapshot, validate_circuit_distribution
 
 router = APIRouter(prefix="/api/circuits", tags=["circuits"])
 
 
 @router.post("", response_model=CircuitResponse, status_code=201)
 def create_circuit(payload: CircuitCreate, session: DBSession, request: Request):
-    from ticketyn.security.mutations import contextual_creation
-    contextual_creation(request.state.principal, 'circuits', payload.model_dump())
-    validate_sector(session, payload.sector_id)
-    validate_initial_capacity(payload.model_dump())
-    get_or_404(session, Customer, payload.customer_id)
-    validate_node(session, payload.node_id)
-    if payload.service_type_id is not None:
-        validate_active(session, ServiceType, payload.service_type_id)
-    if payload.cpe_model_id is not None:
-        validate_active(session, CpeModel, payload.cpe_model_id)
-    return save_item(session, Circuit(**payload.model_dump()))
+    with distribution_write(session):
+        from ticketyn.security.mutations import contextual_creation
+        contextual_creation(request.state.principal, 'circuits', payload.model_dump())
+        validate_sector(session, payload.sector_id)
+        validate_initial_capacity(payload.model_dump())
+        get_or_404(session, Customer, payload.customer_id)
+        validate_node(session, payload.node_id)
+        if payload.service_type_id is not None:
+            validate_active(session, ServiceType, payload.service_type_id)
+        if payload.cpe_model_id is not None:
+            validate_active(session, CpeModel, payload.cpe_model_id)
+        validate_circuit_distribution(session, payload.model_dump())
+        item = Circuit(**payload.model_dump())
+        session.add(item); session.flush(); session.refresh(item)
+        if item.distribution_device_id is not None:
+            record(session, request.state.principal.id, item, 'ASSIGN')
+        result = CircuitResponse.model_validate(item)
+    return result
 
 
 @router.get("", response_model=list[CircuitResponse])
@@ -60,8 +67,9 @@ def get_circuit(id: Annotated[int, Path(gt=0)], session: DBSession):
 
 @router.patch("/{id}", response_model=CircuitResponse)
 def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, session: DBSession, request: Request):
-    try:
+    with distribution_write(session):
         item = locked_circuit(session, id)
+        before = snapshot(item)
         values = payload.model_dump(exclude_unset=True)
         from ticketyn.security.mutations import circuit_mutation
         circuit_mutation(request.state.principal, item, values)
@@ -82,17 +90,16 @@ def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, sessio
             validate_active(session, ServiceType, values['service_type_id'])
         if values.get('cpe_model_id') is not None and values['cpe_model_id'] != item.cpe_model_id:
             validate_active(session, CpeModel, values['cpe_model_id'])
+        validate_circuit_distribution(session, values, item)
         if sector_changed:
             synchronize_recent_ticket_sectors(session, item.id, new_sector)
-        return update_item(session, item, values)
-    except OperationalError as error:
-        session.rollback()
-        if getattr(error.orig, 'sqlstate', None) in {'55P03', '40P01', '40001'}:
-            raise HTTPException(409, 'Hay una edición concurrente del circuito o sus tickets. Reintenta guardar los cambios.') from None
-        raise
-    except Exception:
-        session.rollback()
-        raise
+        for key, value in values.items():
+            setattr(item, key, value)
+        session.flush(); session.refresh(item)
+        if before != snapshot(item) and (before['distribution_device_id'] is not None or item.distribution_device_id is not None):
+            record(session, request.state.principal.id, item, 'ASSIGN', before)
+        result = CircuitResponse.model_validate(item)
+    return result
 
 
 @router.delete("/{id}", status_code=204, response_class=Response)

@@ -44,7 +44,7 @@ export function CircuitDetail() {
   }, [id, currentTab, offset, refresh])
   if (!detail || detail.circuit.id !== id) return <RequestState loading={loading} error={error} onRetry={() => setRefresh(refresh + 1)} />
   const c = detail.circuit, a = detail.initial_activation
-  const info = [['Código', c.circuit_code], ['Sector', c.sector?.name ?? 'Sin asignar'], ['Cliente', detail.customer.name], ['Nodo', c.node?.name ?? 'Sin asignar'], ['Modelo de CPE actual', c.cpe_model?.name ?? 'Sin asignar'], ['Tipo de servicio', c.service_type?.name ?? 'Sin asignar'], ['Descripción', c.description], ['Estado administrativo', c.active ? 'Activo' : 'Inactivo'], ['Fecha de creación', formatDate(c.created_at, ticketynTimezone)], ['Capacidad inicial', capacityLabel(c.initial_capacity, c.initial_capacity_unit)], ['Capacidad actual', capacityLabel(detail.current_capacity, detail.current_capacity_unit)]]
+  const info = [['Código', c.circuit_code], ['Sector', c.sector?.name ?? 'Sin asignar'], ['Cliente', detail.customer.name], ['Nodo', c.node?.name ?? 'Sin asignar'], ['IP de gestión CPE', c.cpe_management_ip || 'No asignada'], ['Modelo de CPE actual', c.cpe_model?.name ?? 'Sin asignar'], ['Tipo de servicio', c.service_type?.name ?? 'Sin asignar'], ['Descripción', c.description], ['Estado administrativo', c.active ? 'Activo' : 'Inactivo'], ['Fecha de creación', formatDate(c.created_at, ticketynTimezone)], ['Capacidad inicial', capacityLabel(c.initial_capacity, c.initial_capacity_unit)], ['Capacidad actual', capacityLabel(detail.current_capacity, detail.current_capacity_unit)]]
   async function toggle() {
     if (actionSending.current || (c.active && !confirmDeactivation())) return
     const request = new AbortController(); actionRequest.current = request
@@ -126,6 +126,23 @@ export function CircuitDetail() {
         )}
       </section>
     </div>
+    <section aria-label="Distribución actual del circuito" className="panel mb-5 rounded-2xl border border-sky-500/20 bg-[#0b1426] p-6">
+      <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-white">Distribución actual</h2>
+      <dl className="grid gap-4 sm:grid-cols-3">
+        {([['Nodo de distribución', c.node?.name], ['Equipo de distribución', c.distribution_device?.name], ['Puerto de distribución', c.distribution_port?.name]] as const).map(([label, value]) => <div key={label} className="min-w-0">
+          <dt className="text-xs text-slate-400">{label}</dt>
+          <dd className="mt-1 break-words text-sm text-white">
+            {label === 'Equipo de distribución' && c.distribution_device?.id && access.any('distribution_devices.view', 'distribution_devices.lookup') ? (
+              <Link to={`/distribution-devices/${c.distribution_device.id}`} className="text-sky-400 hover:text-sky-300 font-medium hover:underline inline-flex items-center gap-1">
+                {value} →
+              </Link>
+            ) : (
+              value ?? 'No asignado'
+            )}
+          </dd>
+        </div>)}
+      </dl>
+    </section>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div className="segmented-control segmented-control--soft segmented-control--blue" role="group" aria-label="Historial del circuito">
         <Can permission="capacity_changes.view"><button className="segment-button" aria-pressed={currentTab === 'capacity-changes'} onClick={() => setTab('capacity-changes')}>Capacidad</button></Can>

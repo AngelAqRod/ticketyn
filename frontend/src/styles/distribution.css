@@ -1,0 +1,89 @@
+/* Tickets internos' existing purple palette, scoped to distribution pages and portals.
+   Global Electric Blue and semantic status/action colors remain unchanged. */
+.distribution-theme {
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-soft: rgba(168, 85, 247, 0.1);
+  --primary-border: rgba(168, 85, 247, 0.35);
+  --distribution-accent: #c084fc;
+  --distribution-highlight: #d8b4fe;
+  --distribution-hover: rgba(168, 85, 247, 0.15);
+}
+
+.distribution-theme :focus-visible,
+.distribution-theme .page-heading :focus-visible,
+.distribution-theme .pagination-bar :focus-visible {
+  outline-color: var(--distribution-accent);
+}
+
+.distribution-theme .form-input:hover:not(:disabled),
+.distribution-theme .form-input:focus-within:not(:disabled) {
+  border-color: var(--distribution-accent);
+}
+.distribution-theme .form-input:focus-within:not(:disabled) {
+  box-shadow: 0 0 0 3px var(--distribution-hover);
+}
+.distribution-theme input[type="checkbox"] { accent-color: var(--primary); }
+.distribution-theme .heading-emblem .seven-segment-number { color: var(--distribution-accent); }
+
+.distribution-theme .page-heading .button-ghost,
+.distribution-theme .button-ghost:not(.text-red-400):not(.text-amber-400):not(.text-emerald-400) {
+  color: var(--distribution-accent);
+}
+.distribution-theme .page-heading .button-ghost:hover:not(:disabled),
+.distribution-theme .button-secondary:hover:not(:disabled):not(.text-red-400):not(.text-amber-400):not(.text-emerald-400),
+.distribution-theme .button-ghost:hover:not(:disabled):not(.text-red-400):not(.text-amber-400):not(.text-emerald-400),
+.distribution-theme .combobox-action:hover:not(:disabled),
+.distribution-theme .segment-button:hover:not(:disabled):not([aria-pressed="true"]) {
+  background: var(--distribution-hover);
+  border-color: var(--primary-border);
+}
+
+.distribution-theme .segmented-control--purple {
+  background: var(--primary-soft);
+  border-color: var(--primary-border);
+}
+.distribution-theme .segment-button[aria-pressed="true"],
+.distribution-theme .segment-button.distribution-selected {
+  background: var(--primary);
+  border-color: var(--distribution-accent);
+  box-shadow: none;
+}
+
+.distribution-theme .distribution-metric {
+  --distribution-metric-accent: var(--distribution-accent);
+  border-color: color-mix(in srgb, var(--distribution-metric-accent) 35%, transparent);
+}
+.distribution-theme .distribution-metric--blue { --distribution-metric-accent: var(--sidebar-light); }
+.distribution-theme .distribution-metric--cyan { --distribution-metric-accent: #22d3ee; }
+.distribution-theme .distribution-metric--green { --distribution-metric-accent: #34d399; }
+.distribution-theme .distribution-metric:hover { border-color: var(--distribution-metric-accent); }
+.distribution-theme .distribution-metric .stat-card-value { color: var(--distribution-metric-accent); }
+.distribution-theme .pagination-current { background: var(--primary); }
+.distribution-theme .pagination-bar .pagination-control:hover:not(:disabled) {
+  background: var(--distribution-hover);
+  border-color: var(--distribution-accent);
+}
+
+.distribution-theme .combobox-menu { border-color: var(--primary-border) !important; }
+.distribution-theme .combobox-menu [aria-selected="true"] {
+  color: var(--distribution-highlight) !important;
+  background: var(--primary-soft) !important;
+}
+.distribution-theme .combobox-menu [role="option"]:hover:not([aria-disabled="true"]),
+/* SearchableSelect's existing keyboard-active class; keep focus treatment local. */
+.distribution-theme .combobox-menu .bg-\[\#1e3a6d\]:not([aria-disabled="true"]) {
+  background: var(--distribution-hover) !important;
+}
+.distribution-theme .combobox-menu .text-sky-400 { color: var(--distribution-accent); }
+
+.port-create-dialog { color-scheme: dark; }
+.port-create-dialog,
+.port-create-dialog ul { scrollbar-color: #475569 #0b1426; }
+.port-create-dialog .button-primary--blue {
+  --primary: #1e60d8;
+  --primary-hover: #164bb0;
+}
+@media (forced-colors: active) {
+  .distribution-theme :focus-visible { outline-color: Highlight; }
+}

@@ -140,7 +140,7 @@ describe('creación contextual de catálogos en TicketForm', () => {
     await screen.findByText('Circuito MANUAL.02 creado y seleccionado.')
     expectPreserved(); expect(combo('Cliente')).toHaveValue('OLD — Cliente actual'); expect(combo('Circuito')).toHaveValue('MANUAL.02 — Nuevo enlace')
     expect(writes(mock)).toHaveLength(1); expect(writes(mock)[0][0]).toBe('/api/circuits')
-    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ sector_id: 1, customer_id: 1, circuit_code: 'MANUAL.02', description: 'Nuevo enlace', active: true, node_id: 1 })
+    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toEqual({ cpe_management_ip: null, sector_id: 1, customer_id: 1, circuit_code: 'MANUAL.02', description: 'Nuevo enlace', active: true, node_id: 1 })
     fireEvent.click(combo('Circuito')); expect(screen.getByRole('option', { name: 'MANUAL.02 — Nuevo enlace' })).toBeInTheDocument()
   })
   it.each(['cliente', 'circuito'] as const)('409 de %s mantiene diálogo y valores, permitiendo corregir', async (kind) => {

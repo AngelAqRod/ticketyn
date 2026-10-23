@@ -142,23 +142,28 @@ def test_html_wordmark_layout_and_plain_text_without_images():
 
 def test_minimal_header_title_footer_and_mobile_fallback():
     parsed = assert_passive(render([field('customer.name')]).html_body)
-    header = next(node for node in nodes(parsed.root) if 'border-bottom:2px solid #1769D5' in node.attrs.get('style', ''))
+    header = next(node for node in nodes(parsed.root) if 'ticketyn-header' in node.attrs.get('class', ''))
     assert header.attrs['bgcolor'] == '#FFFFFF'
+    assert 'border-left:4px solid #1768D5' in header.attrs.get('style', '')
+    assert 'border-bottom:1px solid #E2E8F0' in header.attrs.get('style', '')
     left, right = next(node for node in nodes(header) if node.tag == 'tr').children
-    assert left.attrs['align'] == 'left' and text_of(left) == 'Ticketyn'
-    assert 'color:#1769D5' in left.attrs['style']
-    assert right.attrs['align'] == 'right' and text_of(right) == 'OPERACIONES FMS'
-    assert 'NOTIFICACIÓN OPERATIVA' in parsed.visible
-    assert [text_of(node) for node in nodes(parsed.root) if node.tag == 'h1'] == ['Registro de activación']
+    assert left.attrs['align'] == 'left'
+    assert 'Ticketyn' in text_of(left)
+    assert 'NOTIFICACIÓN OPERATIVA' in text_of(left)
+    assert any('color:#1768D5' in n.attrs.get('style', '') for n in nodes(left))
+    assert right.attrs['align'] == 'right'
+    assert 'FMS · ACTIVACIÓN' in text_of(right)
+    assert 'Nueva activación' in text_of(right)
+    assert 'ACT-000001' in text_of(right)
     footer = next(node for node in nodes(parsed.root) if node.attrs.get('bgcolor') == '#F8FAFC')
-    assert footer.attrs['align'] == 'center' and text_of(footer) == 'Ticketyn · Gestión operativa'
+    assert footer.attrs['align'] == 'center' and 'Ticketyn · Gestión operativa' in text_of(footer)
     document = render([field('customer.name')]).html_body
     assert '@media screen and (max-width:480px)' in document
     assert '.ticketyn-blocks,.ticketyn-blocks>tbody,.ticketyn-blocks>tbody>tr,.ticketyn-blocks>tbody>tr>td{display:block!important;width:100%!important;box-sizing:border-box;}' in document
     assert '.ticketyn-blocks>tbody>tr>.ticketyn-empty{display:none!important;}' in document
     blocks_table = next(node for node in nodes(parsed.root) if node.attrs.get('class') == 'ticketyn-blocks')
     assert blocks_table.tag == 'table' and blocks_table.attrs['width'] == '100%'
-    assert 'display:grid' not in document and 'border-left:3px' not in document
+    assert 'display:grid' not in document
 
 
 @pytest.mark.parametrize('count', [0, 1, 2, 3, 4, 5])
@@ -198,9 +203,9 @@ def test_full_width_notes_interrupt_pairs_without_reordering(order, expected):
     assert actual == expected
     for node in nodes(parsed.root):
         if node.tag == 'table' and node.attrs.get('bgcolor') == '#F2F6FC':
-            assert 'border-left:3px solid #1769D5' in node.attrs['style']
+            assert 'border-left:3px solid #047857' in node.attrs['style']
             assert 'n:\nPrimera línea\n\n  Puerto MiXto ñ' in text_of(node)
-    assert sum(node.attrs.get('colspan') == '2' for node in nodes(parsed.root)) == order.count('n')
+    assert sum(node.attrs.get('colspan') == '2' and 'ticketyn-section-header' not in node.attrs.get('class', '') for node in nodes(parsed.root)) == order.count('n')
 
 
 @pytest.mark.parametrize('kind,text', [('introduction', 'Introducción intermedia\nLiteral'),
@@ -216,12 +221,12 @@ def test_configured_text_and_spacing_also_interrupt_field_pairs(kind, text):
 
 
 def test_absent_fields_do_not_reserve_cells_or_move_notes():
-    result = render([field('activation.node'), field('customer.name'), field('activation.activation_notes'), field('circuit.code')], example(None))
+    result = render([field('activation.node'), field('customer.name'), field('circuit.code')], example(None))
     parsed = assert_passive(result.html_body)
     rows = field_rows(parsed)
     assert len(rows) == 1 and len(rows[0].children) == 2
     assert 'Cliente Ñandú' in text_of(rows[0].children[0]) and 'CIR-1' in text_of(rows[0].children[1])
-    assert 'NOTAS DE ACTIVACIÓN' not in parsed.visible and '#F2F6FC' not in result.html_body
+    assert 'NODO' not in parsed.visible and '#F2F6FC' not in result.html_body
 
 
 def test_long_unbroken_value_keeps_equal_column_width_and_literal_data():
@@ -268,8 +273,9 @@ def test_notes_selected_multiline_custom_label_and_empty_values(notes):
         assert 'Detalles MiXtos ñ:\n' + notes.replace('\r\n', '\n') in visible
         assert 'bgcolor="#F2F6FC"' in result.html_body
     else:
-        assert result.body == '' and 'Detalles MiXtos ñ:' not in visible
-        assert '#F2F6FC' not in result.html_body
+        assert result.body == 'Detalles MiXtos ñ:\nSin notas registradas'
+        assert 'Detalles MiXtos ñ:\nSin notas registradas' in visible
+        assert 'bgcolor="#F2F6FC"' in result.html_body
 
 
 def test_unselected_notes_empty_blocks_and_explicit_newlines():

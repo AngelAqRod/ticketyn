@@ -252,9 +252,9 @@ def test_empty_elements_persist_and_preview_without_placeholder_or_writes(api_cl
     activation = create(api_client, '/api/activations', operation_payload)
     template = {'version': 1, 'subject': [
         {'type': 'text', 'text': ''}, {'type': 'text', 'text': 'texto 1'},
-        dynamic('activation.activation_notes'), dynamic('activation.reference'),
+        dynamic('activation.service_type'), dynamic('activation.reference'),
         {'type': 'text', 'text': ' '}, dynamic('activation.effective_at')],
-        'body': [{'type': 'introduction', 'text': ''}, dynamic('activation.activation_notes'),
+        'body': [{'type': 'introduction', 'text': ''}, dynamic('activation.service_type'),
                  {'type': 'signature', 'text': ''}]}
     assert api_client.patch(EVENT + '/template', json=template).status_code == 200
     stored = api_client.get(EVENT + '/template').json()

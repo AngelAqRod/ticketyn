@@ -17,3 +17,5 @@ export function operationExportUrl(kind: FmsKind, format: 'pdf' | 'xlsx', filter
 export const downloadOperations = (kind: FmsKind, format: 'pdf' | 'xlsx', filters: URLSearchParams) => downloadFile(operationExportUrl(kind, format, filters), `ticketyn-${kind}.${format}`)
 
 export const downloadActivationReport = (id: number) => downloadFile(`/api/activations/${id}/reports/pdf?${new URLSearchParams({ timezone: ticketynTimezone })}`, `ticketyn-activacion-${id}.pdf`)
+
+export const downloadCustomerActivationReport = (id: number) => downloadFile(`/api/activations/${id}/reports/customer/pdf?${new URLSearchParams({ timezone: ticketynTimezone })}`, `ticketyn-activacion-${id}-cliente.pdf`)

@@ -117,3 +117,73 @@ def test_failure_is_controlled_and_temporary_file_closed(api_client, monkeypatch
     assert response.json()['detail'] == 'No se pudo generar el reporte de la activación.'
     assert 'confidencial' not in response.text
     assert files[0].closed
+
+
+@pytest.mark.parametrize('notes', [None, '', 'Configuración verificada: CPE ñ & <equipo> "principal".',
+    'Primera línea: enlace óptico\nSegunda línea: VLAN 200 & gestión\n\nNuevo párrafo con áéíóú.'])
+def test_activation_notes_are_exact_and_separate_from_log(api_client, operation_payload, pdf_strings, monkeypatch, notes):
+    from ticketyn.api import activation_reports
+    captured = []
+    original = activation_reports.paragraph
+    def capture(value, **kwargs):
+        captured.append(value)
+        return original(value, **kwargs)
+    monkeypatch.setattr(activation_reports, 'paragraph', capture)
+    response = api_client.post('/api/activations', json={**operation_payload, 'activation_notes': notes})
+    assert response.status_code == 201
+    item = response.json()
+    before = api_client.get(f"/api/activations/{item['id']}").json()
+    pdf_strings.clear()
+    response = report(api_client, item['id'])
+    assert response.status_code == 200
+    content = ' '.join(pdf_strings)
+    assert content.index('Equipo de distribución') < content.index('Notas internas de activación') < content.index('Bitácora de activación')
+    assert (notes or 'Sin notas registradas') in captured
+    for line in (notes or 'Sin notas registradas').splitlines():
+        if line:
+            assert line in content
+    assert 'Sin intervenciones registradas.' in content
+    assert api_client.get(f"/api/activations/{item['id']}").json() == before
+
+
+def test_long_activation_notes_continue_across_pages(api_client, operation_payload, pdf_strings, monkeypatch):
+    from reportlab.pdfgen.textobject import PDFTextObject
+    first_note_pages = []
+    original_text = PDFTextObject._textOut
+    def capture_page(self, text, *args, **kwargs):
+        if 'NOTA-000' in text:
+            first_note_pages.append(self._canvas.getPageNumber())
+        return original_text(self, text, *args, **kwargs)
+    monkeypatch.setattr(PDFTextObject, '_textOut', capture_page)
+    lines = [f'NOTA-{index:03}: Verificación óptica, potencia y conectividad del servicio & CPE <NOC>.' for index in range(110)]
+    notes = '\n\n'.join(lines)
+    assert len(notes) <= 10000
+    item = api_client.post('/api/activations', json={**operation_payload, 'activation_notes': notes}).json()
+    pdf_strings.clear()
+    response = report(api_client, item['id'])
+    assert response.status_code == 200
+    content = ' '.join(pdf_strings)
+    for line in lines:
+        assert line in content
+    assert content.index('NOTA-000') < content.index('NOTA-109') < content.index('Bitácora de activación')
+    assert any('Página 2 /' in value for value in pdf_strings)
+    assert first_note_pages and first_note_pages[0] == 1
+
+
+@pytest.mark.parametrize('recorded, device, port', [(True, 'EQUIPO HISTÓRICO', 'PUERTO HISTÓRICO'),
+    (True, 'EQUIPO HISTÓRICO', None), (True, None, None), (False, None, None)])
+def test_notes_keep_distribution_snapshots(api_client, activation, db_session, pdf_strings, recorded, device, port):
+    item = db_session.get(Activation, activation['id'])
+    item.activation_notes = 'Notas históricas originales.'
+    item.distribution_recorded = recorded
+    item.distribution_device_name = device
+    item.distribution_port_name = port
+    db_session.commit()
+    before = api_client.get(f"/api/activations/{item.id}").json()
+    pdf_strings.clear()
+    assert report(api_client, item.id).status_code == 200
+    content = ' '.join(pdf_strings)
+    assert 'Notas históricas originales.' in content
+    assert (device or ('No asignado' if recorded else 'No registrado')) in content
+    assert (port or ('No asignado' if recorded else 'No registrado')) in content
+    assert api_client.get(f"/api/activations/{item.id}").json() == before

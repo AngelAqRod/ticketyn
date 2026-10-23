@@ -1,3 +1,5 @@
+import { CircuitDistributionFields } from './CircuitDistributionFields'
+import { CircuitsNavigation } from './CircuitsNavigation'
 import { ResponsibleAccess } from './ResponsibleAccess'
 import { allPages, type Account } from '../api/security'
 import { Can, usePermissions, catalogModule } from '../auth/permissions'
@@ -46,8 +48,8 @@ const labels = {
 }
 
 type CatalogItem = Customer | Circuit | NamedCatalog
-interface Draft { appliesEfficiency: boolean; sectorId: string; id: number | null; code: string; name: string; customerId: string; nodeId: string; active: boolean; detail: string; departmentId: string; positionId: string; operationalSelectable: boolean; capacity: string; capacityUnit: string; serviceTypeId: string; cpeModelId: string }
-const blank = (): Draft => ({ operationalSelectable: true, appliesEfficiency: false, sectorId: '', id: null, code: '', name: '', customerId: '', nodeId: '', active: true, detail: '', departmentId: '', positionId: '', capacity: '', capacityUnit: 'Mbps', serviceTypeId: '', cpeModelId: '' })
+interface Draft { cpeManagementIp: string; appliesEfficiency: boolean; sectorId: string; id: number | null; code: string; name: string; customerId: string; nodeId: string; distributionDeviceId: string; distributionPortId: string; active: boolean; detail: string; departmentId: string; positionId: string; operationalSelectable: boolean; capacity: string; capacityUnit: string; serviceTypeId: string; cpeModelId: string }
+const blank = (): Draft => ({ cpeManagementIp: '', operationalSelectable: true, appliesEfficiency: false, sectorId: '', id: null, code: '', name: '', customerId: '', nodeId: '', distributionDeviceId: '', distributionPortId: '', active: true, detail: '', departmentId: '', positionId: '', capacity: '', capacityUnit: 'Mbps', serviceTypeId: '', cpeModelId: '' })
 const message = (error: unknown) => error instanceof Error ? error.message : 'Ocurrió un error inesperado.'
 
 function list(kind: CatalogKind, signal: AbortSignal, filters?: URLSearchParams): Promise<CatalogItem[]> {
@@ -71,7 +73,7 @@ function list(kind: CatalogKind, signal: AbortSignal, filters?: URLSearchParams)
   }
 }
 
-function save(kind: CatalogKind, draft: Draft): Promise<CatalogItem> {
+function save(kind: CatalogKind, draft: Draft, original?: CatalogItem): Promise<CatalogItem> {
   const id = draft.id
   const named = { name: draft.name.trim(), active: draft.active }
   switch (kind) {
@@ -91,7 +93,17 @@ function save(kind: CatalogKind, draft: Draft): Promise<CatalogItem> {
       return id === null ? api.createCustomer(payload) : api.updateCustomer(id, payload)
     }
     case 'circuits': {
-      const payload = { cpe_model_id: draft.cpeModelId ? Number(draft.cpeModelId) : null, sector_id: Number(draft.sectorId), service_type_id: draft.serviceTypeId ? Number(draft.serviceTypeId) : null, initial_capacity: draft.capacity || null, initial_capacity_unit: draft.capacity ? draft.capacityUnit : null, description: draft.name.trim(), circuit_code: draft.code.trim(), node_id: Number(draft.nodeId), customer_id: Number(draft.customerId), active: draft.active }
+      const deviceId = draft.distributionDeviceId ? Number(draft.distributionDeviceId) : null
+      const portId = draft.distributionPortId ? Number(draft.distributionPortId) : null
+      const previousDevice = original && 'distribution_device_id' in original ? original.distribution_device_id ?? null : null
+      const previousPort = original && 'distribution_port_id' in original ? original.distribution_port_id ?? null : null
+      const distribution = {
+        ...((id === null ? deviceId !== null : deviceId !== previousDevice) ? { distribution_device_id: deviceId } : {}),
+        ...((id === null ? portId !== null : portId !== previousPort) ? { distribution_port_id: portId } : {}),
+      }
+      const managementIp = draft.cpeManagementIp.trim() || null
+      const previousIp = original && 'cpe_management_ip' in original ? original.cpe_management_ip ?? null : null
+      const payload = { ...distribution, ...((id === null || managementIp !== previousIp) ? { cpe_management_ip: managementIp } : {}), cpe_model_id: draft.cpeModelId ? Number(draft.cpeModelId) : null, sector_id: Number(draft.sectorId), service_type_id: draft.serviceTypeId ? Number(draft.serviceTypeId) : null, initial_capacity: draft.capacity || null, initial_capacity_unit: draft.capacity ? draft.capacityUnit : null, description: draft.name.trim(), circuit_code: draft.code.trim(), node_id: Number(draft.nodeId), customer_id: Number(draft.customerId), active: draft.active }
       return id === null ? api.createCircuit(payload) : api.updateCircuit(id, payload)
     }
     case 'sectors': return id === null ? api.createSector(named) : api.updateSector(id, named)
@@ -124,7 +136,7 @@ function changeActive(kind: CatalogKind, id: number, active: boolean): Promise<C
 const catalogName = (item: CatalogItem) => 'circuit_code' in item ? item.description : item.name
 const catalogCode = (item: CatalogItem) => 'customer_code' in item ? item.customer_code : 'circuit_code' in item ? item.circuit_code : ''
 function draftFor(item: CatalogItem, kind: CatalogKind): Draft {
-  return { operationalSelectable: !('operational_selectable' in item) || item.operational_selectable !== false, appliesEfficiency: 'applies_efficiency' in item && Boolean(item.applies_efficiency), cpeModelId: 'cpe_model_id' in item && item.cpe_model_id ? String(item.cpe_model_id) : '', sectorId: 'sector_id' in item && item.sector_id ? String(item.sector_id) : '', id: item.id, serviceTypeId: 'service_type_id' in item && item.service_type_id ? String(item.service_type_id) : '', capacity: 'initial_capacity' in item ? String(item.initial_capacity ?? '') : '', capacityUnit: 'initial_capacity_unit' in item ? item.initial_capacity_unit ?? 'Mbps' : 'Mbps', code: catalogCode(item), name: catalogName(item), nodeId: 'node_id' in item && item.node_id ? String(item.node_id) : '', customerId: 'customer_id' in item ? String(item.customer_id) : '', active: item.active, departmentId: 'department_id' in item && item.department_id ? String(item.department_id) : '', positionId: 'position_id' in item && item.position_id ? String(item.position_id) : '', detail: (kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && 'description' in item ? String(item.description ?? '') : '' }
+  return { cpeManagementIp: 'cpe_management_ip' in item ? item.cpe_management_ip ?? '' : '', distributionDeviceId: 'distribution_device_id' in item && item.distribution_device_id ? String(item.distribution_device_id) : '', distributionPortId: 'distribution_port_id' in item && item.distribution_port_id ? String(item.distribution_port_id) : '', operationalSelectable: !('operational_selectable' in item) || item.operational_selectable !== false, appliesEfficiency: 'applies_efficiency' in item && Boolean(item.applies_efficiency), cpeModelId: 'cpe_model_id' in item && item.cpe_model_id ? String(item.cpe_model_id) : '', sectorId: 'sector_id' in item && item.sector_id ? String(item.sector_id) : '', id: item.id, serviceTypeId: 'service_type_id' in item && item.service_type_id ? String(item.service_type_id) : '', capacity: 'initial_capacity' in item ? String(item.initial_capacity ?? '') : '', capacityUnit: 'initial_capacity_unit' in item ? item.initial_capacity_unit ?? 'Mbps' : 'Mbps', code: catalogCode(item), name: catalogName(item), nodeId: 'node_id' in item && item.node_id ? String(item.node_id) : '', customerId: 'customer_id' in item ? String(item.customer_id) : '', active: item.active, departmentId: 'department_id' in item && item.department_id ? String(item.department_id) : '', positionId: 'position_id' in item && item.position_id ? String(item.position_id) : '', detail: (kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && 'description' in item ? String(item.description ?? '') : '' }
 }
 
 export function CatalogAdmin({ kind, embedded = false, administrativeAccess = false, circuitEditor }: { kind: CatalogKind; embedded?: boolean; administrativeAccess?: boolean; circuitEditor?: { item: Circuit; onSaved: (item: Circuit) => void; onCancel: () => void; onBusyChange: (busy: boolean) => void } }) {
@@ -145,6 +157,7 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
   const [sectors, setSectors] = useState<NamedCatalog[]>([])
   const [nodes, setNodes] = useState<NamedCatalog[]>([])
   const [quickNode, setQuickNode] = useState(false)
+  const [distributionOpen, setDistributionOpen] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -231,14 +244,14 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
     event.preventDefault()
     if (kind === 'circuits' && draft && !draft.nodeId) { setError('Selecciona un Nodo antes de guardar.'); return }
     if (kind === 'circuits' && draft && !draft.sectorId) { setError('Selecciona un Sector antes de guardar.'); return }
-    if (!draft || sending.current) return
+    if (!draft || sending.current || distributionOpen) return
     setApiInvalidFields([])
     if (!draft.name.trim() || ((kind === 'customers' || kind === 'circuits') && !draft.code.trim()) || (kind === 'circuits' && !draft.customerId) || (kind === 'positions' && !draft.departmentId)) {
       setError('Completa los campos obligatorios antes de guardar.'); return
     }
     if (kind === 'circuits' && draft.capacity) { try { capacityInMicroMbps(draft.capacity, draft.capacityUnit) } catch (failure) { setError(message(failure)); return } }
     if (!draft.active && (draft.id === null || items.find((item) => item.id === draft.id)?.active) && !confirmDeactivation()) return
-    void persist(() => save(kind, draft), draft.id === null ? 'Registro creado correctamente.' : 'Cambios guardados correctamente.', true)
+    void persist(() => save(kind, draft, items.find(item => item.id === draft.id)), draft.id === null ? 'Registro creado correctamente.' : 'Cambios guardados correctamente.', true)
   }
   function toggle(item: CatalogItem) {
     if (sending.current || (item.active && !confirmDeactivation())) return
@@ -295,6 +308,7 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
         }
       />
     ))}
+    {kind === 'circuits' && <CircuitsNavigation />}
     {accessId !== null && manageAccess && <ResponsibleAccess key={accessId} id={accessId} onClose={() => setAccessId(null)} onSaved={() => setRetry(value => value + 1)} />}
     {notice && <FeedbackMessage variant="success" className="mb-4">{notice}</FeedbackMessage>}
     {error && <FeedbackMessage id="catalog-form-error" variant="error" className="mb-4">{error}</FeedbackMessage>}
@@ -339,7 +353,10 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
         )}
         <fieldset disabled={busy || Boolean(circuitEditor && (loading || loadError))} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
           {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.customerId.trim()) || apiInvalidFields.includes("customer_id")} id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
-          {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.nodeId) || apiInvalidFields.includes("node_id")} id="admin-node" required label="Nodo"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="admin-node" required label="Nodo" value={draft.nodeId} onChange={(value) => setDraft({ ...draft, nodeId: value })} options={nodes.filter((item) => item.active || String(item.id) === draft.nodeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Selecciona un nodo" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><Can anyOf={["catalogs.nodes.create","context.nodes.create"]}><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></Can></div></FormField>}
+          {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.nodeId) || apiInvalidFields.includes("node_id")} id="admin-node" required label="Nodo"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="admin-node" required label="Nodo" value={draft.nodeId} onChange={(value) => setDraft(current => current ? { ...current, nodeId: value, ...(value !== current.nodeId ? { distributionDeviceId: '', distributionPortId: '' } : {}) } : current)} options={nodes.filter((item) => item.active || String(item.id) === draft.nodeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Selecciona un nodo" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><Can anyOf={["catalogs.nodes.create","context.nodes.create"]}><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></Can></div></FormField>}
+          {kind === 'circuits' && <CircuitDistributionFields key={draft.id ?? 'new'} nodeId={draft.nodeId} nodeName={nodes.find(node => String(node.id) === draft.nodeId)?.name ?? ''} deviceId={draft.distributionDeviceId} portId={draft.distributionPortId}
+            original={items.find((item): item is Circuit => item.id === draft.id && 'circuit_code' in item)} disabled={busy} invalidFields={apiInvalidFields} onModalChange={setDistributionOpen}
+            onChange={(distributionDeviceId, distributionPortId) => setDraft(current => current ? { ...current, distributionDeviceId, distributionPortId } : current)} />}
           {(kind === 'customers' || kind === 'circuits') && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.code.trim()) || apiInvalidFields.includes(kind === "circuits" ? "circuit_code" : "customer_code")} id="admin-code" label={kind === 'customers' ? 'Código de cliente' : 'Código de circuito'} required><input id="admin-code" className="form-input font-mono" required value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} /></FormField>}
           <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.name.trim()) || apiInvalidFields.includes(kind === "circuits" ? "description" : "name")} id="admin-name" label={kind === 'circuits' ? 'Descripción' : 'Nombre'} required><input id="admin-name" className="form-input" required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></FormField>
           {(kind === 'responsibles' || kind === 'positions') && <FormField id="admin-department" label="Departamento" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("department_id") || (kind === 'positions' && Boolean(error) && !draft.departmentId)} required={kind === 'positions'}><SearchableSelect id="admin-department" label="Departamento" required={kind === 'positions'} value={draft.departmentId} onChange={(value) => setDraft({ ...draft, departmentId: value, positionId: '', capacity: '', capacityUnit: 'Mbps' })} options={departments.filter((item) => item.active || String(item.id) === draft.departmentId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder={kind === 'positions' ? 'Selecciona un departamento' : 'Sin asignar'} emptyMessage="No hay departamentos activos." noMatchMessage="Sin coincidencias." /></FormField>}
@@ -349,6 +366,7 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
           {(kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && <FormField id="admin-detail" label="Descripción (opcional)"><input id="admin-detail" className="form-input" maxLength={10000} value={draft.detail} onChange={(event) => setDraft({ ...draft, detail: event.target.value })} /></FormField>}
           {kind === 'circuits' && <FormField id="admin-sector" label="Sector" required describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.sectorId) || apiInvalidFields.includes("sector_id")}><select disabled={draft.id!==null&&!access.can("tickets.edit")} id="admin-sector" className="form-input" required value={draft.sectorId} onChange={event => setDraft({ ...draft, sectorId: event.target.value })}><option value="">Selecciona un sector</option>{sectors.filter(item => item.active || String(item.id) === draft.sectorId).map(item => <option key={item.id} value={item.id} disabled={!item.active}>{item.name}</option>)}</select></FormField>}
           {kind === 'circuits' && <FormField id="admin-service-type" label="Tipo de servicio" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("service_type_id")}><SearchableSelect id="admin-service-type" label="Tipo de servicio" value={draft.serviceTypeId} onChange={(value) => setDraft({ ...draft, serviceTypeId: value })} options={serviceTypes.filter((item) => item.active || String(item.id) === draft.serviceTypeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay tipos de servicio activos." noMatchMessage="Sin coincidencias." /></FormField>}
+          {kind === 'circuits' && <FormField id="admin-cpe-management-ip" label="IP de gestión CPE" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes('cpe_management_ip')}><input id="admin-cpe-management-ip" className="form-input" type="text" placeholder="192.0.2.10" value={draft.cpeManagementIp} onChange={event => setDraft({ ...draft, cpeManagementIp: event.target.value })} /></FormField>}
           {kind === 'circuits' && <FormField id="admin-cpe-model" label="Modelo de CPE actual" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("cpe_model_id")}><SearchableSelect id="admin-cpe-model" label="Modelo de CPE actual" value={draft.cpeModelId} onChange={(value) => setDraft({ ...draft, cpeModelId: value })} options={cpeModels.filter((item) => item.active || String(item.id) === draft.cpeModelId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay modelos de CPE activos." noMatchMessage="Sin coincidencias." /></FormField>}
           {kind === 'circuits' && <div className="sm:col-span-2"><CapacityFields id="admin-initial-capacity" label="Capacidad inicial (opcional)" value={draft.capacity} unit={draft.capacityUnit} onChange={(capacity, capacityUnit) => setDraft({ ...draft, capacity, capacityUnit })} /></div>}
           {kind === 'change-completion-types' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.appliesEfficiency} onChange={e=>setDraft({...draft,appliesEfficiency:e.target.checked})}/>Aplica para eficiencia</label>}
@@ -356,8 +374,8 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
         </fieldset>
         <p className="mt-3 text-xs text-slate-400 font-mono">Desactivar conserva el registro y sus referencias históricas.</p>
         <div className="mt-4 flex justify-end gap-3">
-          <button type="button" className="button-secondary rounded-full shadow-xs" disabled={busy} onClick={() => { if (circuitEditor) circuitEditor.onCancel(); else { setDraft(null); setError(null); setApiInvalidFields([]) } }}>Cancelar</button>
-          <button type="submit" className={`button-primary ${kind === 'customers' || kind === 'circuits' ? 'button-primary--blue' : 'button-primary--slate'} rounded-full shadow-sm`} disabled={busy || Boolean(circuitEditor && (loading || loadError))}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button>
+          <button type="button" className="button-secondary rounded-full shadow-xs" disabled={busy || distributionOpen} onClick={() => { if (circuitEditor) circuitEditor.onCancel(); else { setDraft(null); setError(null); setApiInvalidFields([]) } }}>Cancelar</button>
+          <button type="submit" className={`button-primary ${kind === 'customers' || kind === 'circuits' ? 'button-primary--blue' : 'button-primary--slate'} rounded-full shadow-sm`} disabled={busy || distributionOpen || Boolean(circuitEditor && (loading || loadError))}>{busy ? (draft.id === null ? 'Creando...' : 'Guardando...') : 'Guardar'}</button>
         </div>
       </form>
     )}
@@ -563,6 +581,6 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
       setDeleting(null)
     }} />}
     </>}
-    {quickNode && draft && <QuickCatalogCreate kind="node" onCancel={() => setQuickNode(false)} onCreated={(node) => { setNodes((current) => [...current, node]); setDraft({ ...draft, nodeId: String(node.id) }); setQuickNode(false) }} />}
+    {quickNode && draft && <QuickCatalogCreate kind="node" onCancel={() => setQuickNode(false)} onCreated={(node) => { setNodes((current) => [...current, node]); setDraft(current => current ? { ...current, nodeId: String(node.id), distributionDeviceId: '', distributionPortId: '' } : current); setQuickNode(false) }} />}
   </>
 }

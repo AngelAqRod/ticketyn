@@ -1,14 +1,15 @@
+import '../styles/navigation.css'
 import { UserControls } from './UserControls'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
-import { LayoutDashboard, Ticket, Users, Network, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power, Workflow, Mail, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Ticket, Users, Network, Server, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power, Workflow, Mail, ShieldCheck } from 'lucide-react'
 import { getHealth, getSystemVersion } from '../api'
 import { usePermissions, routeAllowed } from '../auth/permissions'
 import { SevenSegmentNumber } from './SevenSegmentNumber'
 import { identityFor, moduleIdentity, moduleGroups, orderedModuleIdentity } from './moduleIdentity'
 import { describeVersion, parseVersion } from '../lib/version'
 
-const icons = [LayoutDashboard, Ticket, Ticket, Workflow, Users, Network, ChartNoAxesCombined, Layers3, Settings, Zap, Gauge, Power, ChartNoAxesCombined, ChartNoAxesCombined, ChartNoAxesCombined, Mail, Mail, Users, Settings, Users, ShieldCheck]
+const icons = [LayoutDashboard, Ticket, Ticket, Workflow, Users, Network, Server, ChartNoAxesCombined, Layers3, Settings, Zap, Gauge, Power, ChartNoAxesCombined, ChartNoAxesCombined, ChartNoAxesCombined, Mail, Mail, Users, Settings, Users, ShieldCheck]
 const navigation = orderedModuleIdentity.map(item => ({
   ...item, icon: icons[moduleIdentity.findIndex(original => original.path === item.path)],
 }))
@@ -16,7 +17,7 @@ const navigation = orderedModuleIdentity.map(item => ({
 
 export function Layout() {
   const access = usePermissions()
-  const visibleNavigation = navigation.filter(item => routeAllowed(item.path, access))
+  const visibleNavigation = navigation.filter(item => item.path === '/distribution-devices' ? access.can('distribution_devices.view') : routeAllowed(item.path, access))
   const pathname = useLocation().pathname
   const context = identityFor(pathname) ?? (pathname === '/profile' ? { path: '/profile', title: 'Mi perfil', group: 'Personal', number: '' } : undefined)
   const ContextIcon = navigation.find((item) => item.path === context?.path)?.icon ?? Ticket
@@ -80,7 +81,7 @@ export function Layout() {
         <nav aria-label="Navegación principal" tabIndex={0} className="sidebar-navigation-scroll p-3 md:py-6">
           {moduleGroups.filter(group => visibleNavigation.some(item => item.group === group)).map((group) => <div key={group} className="nav-group">
             <p className="nav-group-label">{group}</p>
-            {visibleNavigation.filter((item) => item.group === group).map(({ path, title, number, icon: Icon }) => <NavLink key={path} to={path} end={path === '/'} onClick={() => setMenuOpen(false)} className="nav-link">
+            {visibleNavigation.filter((item) => item.group === group).map(({ path, title, number, theme, icon: Icon }) => <NavLink key={path} to={path} end={path === '/'} onClick={() => setMenuOpen(false)} className="nav-link" data-theme={theme}>
               <span aria-hidden="true" className="nav-number hidden"><SevenSegmentNumber value={number} /></span><Icon size={16} strokeWidth={1.8} aria-hidden="true" className="shrink-0" /><span className="nav-title">{title}</span>
             </NavLink>)}
           </div>)}

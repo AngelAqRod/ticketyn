@@ -1,8 +1,9 @@
 # Módulos disponibles
 
 Esta referencia describe capacidades verificadas en las rutas, formularios,
-servicios y exportaciones del repositorio. No implica que el proyecto esté terminado.
-La [arquitectura](architecture.md) explica las relaciones entre entidades.
+servicios y exportaciones del repositorio (v0.7.0+).
+La [arquitectura](architecture.md) explica las relaciones estructurales y el
+[Mapa del Sistema](SYSTEM_MAP.md) indexa los archivos de cada dominio.
 
 ## Dashboard
 
@@ -29,9 +30,6 @@ resultados filtrados, no únicamente de la página visible.
 Un ticket puede vincularse, cambiarse o desvincularse de un único ticket interno,
 incluso cerrado. No se exige coincidencia de sector o nodo ni se propagan estados.
 
-Guía especializada: [Escalamientos](escalations-v0.3.1.md). Sus referencias de
-migración y resultados de pruebas corresponden a la versión indicada en el documento.
-
 ## Tickets internos
 
 Gestiona incidencias de infraestructura sin cliente, circuito ni contenido
@@ -47,9 +45,6 @@ Todos los seguimientos son internos.
 La numeración es independiente. Listado, búsqueda, filtros y paginación utilizan
 campos propios de infraestructura. Hay exportación de listado PDF/Excel, PDF
 individual interno y consulta de tickets de clientes vinculados desde ambos detalles.
-
-Véase [Tickets internos](internal-tickets-v0.5.0-design.md), que conserva también
-notas de implementación y validaciones de etapas anteriores.
 
 ## Clientes y circuitos
 
@@ -113,8 +108,15 @@ Pueden corregirse participantes y notas; los vínculos opcionales con varios tic
 internos no cambian estados en ninguno de los módulos.
 
 Incluye PDF individual, PDF/Excel del listado y PDF/Excel estadísticos.
-Guías: [diseño de Control de cambios](change-control-v0.5.0-design.md) y
-[catálogo Tipos de cambio](change-types-v0.5.0.md).
+
+## Notificaciones y correo
+
+Permite el envío automático y manual de correos basado en eventos operativos:
+
+- **Eventos:** Notificación técnica de activaciones, con destinatarios configurables, asunto y cuerpo dinámicos.
+- **Plantillas:** Editor de plantillas para formatos HTML y texto plano con sustitución de variables contextuales.
+- **Transporte:** Configuración de servidor SMTP tradicional o integración OAuth2 para Microsoft 365 y Google Workspace. Pruebas de transporte y diagnóstico interactivo.
+- **Procesamiento asíncrono:** Cola de despacho persistente (`mail_jobs`) con reintentos controlados y bitácora de entrega.
 
 ## Reportería
 
@@ -140,25 +142,25 @@ Las categorías decorativas comparten la paleta Capsule NOC. Los filtros y los d
 históricos pertenecen a cada dominio; no se mezclan tickets normales e internos
 salvo en los indicadores explícitos de relación.
 
-## Administración
+## Administración y Seguridad
 
-Catálogos mantiene sectores, nodos, departamentos, puestos, responsables, tipos
-de incidencia de clientes e internos, proveedores, motivos de escalamiento,
-tipos de servicio, motivos de baja, modelos CPE y tipos y finalizaciones de cambios.
-La desactivación conserva referencias históricas; las validaciones evitan nombres
-duplicados según las convenciones del catálogo.
+La sección administrativa agrupa la configuración operativa y el gobierno del sistema:
 
-Configuración administra numeraciones independientes de Tickets, Tickets internos,
-Activaciones y Control de cambios. Permite prefijo, separador, siguiente número,
-longitud y vista previa sin consumir referencias. No configura todos los campos
-ni permite definir libremente estados o flujos nuevos.
+- **Seguridad y Cuentas:** Administración de acceso sobre el catálogo de Responsables. Habilitación de acceso web (`access_granted`), asignación de contraseñas (Argon2id), asignación de roles y control de disponibilidad para asignaciones operativas (`operational_selectable`).
+- **Roles y permisos:** Gestión de roles personalizados con asignación granular de permisos a partir de un inventario cerrado de módulos y operaciones. Protección inmutable de facultades del Superadministrador.
+- **Sesiones activas:** Monitorización y revocación selectiva o global de sesiones activas en memoria RAM.
+- **Auditoría de seguridad:** Registro de eventos de autenticación, administración de cuentas y modificaciones de roles. Filtros y exportación en PDF y Excel (.xlsx). Configuración de política de retención automática entre 1 y 3650 días.
+- **Catálogos:** Mantiene sectores, nodos, departamentos, puestos, responsables, tipos de incidencia de clientes e internos, proveedores, motivos de escalamiento, tipos de servicio, motivos de baja, modelos CPE y tipos y finalizaciones de cambios. La desactivación conserva referencias históricas.
+- **Configuración:** Administra numeraciones independientes de Tickets, Tickets internos, Activaciones y Control de cambios (prefijo, separador, siguiente número, longitud y vista previa).
 
 ## Límites y documentación histórica
 
-No hay autenticación, autorización por usuario, portal de clientes, adjuntos ni
-motor de SLA. Las funciones disponibles no sustituyen monitoreo, inventario
-especializado ni gestión comercial.
+Ticketyn está diseñado para la operativa técnica de NOC e ISP. No incluye:
+- Portal público de autoservicio para clientes finales.
+- Archivos adjuntos binarios en tickets o seguimientos.
+- Motor de SLA automático con reglas de escalamiento desatendidas.
+- Registro público ni autorregistro de usuarios.
+- Doble factor de autenticación (MFA) ni recuperación remota de contraseña por correo.
+- Sincronización de red en tiempo real o aprovisionamiento activo sobre routers o switches.
 
-[Actualización v0.3.0](upgrading-v0.3.0.md) y
-[notas v0.3.0](releases/v0.3.0.md) se conservan como referencias históricas.
-Para una instalación actual utiliza [Administración y despliegue](deployment.md).
+Documentos históricos de versiones anteriores (`v0.3.0`, `v0.5.0`, `v0.6.0`) se conservan como referencia de diseño y validación. Para el mapa general vigente, consultar [SYSTEM_MAP.md](SYSTEM_MAP.md).

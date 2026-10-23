@@ -1,7 +1,11 @@
 import type { Circuit, NamedCatalog } from './catalog'
 export type FmsKind = 'activations' | 'capacity-changes' | 'circuit-lifecycle'
 export interface Operation {
+  distribution_recorded?: boolean
+  distribution_device_name?: string | null
+  distribution_port_name?: string | null
   activation_notes?: string | null
+  customer_activation_notes?: string | null
   node_id?: number | null; node?: Pick<NamedCatalog, 'id' | 'name' | 'active'> | null
   sector_id?: number | null; sector?: Pick<NamedCatalog, 'id' | 'name' | 'active'> | null
   cpe_activation?: string | null; service_type_name?: string | null; initial_capacity?: string | null; initial_capacity_unit?: string | null
@@ -16,3 +20,7 @@ export interface CircuitOperationalDetail { circuit: Circuit; customer: Pick<Nam
 export const fmsTitles: Record<FmsKind, string> = { activations: 'Activaciones', 'capacity-changes': 'Cambios de capacidad', 'circuit-lifecycle': 'Bajas y Reactivaciones' }
 export const operationLabel = (value?: string) => ({ INCREASE: 'Incremento', DECREASE: 'Decremento', DEACTIVATE: 'Baja', REACTIVATE: 'Reactivación' }[value ?? ''] ?? 'Activación')
 export { formatCapacity as capacityLabel } from '../lib/capacity'
+
+export function activationDistributionLabel(operation: Operation, field: 'distribution_device_name' | 'distribution_port_name'): string {
+  return operation.distribution_recorded ? (operation[field] || 'No asignado') : 'No registrado'
+}

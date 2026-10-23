@@ -1,8 +1,8 @@
 # Ticketyn — Instrucciones del Proyecto y Mecanismo de Continuidad Multagente
 
-Este documento define las reglas operativas y el protocolo de colaboración continua entre **Codex CLI** y **Antigravity GUI** para el desarrollo del proyecto Ticketyn.
+Este documento define las reglas operativas y el protocolo de colaboración continua entre **Codex CLI**, **Antigravity GUI** y **DeepSeek** para el desarrollo del proyecto Ticketyn.
 
-Ambos agentes deben cumplir estrictamente estas directrices.
+Los tres agentes deben cumplir estrictamente estas directrices.
 
 ---
 
@@ -64,3 +64,31 @@ Para garantizar que cualquier agente pueda retomar el trabajo del otro sin repet
    * Las sesiones utilizan tokens opacos y metadatos alojados en **memoria RAM** del backend (`SecurityMemory`).
    * No existen tablas de sesiones en base de datos ni servicios de caché como Redis.
    * La aplicación está diseñada para operar como **un único trabajador HTTP** (`--workers 1`). No levantar múltiples instancias o procesos worker simultáneos.
+
+---
+
+## 4. Enrutamiento de contexto y exploración eficiente
+
+Para reducir el consumo de tokens y evitar reexploraciones repetitivas del repositorio, los agentes deben seguir un flujo de carga progresiva de contexto:
+
+1. **Instrucciones globales:** Leer las reglas operativas y arquitectónicas de este documento (`AGENTS.md`) y el estado de continuidad en `AGENT_HANDOFF.md`.
+2. **Identificación del dominio:** Consultar `docs/SYSTEM_MAP.md` para ubicar el área funcional afectada entre los nueve dominios del sistema.
+3. **Carga modular dirigida:** Leer exclusivamente la ficha correspondiente en `docs/modules/` asociada a la tarea (ej. `docs/modules/control-cambios.md`). No cargar las nueve fichas simultáneamente.
+4. **Localización de archivos:** Utilizar las rutas directas de backend y frontend documentadas en la tabla del mapa técnico.
+5. **Inspección selectiva:** Inspeccionar puntualmente las secciones de código requeridas antes de realizar cambios (`view_file` con rangos de líneas acotados).
+6. **Exploración ampliada justificada:** Extender la inspección a archivos adicionales únicamente cuando existan dependencias directas, discrepancias con el código o dudas técnicas justificadas.
+
+> *Nota:* `docs/SYSTEM_MAP.md` y las fichas de `docs/modules/` son referencias arquitectónicas y guías de navegación; no sustituyen la verificación del código fuente antes de modificarlo.
+
+### Directrices de optimización de tokens y comandos
+* **Búsquedas dirigidas:** Evitar exploraciones recursivas indiscriminadas (`find`, `tree`, `grep` general) cuando el mapa técnico ya indique la ubicación exacta de los componentes.
+* **Sin precarga histórica:** No leer especificaciones de versiones anteriores (`docs/*-design.md`, `docs/*-v0.*.md`) salvo que la tarea solicite explícitamente auditar antecedentes.
+* **Lecturas parciales:** Priorizar lecturas acotadas mediante parámetros `StartLine` y `EndLine`, evitando ver archivos completos de cientos de líneas para confirmar un detalle menor.
+* **Salidas de terminal sintéticas:** Utilizar comandos que generen salidas resumidas (ej. `pytest -q`, `git status --short`). No obstante, ante fallos de pruebas o excepciones, deben mostrarse los trazos de error completos necesarios para diagnosticar la causa raíz.
+* **No duplicar diagnósticos:** No repetir análisis de arquitectura o descripciones de modelos que ya se encuentren documentados y vigentes en el repositorio.
+
+### Actualización documental continua
+Cuando una implementación modifique la arquitectura, contratos de API, reglas de negocio, permisos, dependencias o rutas principales de archivos, el agente debe mantener sincronizada la documentación:
+* Actualizar la fila y los archivos correspondientes en `docs/SYSTEM_MAP.md`.
+* Actualizar las reglas, invariantes o contratos en la ficha modular afectada dentro de `docs/modules/`.
+* No reescribir toda la documentación por cambios menores de implementación que no alteren la arquitectura ni los contratos del módulo.

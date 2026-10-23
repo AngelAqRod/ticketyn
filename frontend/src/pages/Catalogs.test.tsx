@@ -4,6 +4,8 @@ import { Catalogs } from './Catalogs'
 
 vi.mock('../components/CatalogAdmin', () => ({ CatalogAdmin: ({ kind }: { kind: string }) => <div data-testid="catalog-content">{kind}</div> }))
 
+vi.mock('../components/PortNomenclatureAdmin', () => ({ PortNomenclatureAdmin: () => <div data-testid="catalog-content">port-nomenclatures</div> }))
+
 afterEach(()=>vi.restoreAllMocks())
 
 function scrollingStrip(initialWidth=300){
@@ -26,13 +28,13 @@ describe('selector de Catálogos', () => {
     render(<Catalogs />)
     const nav = screen.getByRole('navigation', { name: 'Catálogos' })
     const buttons = within(within(nav).getByRole('group',{name:'Categorías de catálogos'})).getAllByRole('button')
-    expect(buttons.map(button => button.textContent)).toEqual(['Sectores', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Puestos', 'Motivos de escalamiento', 'Tipos de servicio', 'Motivos de baja', 'Modelos de CPE', 'Tipos de incidencia interna', 'Proveedores', 'Tipos de finalización de cambios', 'Tipos de cambio'])
+    expect(buttons.map(button => button.textContent)).toEqual(['Sectores', 'Departamentos', 'Tipos de incidencia', 'Nodos', 'Puestos', 'Motivos de escalamiento', 'Tipos de servicio', 'Motivos de baja', 'Modelos de CPE', 'Tipos de incidencia interna', 'Proveedores', 'Tipos de finalización de cambios', 'Tipos de cambio', 'Nomenclaturas de puertos'])
     expect(buttons[0]).toHaveAttribute('aria-pressed', 'true')
     buttons.forEach((button, index) => {
       fireEvent.click(button)
       expect(button).toHaveAttribute('aria-pressed', 'true')
       expect(buttons.filter(item => item.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
-      expect(screen.getByTestId('catalog-content')).toHaveTextContent(['sectors', 'departments', 'incident-types', 'nodes', 'positions', 'escalation-reasons', 'service-types', 'deactivation-reasons', 'cpe-models', 'internal-incident-types', 'providers', 'change-completion-types', 'change-types'][index])
+      expect(screen.getByTestId('catalog-content')).toHaveTextContent(['sectors', 'departments', 'incident-types', 'nodes', 'positions', 'escalation-reasons', 'service-types', 'deactivation-reasons', 'cpe-models', 'internal-incident-types', 'providers', 'change-completion-types', 'change-types', 'port-nomenclatures'][index])
     })
   })
   it('desplaza solo la barra y deshabilita flechas e indicadores en cada extremo',()=>{
@@ -57,7 +59,7 @@ describe('selector de Catálogos', () => {
     fireEvent.click(buttons.at(-1)!)
     expect(viewport.scrollLeft).toBe(total-viewport.clientWidth)
     expect(buttons.at(-1)).toHaveAttribute('aria-pressed','true')
-    expect(screen.getByTestId('catalog-content')).toHaveTextContent('change-types')
+    expect(screen.getByTestId('catalog-content')).toHaveTextContent('port-nomenclatures')
     scroll.mockClear();fireEvent.click(buttons.at(-1)!);expect(scroll).not.toHaveBeenCalled()
     fireEvent.click(buttons[0]);expect(viewport.scrollLeft).toBe(0)
   })

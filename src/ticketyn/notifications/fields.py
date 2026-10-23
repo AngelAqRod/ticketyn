@@ -4,6 +4,16 @@ from dataclasses import dataclass
 ACTIVATION_EVENT = 'fms.activation.created'
 EVENTS = {ACTIVATION_EVENT: 'Registro de activación FMS'}
 
+EVENT_METADATA = {
+    ACTIVATION_EVENT: {
+        'badge': 'FMS · ACTIVACIÓN',
+        'title': 'Registro de activación',
+        'description': 'Nueva activación',
+        'badge_color': '#047857',
+        'badge_bg': '#ECFDF5',
+    }
+}
+
 
 @dataclass(frozen=True)
 class DynamicField:
@@ -24,7 +34,9 @@ ACTIVATION_FIELDS = (
     field('activation.reference', 'Activación FMS', 'Correlativo', 'text', 'HISTORICAL', 'Activation.reference'),
     field('activation.effective_at', 'Activación FMS', 'Fecha efectiva de activación', 'datetime_guatemala', 'HISTORICAL', 'Activation.effective_at'),
     field('activation.created_at', 'Activación FMS', 'Fecha de creación', 'datetime_guatemala', 'HISTORICAL', 'Activation.created_at'),
-    field('activation.activation_notes', 'Activación FMS', 'Notas de activación', 'multiline', 'HISTORICAL', 'Activation.activation_notes'),
+    field('activation.activation_notes', 'Activación FMS', 'Notas de activación', 'multiline', 'HISTORICAL', 'Activation.activation_notes', resolver='activation_notes'),
+    field('activation.distribution_device', 'Activación FMS', 'Equipo de distribución', 'text', 'HISTORICAL', 'Activation.distribution_device_name', 'Activation.distribution_recorded', resolver='distribution_device'),
+    field('activation.distribution_port', 'Activación FMS', 'Puerto de distribución', 'text', 'HISTORICAL', 'Activation.distribution_port_name', 'Activation.distribution_recorded', resolver='distribution_port'),
     field('activation.sector', 'Activación FMS', 'Sector', 'text', 'HISTORICAL_REFERENCE_CURRENT_NAME', 'Activation.sector.name'),
     field('activation.node', 'Activación FMS', 'Nodo', 'text', 'HISTORICAL_REFERENCE_CURRENT_NAME', 'Activation.node.name'),
     field('activation.responsible', 'Activación FMS', 'Responsable', 'text', 'HISTORICAL_REFERENCE_CURRENT_NAME', 'Activation.responsible.name'),
@@ -37,6 +49,7 @@ ACTIVATION_FIELDS = (
     field('circuit.node', 'Circuito', 'Nodo', 'text', 'CURRENT', 'Activation.circuit.node.name'),
     field('circuit.service_type', 'Circuito', 'Tipo de servicio', 'text', 'CURRENT', 'Activation.circuit.service_type.name'),
     field('circuit.cpe_model', 'Circuito', 'Modelo de CPE actual', 'text', 'CURRENT', 'Activation.circuit.cpe_model.name'),
+    field('circuit.cpe_management_ip', 'Circuito', 'IP de gestión CPE', 'text', 'CURRENT', 'Activation.circuit.cpe_management_ip', resolver='cpe_management_ip'),
     field('circuit.initial_capacity', 'Circuito', 'Capacidad inicial', 'capacity', 'CURRENT', 'Activation.circuit.initial_capacity', 'Activation.circuit.initial_capacity_unit', resolver='capacity'),
     field('circuit.current_capacity', 'Circuito', 'Capacidad actual', 'capacity', 'CURRENT', 'Activation.circuit_id', 'CapacityChange.effective_at', 'CapacityChange.id', 'CapacityChange.new_capacity', 'CapacityChange.new_unit', 'Activation.circuit.initial_capacity', 'Activation.circuit.initial_capacity_unit', resolver='latest_capacity_effective_now_or_initial'),
     field('customer.name', 'Cliente', 'Cliente', 'text', 'CURRENT', 'Activation.circuit.customer.name'),

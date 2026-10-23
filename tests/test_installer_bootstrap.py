@@ -53,8 +53,8 @@ def test_detects_actual_authentication_even_before_version_bump(auth_source):
 def test_legacy_release_does_not_depend_on_version_number(tmp_path):
     (tmp_path / 'src/ticketyn').mkdir(parents=True)
     (tmp_path / 'alembic/versions').mkdir(parents=True)
-    # A real pre-authentication application entry point from the base commit.
-    legacy = subprocess.check_output(['git', 'show', 'HEAD:src/ticketyn/main.py'], cwd=ROOT)
+    # HEAD now contains v0.7 authentication; pin this historical fixture explicitly.
+    legacy = subprocess.check_output(['git', 'show', 'v0.6.2:src/ticketyn/main.py'], cwd=ROOT)
     (tmp_path / 'src/ticketyn/main.py').write_bytes(legacy)
     (tmp_path / 'alembic/versions/0029.py').write_text("revision='0029_mail_requests'\ndown_revision=None\n")
     assert security.capability(tmp_path) == 'legacy'
@@ -417,7 +417,10 @@ def test_real_migrations_bootstrap_and_reexecution_on_disposable_postgresql(real
     result = shell(setup + 'verify_database_head')
     assert result.returncode == 0, result.stderr
     with blank_database.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0032_responsible_selectable'
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+        expected_head = ScriptDirectory.from_config(Config(str(ROOT / 'alembic.ini'))).get_current_head()
+        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == expected_head
     secret = 'SyntheticInstallerPassword!'  # exclusively an ephemeral test value
     code, output = interactive_shell(setup + 'RELEASE_READY=1\ninitialize_administration\n[[ $ADMIN_READY == 1 ]]', [
         ('Nombre de usuario (login): ', 'installer-admin'),

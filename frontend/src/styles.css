@@ -1122,28 +1122,924 @@
   color: #ffffff !important;
   box-shadow: 0 0 12px rgba(148, 163, 184, 0.3) !important;
 }
-.change-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; min-width: 0; }
-.change-calendar-cell { min-width: 0; min-height: 110px; padding: 8px; border: 1px solid #1e293b; border-radius: 14px; background: #070d1a; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); transition: all 0.15s ease; }
-.change-calendar-cell:hover { border-color: rgba(245, 158, 11, 0.4); background: #0c162c; }
-.change-calendar-placeholder { min-width: 0; min-height: 110px; border-radius: 14px; background: rgba(7, 13, 26, 0.25); border: 1px dashed rgba(51, 65, 85, 0.35); }
-.change-calendar-weekdays { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; color: #94a3b8; font-family: var(--font-mono); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
-.change-calendar-weekdays > span { padding-block: 6px; min-width: 0; }
-.change-calendar-date-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+/* ==========================================================================
+   Electric Blue 2.0 — Control de Cambios Calendar Redesign
+   Industrial Split Cut 2.0 | Technical Frame B | Corner Frame E
+   ========================================================================== */
+
+/* --- 1. Cabecera principal: Industrial Split Cut 2.0 --- */
+.industrial-split-cut-header {
+  position: relative;
+  background: linear-gradient(180deg, #0b1528 0%, #060d1b 100%);
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  clip-path: polygon(0 0, calc(100% - 32px) 0, 100% 32px, 100% 100%, 0 100%);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(15, 23, 42, 0.6);
+  overflow: hidden;
+}
+
+/* Línea superior de acento Electric Blue que termina antes del recorte diagonal */
+.isc-top-accent {
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 48px; /* Termina 16px antes del inicio del recorte diagonal a (100% - 32px) */
+  height: 2px;
+  background: #0879f8;
+  box-shadow: 0 0 10px rgba(8, 121, 248, 0.7);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Borde industrial discreto sobre el recorte diagonal */
+.isc-diagonal-border {
+  position: absolute;
+  top: 0;
+  left: calc(100% - 32px);
+  width: 45.25px; /* 32 * sqrt(2) */
+  height: 1px;
+  background: #1e293b;
+  transform: rotate(45deg);
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Nivel superior: información temporal */
+.isc-level-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.isc-temporal-group {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+/* Bloque de fecha integrado */
+.isc-date-block {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  background: #070f1e;
+  border: 1px solid rgba(8, 121, 248, 0.25);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.isc-date-block-digits {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+}
+
+.isc-date-block-month {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #38bdf8;
+  line-height: 1;
+}
+
+.isc-date-block-day {
+  font-family: var(--font-mono);
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+}
+
+.isc-date-block-today {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+}
+
+/* Información temporal principal */
+.isc-info-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.isc-info-subtitle {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+/* Nivel inferior: controles existentes */
+.isc-level-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.875rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.isc-controls-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.isc-date-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+/* --- 2. Encabezados LUN–DOM: Technical Frame B --- */
+.change-calendar-weekdays {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.technical-frame-b {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 40px;
+  border-radius: 4px;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  user-select: none;
+  overflow: hidden;
+}
+
+.technical-frame-b--weekday {
+  background: #0b1426;
+  border-color: rgba(30, 41, 59, 0.8);
+}
+
+.technical-frame-b--weekend {
+  background: #200c14;
+  border-color: rgba(159, 18, 57, 0.35);
+}
+
+.tf-b-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+@media (max-width: 900px) {
+  .tf-b-text {
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+  }
+}
+
+.technical-frame-b--weekday .tf-b-text {
+  color: #f1f5f9;
+}
+
+.technical-frame-b--weekend .tf-b-text {
+  color: #fecdd3;
+}
+
+/* Segmentos decorativos para Technical Frame B */
+.tf-b-bracket-tl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border-top: 2px solid #475569;
+  border-left: 2px solid #475569;
+  border-top-left-radius: 3px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.technical-frame-b--weekend .tf-b-bracket-tl {
+  border-top-color: #be123c;
+  border-left-color: #be123c;
+}
+
+.tf-b-bracket-br {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  border-bottom: 2px solid #475569;
+  border-right: 2px solid #475569;
+  border-bottom-right-radius: 3px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.technical-frame-b--weekend .tf-b-bracket-br {
+  border-bottom-color: #be123c;
+  border-right-color: #be123c;
+}
+
+/* Línea superior de acento */
+.tf-b-top-line {
+  position: absolute;
+  top: 0;
+  left: 17px;
+  right: 14px;
+  height: 2px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.technical-frame-b--weekday .tf-b-top-line {
+  background: #0879f8;
+  box-shadow: 0 0 6px rgba(8, 121, 248, 0.4);
+}
+
+.technical-frame-b--weekend .tf-b-top-line {
+  background: #fb7185;
+  box-shadow: 0 0 6px rgba(251, 113, 133, 0.4);
+}
+
+/* Diagonal de acento */
+.tf-b-diagonal-line {
+  position: absolute;
+  top: 0;
+  left: calc(100% - 14px);
+  width: 19.8px;
+  height: 2px;
+  transform: rotate(45deg);
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.technical-frame-b--weekday .tf-b-diagonal-line {
+  background: #0879f8;
+}
+
+.technical-frame-b--weekend .tf-b-diagonal-line {
+  background: #fb7185;
+}
+
+/* --- 3. Celdas del calendario mensual: Corner Frame E --- */
+.change-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.change-calendar-cell,
+.corner-frame-e {
+  position: relative;
+  min-width: 0;
+  min-height: 110px;
+  padding: 10px;
+  border-radius: 4px;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+  border: 1px solid #1e293b;
+  background: #070d1a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+  overflow: hidden;
+}
+
+.corner-frame-e:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: #0c162c;
+}
+
+.corner-frame-e--weekend {
+  background: #150912;
+  border-color: rgba(51, 65, 85, 0.5);
+}
+
+.corner-frame-e--weekend:hover {
+  background: #1d0f1b;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.change-calendar-placeholder {
+  min-width: 0;
+  min-height: 110px;
+  border-radius: 4px;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+  background: rgba(7, 13, 26, 0.25);
+  border: 1px dashed rgba(51, 65, 85, 0.35);
+}
+
+/* Segmentos decorativos para Corner Frame E */
+.cf-e-bracket-tl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  border-top: 2px solid #475569;
+  border-left: 2px solid #475569;
+  border-top-left-radius: 3px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cf-e-bracket-br {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  border-bottom: 2px solid #475569;
+  border-right: 2px solid #475569;
+  border-bottom-right-radius: 3px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Día actual: segmentos ámbar */
+.corner-frame-e--today .cf-e-bracket-tl {
+  border-top-color: #f59e0b;
+  border-left-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.corner-frame-e--today .cf-e-bracket-br {
+  border-bottom-color: #f59e0b;
+  border-right-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+/* Línea de acento superior */
+.cf-e-top-line {
+  position: absolute;
+  top: 0;
+  left: 25px;
+  right: 20px;
+  height: 2px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Diagonal conectada visualmente */
+.cf-e-diagonal-line {
+  position: absolute;
+  top: 0;
+  left: calc(100% - 20px);
+  width: 28.3px;
+  height: 2px;
+  transform: rotate(45deg);
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Actividad: Día sin cambios -> Blanco suave */
+.corner-frame-e--no-changes .cf-e-top-line,
+.corner-frame-e--no-changes .cf-e-diagonal-line {
+  background: rgba(226, 232, 240, 0.75);
+}
+
+/* Actividad: Día con uno o más cambios -> Morado */
+.corner-frame-e--has-changes .cf-e-top-line,
+.corner-frame-e--has-changes .cf-e-diagonal-line {
+  background: #a855f7;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.55);
+}
+
+/* Cápsula de fecha y contenido existente */
+.change-calendar-date-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; z-index: 2; position: relative; }
 .change-calendar-date { display: inline-flex; align-items: center; padding: 0.15rem 0.55rem; border-radius: 9999px; color: #94a3b8; background: #0b1426; border: 1px solid #1e2c4a; text-decoration: none; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; transition: all 0.15s ease; }
 .change-calendar-date:hover { color: #ffffff; border-color: rgba(245, 158, 11, 0.5); background: #17264a; }
 .change-calendar-date[aria-current="date"] { background: #d97706 !important; color: #ffffff !important; border-color: #fbbf24 !important; box-shadow: 0 0 10px rgba(245, 158, 11, 0.45); }
 .change-calendar-mobile-weekday { display: none; font-size: 11px; font-family: var(--font-mono); color: #64748b; }
-.change-calendar-event { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 8px; overflow-wrap: anywhere; font-size: 11px; text-decoration: none; background: #0f1c35; border: 1px solid #1e2c4a; color: #f1f5f9; transition: all 0.15s ease; }
-.change-calendar-event:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
-.change-calendar-event.change-status-SCHEDULED { background: rgba(168, 85, 247, 0.12) !important; border-color: rgba(168, 85, 247, 0.35) !important; color: #f3e8ff !important; }
-.change-calendar-event.change-status-SCHEDULED strong { color: #d8b4fe !important; }
-.change-calendar-event.change-status-EXECUTING { background: rgba(56, 189, 248, 0.12) !important; border-color: rgba(56, 189, 248, 0.35) !important; color: #f0f9ff !important; }
-.change-calendar-event.change-status-EXECUTING strong { color: #38bdf8 !important; }
-.change-calendar-event.change-status-FINISHED { background: rgba(16, 185, 129, 0.12) !important; border-color: rgba(16, 185, 129, 0.35) !important; color: #ecfdf5 !important; }
-.change-calendar-event.change-status-FINISHED strong { color: #34d399 !important; }
-.change-calendar-event strong { font-family: var(--font-mono); font-weight: 700; }
+/* --- 4. Tarjetas de mantenimiento: Technical Cut (Technical Compact + Industrial Mini Cut) --- */
+.change-calendar-event,
+.technical-cut-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  border: 1px solid #1e2c4a;
+  text-decoration: none;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  transition: all 0.15s ease;
+  z-index: 2;
+  overflow: hidden;
+}
+
+/* Línea superior de acento según estado */
+.change-calendar-event::before,
+.technical-cut-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 6px;
+  right: 12px;
+  height: 2px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Borde del recorte diagonal geométrico superior derecho */
+.change-calendar-event::after,
+.technical-cut-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(100% - 10px);
+  width: 14.14px; /* 10 * sqrt(2) */
+  height: 1px;
+  transform: rotate(45deg);
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.change-calendar-event:hover,
+.technical-cut-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.change-card-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #94a3b8;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.change-card-ref {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.change-card-title {
+  font-size: 11px;
+  color: #f1f5f9;
+  line-height: 1.25;
+}
+
+.change-card-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.25;
+  opacity: 0.95;
+}
+
+/* Estado: Agendado (SCHEDULED) -> Morado */
+.change-calendar-event.change-status-SCHEDULED,
+.technical-cut-card.change-status-SCHEDULED {
+  background: #140d20 !important;
+  border-color: rgba(168, 85, 247, 0.4) !important;
+  color: #f3e8ff !important;
+}
+.change-calendar-event.change-status-SCHEDULED::before,
+.technical-cut-card.change-status-SCHEDULED::before {
+  background: #a855f7;
+}
+.change-calendar-event.change-status-SCHEDULED::after,
+.technical-cut-card.change-status-SCHEDULED::after {
+  background: rgba(168, 85, 247, 0.5);
+}
+.change-calendar-event.change-status-SCHEDULED:hover,
+.technical-cut-card.change-status-SCHEDULED:hover {
+  background: #1c112d !important;
+  border-color: rgba(168, 85, 247, 0.65) !important;
+}
+.change-calendar-event.change-status-SCHEDULED strong,
+.technical-cut-card.change-status-SCHEDULED strong,
+.change-calendar-event.change-status-SCHEDULED .change-card-ref,
+.technical-cut-card.change-status-SCHEDULED .change-card-ref {
+  color: #d8b4fe !important;
+}
+.change-calendar-event.change-status-SCHEDULED .change-card-status,
+.technical-cut-card.change-status-SCHEDULED .change-card-status {
+  color: #c084fc !important;
+}
+
+/* Estado: En ejecución (EXECUTING) -> Azul */
+.change-calendar-event.change-status-EXECUTING,
+.technical-cut-card.change-status-EXECUTING {
+  background: #08172c !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  color: #f0f9ff !important;
+}
+.change-calendar-event.change-status-EXECUTING::before,
+.technical-cut-card.change-status-EXECUTING::before {
+  background: #38bdf8;
+}
+.change-calendar-event.change-status-EXECUTING::after,
+.technical-cut-card.change-status-EXECUTING::after {
+  background: rgba(56, 189, 248, 0.5);
+}
+.change-calendar-event.change-status-EXECUTING:hover,
+.technical-cut-card.change-status-EXECUTING:hover {
+  background: #0d223f !important;
+  border-color: rgba(56, 189, 248, 0.65) !important;
+}
+.change-calendar-event.change-status-EXECUTING strong,
+.technical-cut-card.change-status-EXECUTING strong,
+.change-calendar-event.change-status-EXECUTING .change-card-ref,
+.technical-cut-card.change-status-EXECUTING .change-card-ref {
+  color: #38bdf8 !important;
+}
+.change-calendar-event.change-status-EXECUTING .change-card-status,
+.technical-cut-card.change-status-EXECUTING .change-card-status {
+  color: #7dd3fc !important;
+}
+
+/* Estado: Finalizado (FINISHED) -> Verde */
+.change-calendar-event.change-status-FINISHED,
+.technical-cut-card.change-status-FINISHED {
+  background: #081a15 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #ecfdf5 !important;
+}
+.change-calendar-event.change-status-FINISHED::before,
+.technical-cut-card.change-status-FINISHED::before {
+  background: #10b981;
+}
+.change-calendar-event.change-status-FINISHED::after,
+.technical-cut-card.change-status-FINISHED::after {
+  background: rgba(16, 185, 129, 0.5);
+}
+.change-calendar-event.change-status-FINISHED:hover,
+.technical-cut-card.change-status-FINISHED:hover {
+  background: #0d251f !important;
+  border-color: rgba(16, 185, 129, 0.65) !important;
+}
+.change-calendar-event.change-status-FINISHED strong,
+.technical-cut-card.change-status-FINISHED strong,
+.change-calendar-event.change-status-FINISHED .change-card-ref,
+.technical-cut-card.change-status-FINISHED .change-card-ref {
+  color: #34d399 !important;
+}
+.change-calendar-event.change-status-FINISHED .change-card-status,
+.technical-cut-card.change-status-FINISHED .change-card-status {
+  color: #10b981 !important;
+}
+
 .change-calendar-day, .change-calendar-day .change-calendar-weekdays { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 640px) { .change-calendar { grid-template-columns: minmax(0, 1fr); } .change-calendar-placeholder, .change-calendar-weekdays { display: none; } .change-calendar-mobile-weekday { display: inline; } .change-calendar-cell { min-height: 70px; } }
+
+/* --- 5. Vista semanal: Extended Grid (Opción A - 320px) --- */
+@media (min-width: 641px) {
+  .change-calendar-week .change-calendar-cell {
+    height: 320px;
+    min-height: 320px;
+    max-height: 320px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .change-calendar-week .change-calendar-date-heading {
+    flex-shrink: 0;
+  }
+
+  .change-calendar-week .change-calendar-events {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 3px;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.25) transparent;
+  }
+
+  .change-calendar-week .change-calendar-events::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .change-calendar-week .change-calendar-events::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .change-calendar-week .change-calendar-events::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.25);
+    border-radius: 9999px;
+  }
+
+  .change-calendar-week .change-calendar-events::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.5);
+  }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .change-calendar-week {
+    gap: 6px;
+  }
+  .change-calendar-week .change-calendar-cell {
+    padding: 8px 6px;
+  }
+  .change-calendar-week .change-calendar-event,
+  .change-calendar-week .technical-cut-card {
+    padding: 5px 6px;
+  }
+}
+
+/* --- 6. Vista diaria: Technical Timeline Expandida (B2) --- */
+.change-calendar-day-timeline {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.timeline-day-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: linear-gradient(180deg, #0b1528 0%, #070d1a 100%);
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.timeline-day-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 24px;
+  height: 2px;
+  background: #0879f8;
+}
+
+.timeline-day-header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(100% - 16px);
+  width: 22.63px;
+  height: 1px;
+  background: #1e293b;
+  transform: rotate(45deg);
+  transform-origin: 0 0;
+}
+
+.timeline-day-header-title {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timeline-day-header-indicator {
+  width: 8px;
+  height: 8px;
+  background: #0879f8;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(8, 121, 248, 0.6);
+  flex-shrink: 0;
+}
+
+.timeline-stream {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timeline-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.timeline-time-col {
+  width: 85px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.timeline-time-start {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.timeline-time-end {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.timeline-spine-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 20px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.timeline-line {
+  position: absolute;
+  top: 0;
+  bottom: -16px;
+  left: 50%;
+  width: 2px;
+  background: #1e293b;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.timeline-item:last-child .timeline-line {
+  bottom: 0;
+  height: 18px;
+}
+
+.timeline-node {
+  position: relative;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 14px;
+  background: #070d1a;
+  border: 2px solid #38bdf8;
+  flex-shrink: 0;
+}
+
+.timeline-node-FINISHED {
+  border-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.timeline-node-SCHEDULED {
+  border-color: #a855f7;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
+}
+
+.timeline-node-EXECUTING {
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+
+.timeline-card-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-expanded-card {
+  padding: 12px 16px;
+  gap: 8px;
+  border-radius: 4px;
+}
+
+.timeline-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.timeline-expanded-card .change-card-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f1f5f9;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.timeline-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.timeline-expanded-card .change-card-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+}
+
+.timeline-empty-state {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 20px;
+  background: #070d1a;
+  border: 1px dashed rgba(51, 65, 85, 0.6);
+  border-radius: 4px;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  margin-top: 8px;
+}
+
+.timeline-empty-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #64748b;
+  flex-shrink: 0;
+}
+
+.timeline-empty-message {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .timeline-day-header {
+    padding: 10px 14px;
+    margin-bottom: 16px;
+  }
+  .timeline-day-header-title {
+    font-size: 0.82rem;
+  }
+  .timeline-item {
+    gap: 10px;
+  }
+  .timeline-time-col {
+    width: 60px;
+    padding-top: 8px;
+  }
+  .timeline-time-start {
+    font-size: 0.9rem;
+  }
+  .timeline-time-end {
+    font-size: 10px;
+  }
+  .timeline-spine-col {
+    width: 14px;
+  }
+  .timeline-expanded-card {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .change-calendar { grid-template-columns: minmax(0, 1fr); }
+  .change-calendar-placeholder, .change-calendar-weekdays { display: none; }
+  .change-calendar-mobile-weekday { display: inline; }
+  .corner-frame-e, .change-calendar-cell { min-height: 70px; }
+  .isc-temporal-group { gap: 0.75rem; }
+  .isc-info-title { font-size: 1.15rem; }
+  .isc-date-block-day { font-size: 1.4rem; }
+}
 
 /* Login Electric Blue 2.0 & Impeccable Styles */
 .btn-gradient-electric {

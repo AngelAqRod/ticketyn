@@ -16,7 +16,8 @@ ACTION_LABELS = {'view': 'Consultar', 'create': 'Crear', 'edit': 'Editar', 'dele
                  'notify': 'Solicitar notificación', 'deactivate': 'Registrar baja', 'reactivate': 'Registrar reactivación',
                  'lookup': 'Consultar selector', 'manage': 'Administrar', 'test': 'Enviar prueba SMTP',
                  'authorize': 'Autorizar o desconectar OAuth2', 'preview': 'Vista previa', 'control': 'Pausar o reanudar',
-                 'configure': 'Configurar seguridad', 'clean': 'Limpiar auditoría'}
+                 'configure': 'Configurar seguridad', 'clean': 'Limpiar auditoría',
+                 'move': 'Trasladar', 'set_active': 'Activar o desactivar'}
 
 def register(module, actions, *, exclusive=(), lookup=False):
     for action in actions:
@@ -34,15 +35,18 @@ PERMISSIONS.pop('internal_tickets.link')
 register('changes', ('view', 'create', 'edit', 'execute', 'link', 'followup', 'export'))
 for module in ('customers', 'circuits'):
     register(module, ('view', 'create', 'edit', 'delete', 'lookup'))
+for module in ('distribution_devices', 'distribution_ports'):
+    register(module, ('view', 'lookup', 'create', 'edit', 'move', 'set_active', 'delete'))
 register('activations', ('view', 'create', 'followup', 'notify', 'export'))
 register('capacity_changes', ('view', 'execute', 'export'))
 register('lifecycle', ('view', 'deactivate', 'reactivate', 'export'))
 register('cpe', ('view', 'edit'))
 CATALOGS = ('sectors', 'departments', 'incident_types', 'nodes', 'responsibles', 'positions',
             'escalation_reasons', 'service_types', 'deactivation_reasons', 'cpe_models',
-            'internal_incident_types', 'providers', 'change_completion_types', 'change_types')
+            'internal_incident_types', 'providers', 'change_completion_types', 'change_types', 'port_nomenclatures')
 for module in CATALOGS:
     register('catalogs.' + module, ('view', 'create', 'edit', 'lookup'))
+register('catalogs.port_nomenclatures', ('view', 'create', 'edit', 'lookup', 'delete'))
 for module in ('tickets', 'internal_tickets', 'changes', 'activations', 'capacity_changes', 'lifecycle', 'escalations'):
     register('reports.' + module, ('view', 'export') if module != 'escalations' else ('view',))
 for module in ('ticket_number', 'internal_ticket_number', 'activation_number', 'change_number'):
@@ -68,6 +72,7 @@ EXCLUSIVE = frozenset(code for code, item in PERMISSIONS.items() if item.exclusi
 
 # No wildcard for ordinary roles: new modules/actions require an explicit decision here.
 OPERATOR = frozenset({
+    *(f'{module}.{action}' for module in ('distribution_devices', 'distribution_ports') for action in ('view', 'lookup', 'create', 'edit')),
     'dashboard.view',
     *(f'{module}.{action}' for module in ('tickets', 'internal_tickets') for action in ('view', 'create', 'edit', 'close', 'escalate', 'followup', 'export', 'link')),
     *(f'{module}.{action}' for module in ('customers', 'circuits') for action in ('view', 'create', 'edit', 'delete', 'lookup')),
@@ -81,6 +86,8 @@ OPERATOR = frozenset({
     'reports.escalations.view',
 })
 AUDITOR = frozenset({
+    'catalogs.port_nomenclatures.view',
+    *(f'{module}.{action}' for module in ('distribution_devices', 'distribution_ports') for action in ('view', 'lookup')),
     'dashboard.view',
     *(f'{module}.{action}' for module in ('tickets', 'internal_tickets', 'customers', 'circuits', 'activations', 'capacity_changes', 'lifecycle', 'changes') for action in ('view', 'export') if f'{module}.{action}' in PERMISSIONS),
     'customers.lookup', 'circuits.lookup', 'cpe.view',
@@ -89,6 +96,7 @@ AUDITOR = frozenset({
     'reports.escalations.view',
 })
 ADMIN_MODULES = frozenset({
+    'distribution_devices', 'distribution_ports',
     'dashboard', 'tickets', 'internal_tickets', 'customers', 'circuits', 'activations', 'capacity_changes',
     'lifecycle', 'changes', 'cpe', 'accounts', 'sessions', 'audit',
     *('catalogs.' + key for key in CATALOGS),
@@ -124,6 +132,10 @@ CONTEXT_READS = {
 
 def expanded_context(grants):
     effective = set(grants)
+    if any(code.startswith('distribution_ports.') for code in grants):
+        effective.add('catalogs.port_nomenclatures.lookup')
+    if any(code.startswith(('distribution_devices.', 'distribution_ports.')) for code in grants):
+        effective.add('catalogs.nodes.lookup')
     for resource, modules in CONTEXT_READS.items():
         if any(code.rsplit('.', 1)[0] in modules for code in grants):
             effective.add(f'{resource}.lookup' if resource in {'customers', 'circuits'} else f'catalogs.{resource}.lookup')

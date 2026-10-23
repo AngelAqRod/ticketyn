@@ -86,9 +86,12 @@ def test_small_interventions_keep_metadata_and_content_together(monkeypatch, ren
         assert f'Página {page} / {pages}' in page_text and 'Emitido:' in page_text
     for number in range(20):
         date = reports.date_text(incident().end_at + timedelta(minutes=number), ZoneInfo('UTC'))
-        metadata_page = next(page for page, text in rendered if date in text and 'Operador' in text)
-        content_page = next(page for page, text in rendered if f'CONTENIDO-{number:02}' in text)
-        assert metadata_page == content_page
+        date_index = next(index for index, (_, text) in enumerate(rendered) if date in text)
+        content_index = next(index for index, (_, text) in enumerate(rendered) if f'CONTENIDO-{number:02}' in text)
+        metadata_page = rendered[date_index][0]
+        assert metadata_page == rendered[content_index][0]
+        # Typography now emits date, secondary responsible and visibility separately.
+        assert any(page == metadata_page and 'Operador' in text for page, text in rendered[date_index:content_index])
 
 
 def test_customer_title_without_internal_classification(monkeypatch, rendered):

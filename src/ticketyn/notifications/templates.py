@@ -3,13 +3,15 @@
 Paths come exclusively from the server field registry. No client attribute paths,
 expression evaluation, persistence or transport operations are permitted here.
 """
+import ipaddress
 import re
 from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 from sqlalchemy import select, func
+from ticketyn.api.fms_data import distribution_labels
 from ticketyn.api.fms_exports import capacity_text
 from ticketyn.models.fms import CapacityChange
-from ticketyn.notifications.fields import EVENTS, FIELD_REGISTRY
+from ticketyn.notifications.fields import EVENTS, FIELD_REGISTRY, EVENT_METADATA
 from ticketyn.notifications.html import BodyBlock, render_html
 from ticketyn.schemas.mail_templates import MailTemplate, PreviewResponse
 
@@ -20,6 +22,16 @@ def join_subject_elements(elements):
 
 def optional_capacity(value, unit):
     return capacity_text(value, unit) if value is not None and unit is not None else ''
+
+
+def normalize_management_ip(value):
+    if value is None or not str(value).strip():
+        return 'No asignada'
+    try:
+        raw = str(value).strip().split('/')[0]
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        return str(value).strip()
 
 
 
@@ -40,7 +52,7 @@ def render_template(session, event_key, template, activation):
             raise ValueError('Unsupported registry source')
         value = activation
         for part in parts[1:]:
-            value = getattr(value, part) if value is not None else None
+            value = getattr(value, part, None) if value is not None else None
         return value
 
     def resolve(identifier):
@@ -52,9 +64,21 @@ def render_template(session, event_key, template, activation):
             value = optional_capacity(latest.new_capacity, latest.new_unit) if latest else optional_capacity(activation.circuit.initial_capacity, activation.circuit.initial_capacity_unit)
         elif field.resolver == 'capacity':
             value = optional_capacity(*(path_value(path) for path in field.source_paths))
+        elif field.resolver == 'distribution_device':
+            value = distribution_labels(activation)[0]
+        elif field.resolver == 'distribution_port':
+            value = distribution_labels(activation)[1]
+        elif field.resolver == 'cpe_management_ip':
+            raw_ip = path_value(field.source_paths[0])
+            value = normalize_management_ip(raw_ip)
+        elif field.resolver == 'activation_notes':
+            raw_notes = path_value(field.source_paths[0])
+            value = str(raw_notes) if raw_notes is not None and str(raw_notes).strip() else 'Sin notas registradas'
         else:
             value = path_value(field.source_paths[0])
-            if value is None or value == '':
+            if identifier == 'activation.activation_notes':
+                value = str(value) if value is not None and str(value).strip() else 'Sin notas registradas'
+            elif value is None or value == '':
                 value = ''
             elif field.format == 'datetime_guatemala':
                 value = value.astimezone(ZoneInfo('America/Guatemala')).strftime('%d/%m/%Y %H:%M:%S')
@@ -77,7 +101,7 @@ def render_template(session, event_key, template, activation):
                 # other multiline fields retain their existing inline format.
                 separator = '\n' if block.field_id == 'activation.activation_notes' else ' '
                 blocks.append(('field', f'{label}:{separator}{value}'))
-                html_blocks.append(BodyBlock('notes' if block.field_id == 'activation.activation_notes' else 'field', value, label))
+                html_blocks.append(BodyBlock('notes' if block.field_id == 'activation.activation_notes' else 'field', value, label, block.field_id))
         elif block.text.strip():
             blocks.append((block.type, block.text))
             html_blocks.append(BodyBlock(block.type, block.text))
@@ -94,4 +118,21 @@ def render_template(session, event_key, template, activation):
         previous = kind
     if len(subject.encode('utf-8')) > 998 or len(body) > 100000:
         raise HTTPException(422, 'El resultado supera el límite de 998 bytes de asunto o 100.000 caracteres de cuerpo. Reduce los bloques de la plantilla.')
-    return PreviewResponse(subject=subject, body=body, html_body=render_html(EVENTS[event_key], html_blocks))
+    reference = getattr(activation, 'reference', None)
+    meta = EVENT_METADATA.get(event_key, {
+        'badge': 'FMS · ACTIVACIÓN',
+        'title': EVENTS.get(event_key, 'Registro de activación'),
+        'description': 'Nueva activación',
+        'badge_color': '#047857',
+        'badge_bg': '#ECFDF5',
+    })
+    html_body = render_html(
+        meta['title'],
+        html_blocks,
+        event_badge=meta['badge'],
+        reference=reference,
+        event_description=meta['description'],
+        badge_color=meta['badge_color'],
+        badge_bg=meta['badge_bg'],
+    )
+    return PreviewResponse(subject=subject, body=body, html_body=html_body)

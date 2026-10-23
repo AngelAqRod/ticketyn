@@ -13,13 +13,26 @@ from openpyxl.utils import get_column_letter
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import Spacer
 from sqlalchemy import func, select
-from ticketyn.api.documents import build_pdf, fonts, modern_table, paragraph, section
-from ticketyn.api.fms_data import operation_query
+from ticketyn.api.documents import (
+    EMERALD, build_pdf, fonts, modern_table, modular_metric_strip, paragraph,
+    report_identification,
+)
+from ticketyn.api.fms_data import operation_query, distribution_labels
 from ticketyn.api.reports import read_snapshot
 from ticketyn.models import Circuit, Customer
-from ticketyn.models.fms import Activation, CapacityChange
+from ticketyn.models.fms import Activation, CapacityChange, CircuitLifecycleOperation
 
 TITLES = {'activations': 'Activaciones', 'capacity-changes': 'Cambios de capacidad', 'circuit-lifecycle': 'Bajas y Reactivaciones'}
+REPORT_TITLES = {
+    'activations': 'Reporte de activaciones',
+    'capacity-changes': 'Reporte de cambios de capacidad',
+    'circuit-lifecycle': 'Reporte de bajas y reactivaciones',
+}
+CATEGORIES = {
+    'activations': 'GESTIÓN DE SERVICIOS · OPERACIONES FMS',
+    'capacity-changes': 'GESTIÓN DE SERVICIOS · OPERACIONES FMS',
+    'circuit-lifecycle': 'GESTIÓN DE SERVICIOS · OPERACIONES FMS',
+}
 LABELS = {'INCREASE': 'Incremento', 'DECREASE': 'Decremento', 'DEACTIVATE': 'Baja', 'REACTIVATE': 'Reactivación'}
 
 
@@ -62,7 +75,7 @@ def friendly_filters(session, filters):
 def headers(model, exact=False):
     common = ['Fecha y hora efectiva', 'Cliente', 'Código del circuito', 'Descripción del circuito', 'Sector', 'Nodo', 'Responsable']
     if model is Activation:
-        return ['Referencia de activación', *common]
+        return ['Referencia de activación', *common, 'Equipo de distribución', 'Puerto']
     if model is CapacityChange:
         return [*common, 'Tipo de operación', 'Capacidad anterior', 'Capacidad nueva', 'Descripción', *(['Valor anterior registrado (exacto)', 'Unidad anterior registrada', 'Valor nuevo registrado (exacto)', 'Unidad nueva registrada'] if exact else [])]
     return [*common, 'Tipo de operación', 'Motivo de baja', 'Observaciones']
@@ -78,7 +91,7 @@ def rows(session, model, filters, exact=False, pdf=False):
                   circuit.description or 'Sin descripción', row.sector.name if row.sector else None,
                   row.node.name if row.node else None, row.responsible.name]
         if model is Activation:
-            values = [row.reference, *values]
+            values = [row.reference, *values, *distribution_labels(row)]
         elif model is CapacityChange:
             values += [LABELS[row.operation_type], capacity_text(row.previous_capacity, row.previous_unit), capacity_text(row.new_capacity, row.new_unit), row.description]
             if exact:
@@ -88,20 +101,99 @@ def rows(session, model, filters, exact=False, pdf=False):
         yield values
 
 
+from reportlab.lib import colors
+
+
 def export_pdf(session, model, kind, filters, output):
     fonts()
-    title = TITLES[kind]
+    title = REPORT_TITLES.get(kind, TITLES[kind])
     zone = ZoneInfo(filters.timezone)
     generated = datetime.now(timezone.utc).astimezone(zone)
-    total = session.scalar(select(func.count()).select_from(query_for(model, filters).order_by(None).subquery()))
+    total = session.scalar(select(func.count()).select_from(query_for(model, filters).order_by(None).subquery())) or 0
     columns = headers(model)
     # Proporcionar más espacio a descripciones/observaciones y respetar A4 horizontal.
-    weights = [2 if column in ('Descripción del circuito', 'Descripción', 'Observaciones') else 1.3 if column in ('Cliente', 'Responsable', 'Fecha y hora efectiva') else 1.2 if column in ('Tipo de operación', 'Código del circuito') else 1 for column in columns]
+    weights = [2 if column in ('Descripción del circuito', 'Descripción', 'Observaciones') else 1.3 if column in ('Cliente', 'Responsable', 'Fecha y hora efectiva', 'Referencia de activación', 'Equipo de distribución') else 1.2 if column in ('Tipo de operación', 'Código del circuito', 'Capacidad anterior', 'Capacidad nueva', 'Motivo de baja') else 1 for column in columns]
     width = landscape(A4)[0] - 60
-    pdf_columns = [column.replace('Código del circuito', 'Código del\ncircuito').replace('Tipo de operación', 'Tipo de\noperación').replace('Capacidad anterior', 'Capacidad\nanterior').replace('Capacidad nueva', 'Capacidad\nnueva') for column in columns]
-    table = modern_table(pdf_columns, ([value if value is not None else 'Sin registrar' for value in record] for record in rows(session, model, filters, pdf=True)), [width * weight / sum(weights) for weight in weights], reference=model is Activation, compact=True)
-    story = [paragraph(title, size=21, bold=True), paragraph(f'Generado: {generated.astimezone(zone):%d/%m/%Y %H:%M} · Total encontrado: {total}', size=9), paragraph(' · '.join(friendly_filters(session, filters)), size=8), Spacer(1, 10), section(title, 1, keep=False), table]
-    build_pdf(output, title, filters.timezone, story, issued_at=generated)
+    pdf_columns = [column.replace('Código del circuito', 'Código del\ncircuito').replace('Tipo de operación', 'Tipo de\noperación').replace('Capacidad anterior', 'Capacidad\nanterior').replace('Capacidad nueva', 'Capacidad\nnueva').replace('Equipo de distribución', 'Equipo de\ndistribución').replace('Fecha y hora efectiva', 'Fecha/hora\nefectiva').replace('Motivo de baja', 'Motivo de\nbaja') for column in columns]
+
+    from_str = filters.from_at.astimezone(zone).strftime('%d/%m/%Y %H:%M') if filters.from_at else None
+    to_str = filters.to_at.astimezone(zone).strftime('%d/%m/%Y %H:%M') if filters.to_at else None
+    if from_str and to_str:
+        period_str = f'{from_str} — {to_str}'
+    elif from_str:
+        period_str = f'Desde (incluido): {from_str}'
+    else:
+        period_str = 'Sin restricción temporal'
+
+    filter_labels = friendly_filters(session, filters)
+    filter_str = ' · '.join(filter_labels) if filter_labels != ['Todos los registros'] else None
+
+    # Métricas compactas de resumen sobre el dataset completo
+    if model is Activation:
+        metrics = [('TOTAL ACTIVACIONES', total, EMERALD)]
+    elif model is CapacityChange:
+        stmt = query_for(model, filters).order_by(None).subquery()
+        counts = session.execute(
+            select(
+                func.count().label('total'),
+                func.count().filter(stmt.c.operation_type == 'INCREASE').label('increases'),
+                func.count().filter(stmt.c.operation_type == 'DECREASE').label('decreases'),
+            ).select_from(stmt)
+        ).one()
+        metrics = [
+            ('TOTAL CAMBIOS', counts.total or 0, EMERALD),
+            ('INCREMENTOS', counts.increases or 0, EMERALD),
+            ('DECREMENTOS', counts.decreases or 0, colors.HexColor('#0284c7')),
+        ]
+    else:
+        stmt = query_for(model, filters).order_by(None).subquery()
+        counts = session.execute(
+            select(
+                func.count().label('total'),
+                func.count().filter(stmt.c.operation_type == 'REACTIVATE').label('reactivations'),
+                func.count().filter(stmt.c.operation_type == 'DEACTIVATE').label('deactivations'),
+            ).select_from(stmt)
+        ).one()
+        metrics = [
+            ('TOTAL OPERACIONES', counts.total or 0, EMERALD),
+            ('REACTIVACIONES', counts.reactivations or 0, EMERALD),
+            ('BAJAS', counts.deactivations or 0, colors.HexColor('#475569')),
+        ]
+
+    table = modern_table(
+        pdf_columns,
+        ([value if value is not None else 'Sin registrar' for value in record] for record in rows(session, model, filters, pdf=True)),
+        [width * weight / sum(weights) for weight in weights],
+        reference=model is Activation,
+        compact=True,
+        light=True,
+        accent=EMERALD,
+        status_colors=True,
+    )
+    story = [
+        report_identification(
+            title,
+            period=period_str,
+            filters=filter_str,
+            total=total,
+            accent=EMERALD,
+            category=CATEGORIES.get(kind, 'GESTIÓN DE SERVICIOS · OPERACIONES FMS'),
+            width=width,
+        ),
+        modular_metric_strip(metrics, width, accent=EMERALD),
+        table,
+    ]
+    build_pdf(
+        output,
+        title,
+        filters.timezone,
+        story,
+        issued_at=generated.strftime('%d/%m/%Y %H:%M'),
+        subtitle='GESTIÓN DE SERVICIOS · OPERACIONES FMS',
+        modular=True,
+        landscape_mode=True,
+        accent=EMERALD,
+    )
 
 
 def export_xlsx(session, model, kind, filters, output):

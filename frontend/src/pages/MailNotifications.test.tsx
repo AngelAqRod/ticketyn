@@ -10,7 +10,10 @@ const defaults: SmtpConfig = { host: null, port: 587, security: 'STARTTLS', allo
 const initialEvent: MailEvent = { event_key: eventKey, label: 'Registro de activación FMS', mode: 'DISABLED', to: [], cc: [], bcc: [] }
 const fields = [
   { id: 'activation.activation_notes', group: 'Activación FMS', label: 'Notas de activación', format: 'multiline', temporality: 'HISTORICAL' },
+  { id: 'activation.distribution_device', group: 'Activación FMS', label: 'Equipo de distribución', format: 'text', temporality: 'HISTORICAL' },
+  { id: 'activation.distribution_port', group: 'Activación FMS', label: 'Puerto de distribución', format: 'text', temporality: 'HISTORICAL' },
   { id: 'activation.initial_capacity', group: 'Activación FMS', label: 'Capacidad inicial', format: 'capacity', temporality: 'HISTORICAL' },
+  { id: 'circuit.cpe_management_ip', group: 'Circuito', label: 'IP de gestión CPE', format: 'text', temporality: 'CURRENT' },
   { id: 'circuit.current_capacity', group: 'Circuito', label: 'Capacidad actual', format: 'capacity', temporality: 'CURRENT' },
   { id: 'customer.name', group: 'Cliente', label: 'Cliente', format: 'text', temporality: 'CURRENT' },
 ]
@@ -62,6 +65,9 @@ describe('Notificaciones por correo: solo configuración', () => {
     const registry = screen.getByRole('region', { name: 'Campos dinámicos disponibles' })
     for (const group of ['Activación FMS', 'Circuito', 'Cliente']) expect(within(registry).getByRole('heading', { name: group })).toBeInTheDocument()
     expect(within(registry).getByText('Notas de activación')).toBeInTheDocument()
+    expect(within(registry).getByText('Equipo de distribución')).toBeInTheDocument()
+    expect(within(registry).getByText('Puerto de distribución')).toBeInTheDocument()
+    expect(within(registry).getByText('IP de gestión CPE')).toBeInTheDocument()
     expect(within(registry).queryByText('activation.initial_capacity')).not.toBeInTheDocument()
     expect(within(registry).getByText('Capacidad actual')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /enviar|probar|conectar/i })).not.toBeInTheDocument()

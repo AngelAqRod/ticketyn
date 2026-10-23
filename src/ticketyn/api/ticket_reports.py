@@ -15,7 +15,7 @@ from starlette.background import BackgroundTask
 
 from ticketyn.api.crud import DBSession
 from ticketyn.api.escalation_data import list_escalations
-from ticketyn.api.documents import build_pdf, duration_text, fonts, modern_table, paragraph, section, MUTED
+from ticketyn.api.documents import build_pdf, duration_text, fonts, modern_table, paragraph, section, MUTED, BLUE, PURPLE, EMERALD, AMBER, CYAN, MODULAR_WIDTH, MODULAR_HEIGHT, ModularHeading, identification, metadata_modules, timeline_entry
 from ticketyn.api.reports import read_snapshot
 from ticketyn.api.ticket_data import get_ticket
 from ticketyn.api.ticket_update_data import list_updates
@@ -86,18 +86,18 @@ def timing_rows(ticket, zone, issued):
     return rows
 
 
-def intervention_block(heading, content, section_heading=None):
+def intervention_block(heading, content, section_heading=None, *, modular=False):
     """Small interventions travel together; large text starts here and can split.
 
-    Match build_pdf's landscape frame/margins. Never bind an entire lengthy
+    Match the selected build_pdf frame/margins. Never bind an entire lengthy
     intervention to its section heading: bind only its first two lines instead.
     """
-    width = landscape(A4)[0] - 60 - 12
-    frame_height = landscape(A4)[1] - 90 - 43 - 12
+    width = MODULAR_WIDTH if modular else landscape(A4)[0] - 60 - 12
+    frame_height = MODULAR_HEIGHT if modular else landscape(A4)[1] - 90 - 43 - 12
     headings = [*([section_heading] if section_heading is not None else []), heading]
     items = [*headings, content]
     height = sum(item.wrap(width, frame_height)[1] + item.getSpaceBefore() + item.getSpaceAfter() for item in items)
-    if height <= frame_height / 2:
+    if height <= (72 if modular else frame_height / 2):
         return [KeepTogether(items)]
     # The first two lines anchor the intervention without forcing the rest onto
     # a new page. ReportLab's Paragraph.split preserves escaped text and breaks.
@@ -134,18 +134,18 @@ def related_internal_incident(session, internal_ticket_id):
 
 def internal_pdf(session, ticket_id, output, zone, issued):
     fonts()
+    section = ModularHeading
     ticket = get_ticket(session, ticket_id)
     updates = list_updates(session, ticket_id)
-    story = [paragraph(ticket.reference, size=18, bold=True, keep=True),
-        paragraph(ticket.title, size=12, color=MUTED), section('Identificación y tiempos'),
-        modern_table(['Dato', 'Valor'], [
+    story = [identification(ticket.reference, ticket.title, ticket.status, 'Reporte técnico interno', date_text(ticket.start_at, zone)),
+        section('Identificación y tiempos'), metadata_modules([
             ['Cliente', f'{ticket.customer.name} · {ticket.customer.customer_code}'],
             ['Circuito', ticket.circuit.circuit_code], ['Nodo', ticket.node.name if ticket.node else 'Sin asignar'],
             ['Sector', ticket.sector.name], ['Departamento', ticket.department.name],
             ['Responsable', ticket.responsible.name if ticket.responsible else 'Sin asignar'],
-            ['Tipo de incidencia', ticket.incident_type.name], *timing_rows(ticket, zone, issued)], [250, 530], compact=True),
-        section('Descripción original'), paragraph(ticket.description, size=10)]
-    story.extend([section('Resolución documentada'), paragraph(ticket.resolution or 'Sin resolución documentada.', size=10)])
+            ['Tipo de incidencia', ticket.incident_type.name], *timing_rows(ticket, zone, issued)]),
+        *intervention_block(section('Descripción original'), paragraph(ticket.description, size=10), modular=True)]
+    story.extend(intervention_block(section('Resolución documentada', accent=EMERALD), paragraph(ticket.resolution or 'Sin resolución documentada.', size=10), modular=True))
     if getattr(ticket, 'internal_ticket_id', None) is not None:
         related = related_internal_incident(session, ticket.internal_ticket_id)
         rows = [['Correlativo', related.reference], ['Incidencia', related.title or related.description],
@@ -154,30 +154,35 @@ def internal_pdf(session, ticket_id, output, zone, issued):
             rows.append(['Nodo', related.node])
         rows.extend([['Estado actual', 'Abierto' if related.status == 'OPEN' else 'Cerrado'],
                      ['Proveedor atribuible', related.provider or 'Ninguno']])
-        story.extend([section('Incidencia interna relacionada'),
-                      modern_table(['Dato', 'Valor'], rows, [250, 530], compact=True)])
+        story.extend([section('Incidencia interna relacionada', accent=PURPLE),
+                      metadata_modules(rows)])
 
-    history_heading = section('Seguimiento cronológico · Uso interno', keep=False)
+    history_heading = section('Seguimiento cronológico · Uso interno', accent=CYAN, keep=False)
     if not updates:
         history_heading.style.keepWithNext = True
         story.extend([history_heading, paragraph('Sin intervenciones registradas.', size=10)])
     for index, update in enumerate(updates):
-        visibility = 'Interna' if update.visibility == 'INTERNAL' else 'Pública'
-        association = f' · Escalamiento #{update.escalation_id}' if update.escalation_id is not None else ''
-        heading = paragraph(f'{date_text(update.occurred_at, zone)} · {update.responsible.name if update.responsible else "Sin asignar"} · {visibility}{association}', bold=True, size=9)
-        story.extend(intervention_block(heading, paragraph(update.content, size=10), history_heading if index == 0 else None))
+        public = update.visibility == 'PUBLIC'
+        story.append(timeline_entry(date_text(update.occurred_at, zone), update.content,
+            responsible=update.responsible.name if update.responsible else 'Sin asignar',
+            label='Pública' if public else 'Interna', accent=EMERALD if public else CYAN,
+            association=f'Escalamiento #{update.escalation_id}' if update.escalation_id is not None else None,
+            section_heading=history_heading if index == 0 else None))
     escalations = list_escalations(session, ticket_id)
-    append_escalations(story, escalations, zone)
-    build_pdf(output, 'Reporte técnico interno', str(zone), story, issued_at=date_text(issued, zone))
+    append_escalations(story, escalations, zone, modular=True)
+    build_pdf(output, 'Reporte técnico interno', str(zone), story, issued_at=date_text(issued, zone), modular=True, reference=ticket.reference)
 
 
-def append_escalations(story, escalations, zone):
-    escalation_heading = section('Historial de escalamientos', keep=False)
+def append_escalations(story, escalations, zone, *, modular=False, accent=AMBER):
+    heading_style = (lambda value, **kwargs: ModularHeading(value, accent=accent, **kwargs)) if modular else section
+    escalation_heading = heading_style('Historial de escalamientos', keep=False)
     if not escalations:
         escalation_heading.style.keepWithNext = True
         story.extend([escalation_heading, paragraph('Sin escalamientos registrados.', size=10)])
     for index, escalation in enumerate(escalations):
         heading = paragraph(f'Escalamiento #{escalation.id} · Destinatario: {escalation.recipient.name if escalation.recipient else "Pendiente de asignación"} · {"Activo" if escalation.status == "ACTIVE" else "Finalizado"}', bold=True, size=9)
+        if modular:
+            heading = ModularHeading(heading.getPlainText(), accent=AMBER if escalation.status == 'ACTIVE' else EMERALD, size=8.5, keep=False)
         details = []
         if escalation.recipient_department_name:
             details.append(f'Departamento histórico: {escalation.recipient_department_name}')
@@ -187,24 +192,27 @@ def append_escalations(story, escalations, zone):
         details.extend([f'Motivo: {escalation.reason.name}', f'Inicio: {date_text(escalation.started_at, zone)}'])
         if escalation.finished_at:
             details.extend([f'Finalizado: {date_text(escalation.finished_at, zone)}', f'Duración: {duration_text((escalation.finished_at - escalation.started_at).total_seconds())}'])
-        story.extend(intervention_block(heading, paragraph('\n'.join([*details, escalation.description]), size=10), escalation_heading if index == 0 else None))
+        story.extend(intervention_block(heading, paragraph('\n'.join([*details, escalation.description]), size=10), escalation_heading if index == 0 else None, modular=modular))
 
 
 def customer_pdf(session, ticket_id, output, zone, issued):
     fonts()
     ticket = customer_report(session, ticket_id)
-    story = [paragraph(ticket.reference, size=18, bold=True, keep=True),
-        paragraph(ticket.title, size=12, color=MUTED), section('Identificación y tiempos'),
-        modern_table(['Dato', 'Valor'], [['Cliente', ticket.customer_name], ['Circuito', ticket.circuit_code],
-                                        *timing_rows(ticket, zone, issued)], [250, 530]),
-        section('Descripción del incidente'), paragraph(ticket.customer_description or 'Sin descripción autorizada para compartir.', size=10),
-        section('Resolución'), paragraph(ticket.customer_resolution or 'Sin resolución autorizada para compartir.', size=10),
-        section('Seguimiento público · Cronológico')]
+    story = [identification(ticket.reference, ticket.title, ticket.status, 'Reporte para cliente', date_text(ticket.start_at, zone)),
+        ModularHeading('Identificación y tiempos'),
+        metadata_modules([['Cliente', ticket.customer_name], ['Circuito', ticket.circuit_code],
+                          *timing_rows(ticket, zone, issued)]),
+        *intervention_block(ModularHeading('Descripción del incidente'), paragraph(ticket.customer_description or 'Sin descripción autorizada para compartir.', size=10), modular=True),
+        *intervention_block(ModularHeading('Resolución', accent=EMERALD), paragraph(ticket.customer_resolution or 'Sin resolución autorizada para compartir.', size=10), modular=True)]
+    history_heading = ModularHeading('Seguimiento público · Cronológico', accent=BLUE, keep=False)
     if not ticket.interventions:
-        story.append(paragraph('Sin intervenciones públicas registradas.', size=10))
-    for update in ticket.interventions:
-        story.extend([paragraph(date_text(update.occurred_at, zone), size=9, bold=True, keep=True), paragraph(update.content, size=10)])
-    build_pdf(output, 'Reporte para cliente', str(zone), story, issued_at=date_text(issued, zone))
+        history_heading.style.keepWithNext = True
+        story.extend([history_heading, paragraph('Sin intervenciones públicas registradas.', size=10)])
+    for index, update in enumerate(ticket.interventions):
+        story.append(timeline_entry(date_text(update.occurred_at, zone), update.content,
+            variant='customer', section_heading=history_heading if index == 0 else None))
+    build_pdf(output, 'Reporte para cliente', str(zone), story, issued_at=date_text(issued, zone),
+              modular=True, reference=ticket.reference)
 
 
 def report_response(session, ticket_id, options, audience, *, renderer=None, filename=None):

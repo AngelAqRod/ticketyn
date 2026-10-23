@@ -171,9 +171,11 @@ def test_candidate_release_and_real_migration_lineage(tmp_path):
     assert (candidate/'alembic/versions/0008_ticket_updates.py').is_file()
     assert (candidate/'alembic/versions/0009_ticket_resolution.py').is_file()
     assert (candidate/'alembic/versions/0010_ticket_escalations.py').is_file()
-    assert json.loads((ROOT/'frontend/package.json').read_text())['version'] == PROJECT_VERSION
+    # npm metadata is not the application version: Vite reads pyproject.toml.
+    # Keep the lockfile consistent without reintroducing a second official version.
+    frontend_package_version = json.loads((ROOT/'frontend/package.json').read_text())['version']
     lock = json.loads((ROOT/'frontend/package-lock.json').read_text())
-    assert lock['version'] == lock['packages']['']['version'] == PROJECT_VERSION
+    assert lock['version'] == lock['packages']['']['version'] == frontend_package_version
     assert (candidate/'frontend/dist/index.html').is_file()
     installation = subprocess.run(['bash', '-c', 'source "$1/install.sh"; SOURCE="$2"; check_project; validate_release_source "$SOURCE"; project_version "$SOURCE"', 'release-check', str(ROOT), str(candidate)], capture_output=True, text=True)
     assert installation.returncode == 0, installation.stderr

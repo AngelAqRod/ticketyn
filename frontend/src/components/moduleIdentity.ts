@@ -14,6 +14,7 @@ export const moduleIdentity: Omit<ModuleDefinition, 'number'>[] = [
   { path: '/changes', title: 'Control de cambios', group: 'Operación', theme: 'amber', badge: 'MANTENIMIENTOS' },
   { path: '/customers', title: 'Clientes', group: 'Operación', theme: 'blue', badge: 'CATÁLOGO' },
   { path: '/circuits', title: 'Circuitos', group: 'Operación', theme: 'blue', badge: 'RED Y ENLACES' },
+  { path: '/distribution-devices', title: 'Equipos de distribución', group: 'Operación', theme: 'purple', badge: 'RED Y DISTRIBUCIÓN' },
   { path: '/reports', title: 'Reportería de tickets', group: 'Análisis', theme: 'blue', badge: 'REPORTES' },
   { path: '/catalogs', title: 'Catálogos', group: 'Administración', theme: 'slate', badge: 'SISTEMA' },
   { path: '/settings', title: 'Configuración', group: 'Administración', theme: 'slate', badge: 'SISTEMA' },

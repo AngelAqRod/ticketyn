@@ -44,6 +44,17 @@ def create_operation(session: Session, model, values: dict):
         if values.get('reason_id') is not None:
             validate_active(session, DeactivationReason, values['reason_id'])
         if model is Activation:
+            from ticketyn.models import Customer, DistributionDevice, DistributionPort
+            customer_name = session.scalar(select(Customer.name).where(Customer.id == circuit.customer_id)
+                .with_for_update(read=True, of=Customer))
+            values.update(customer_name_snapshot=customer_name, circuit_code_snapshot=circuit.circuit_code)
+            # The circuit row is already locked; hold catalog names until commit.
+            device = session.scalar(select(DistributionDevice).where(DistributionDevice.id == circuit.distribution_device_id)
+                .with_for_update(read=True, of=DistributionDevice).execution_options(populate_existing=True)) if circuit.distribution_device_id is not None else None
+            port = session.scalar(select(DistributionPort).where(DistributionPort.id == circuit.distribution_port_id)
+                .with_for_update(read=True, of=DistributionPort).execution_options(populate_existing=True)) if circuit.distribution_port_id is not None else None
+            values.update(distribution_recorded=True, distribution_device_name=device.name if device else None,
+                          distribution_port_name=port.name if port else None)
             if circuit.service_type_id is not None:
                 from ticketyn.models import ServiceType
                 service = session.scalar(select(ServiceType).where(ServiceType.id == circuit.service_type_id).with_for_update(read=True, of=ServiceType).execution_options(populate_existing=True))
@@ -103,3 +114,10 @@ def operation_query(model, *, circuit_id=None, customer_id=None, from_at=None, t
 def validate_initial_capacity(values: dict):
     if (values.get('initial_capacity') is None) != (values.get('initial_capacity_unit') is None):
         raise HTTPException(422, 'La capacidad inicial y su unidad deben indicarse juntas')
+
+
+def distribution_labels(activation):
+    """Unknown historical topology must never fall back to the current circuit."""
+    if not getattr(activation, 'distribution_recorded', False):
+        return ('No registrado', 'No registrado')
+    return (getattr(activation, 'distribution_device_name', None) or 'No asignado', getattr(activation, 'distribution_port_name', None) or 'No asignado')

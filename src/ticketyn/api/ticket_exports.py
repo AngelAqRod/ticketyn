@@ -10,7 +10,10 @@ from reportlab.platypus import Spacer
 from sqlalchemy import func, select
 
 from ticketyn.models import Node, Responsible
-from ticketyn.api.documents import build_pdf, duration_text, fonts, paragraph, section, ticket_pdf_table
+from ticketyn.api.documents import (
+    AMBER, BLUE, EMERALD, build_pdf, duration_text, fonts,
+    modular_metric_strip, paragraph, report_identification, ticket_pdf_table,
+)
 from ticketyn.api.ticket_data import RELATED_MODELS, ticket_rows, ticket_statement
 
 
@@ -51,13 +54,57 @@ def export_ticket_pdf(session, filters, output):
     fonts()
     zone = ZoneInfo(filters.timezone)
     values = filters.model_dump()
-    total = session.scalar(select(func.count()).select_from(ticket_statement(values).order_by(None).subquery()))
+    stmt = ticket_statement(values).order_by(None).subquery()
+    counts = session.execute(
+        select(
+            func.count().label('total'),
+            func.count().filter(stmt.c.status == 'OPEN').label('open_count'),
+            func.count().filter(stmt.c.status == 'CLOSED').label('closed_count'),
+        ).select_from(stmt)
+    ).one()
+    total = counts.total or 0
+    open_count = counts.open_count or 0
+    closed_count = counts.closed_count or 0
+
     generated = datetime.now(timezone.utc).astimezone(zone)
-    story = [paragraph('Listado de tickets', size=21, bold=True),
-        paragraph(f'Generado: {generated:%d/%m/%Y %H:%M} · Total encontrado: {total}', size=9),
-        paragraph(' · '.join(friendly_filters(session, filters)), size=8), Spacer(1, 10),
-        section('Tickets', 1, keep=False), ticket_pdf_table(ticket_rows(session, values), zone, landscape(A4)[0] - 60)]
-    build_pdf(output, 'Listado de tickets', filters.timezone, story)
+    from_str = filters.from_at.astimezone(zone).strftime('%d/%m/%Y %H:%M') if filters.from_at else None
+    to_str = filters.to_at.astimezone(zone).strftime('%d/%m/%Y %H:%M') if filters.to_at else None
+    if from_str and to_str:
+        period_str = f'{from_str} — {to_str}'
+    elif from_str:
+        period_str = f'Desde (incluido): {from_str}'
+    elif to_str:
+        period_str = f'Hasta (excluido): {to_str}'
+    else:
+        period_str = 'Sin restricción temporal'
+
+    filter_tokens = friendly_filters(session, filters)
+    filters_str = ' · '.join(filter_tokens)
+    width = landscape(A4)[0] - 60
+
+    metrics = [
+        ('TOTAL TICKETS', total, BLUE),
+        ('ABIERTOS / EN CURSO', open_count, AMBER),
+        ('CERRADOS', closed_count, EMERALD),
+    ]
+
+    story = [
+        report_identification(
+            'Listado de tickets',
+            period=period_str,
+            filters=filters_str,
+            total=total,
+            accent=BLUE,
+            category='Gestión de Incidencias · Tickets de Clientes',
+            width=width,
+        ),
+        modular_metric_strip(metrics, width, accent=BLUE),
+        ticket_pdf_table(ticket_rows(session, values), zone, width, light=True, accent=BLUE),
+    ]
+    build_pdf(output, 'Listado de tickets', filters.timezone, story,
+              issued_at=generated.strftime('%d/%m/%Y %H:%M'),
+              subtitle='GESTIÓN DE INCIDENCIAS · CLIENTES',
+              modular=True, landscape_mode=True, reference='Listado general', accent=BLUE)
 
 
 def export_ticket_xlsx(session, filters, output):

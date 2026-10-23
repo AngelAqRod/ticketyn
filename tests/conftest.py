@@ -108,3 +108,25 @@ def ticket_payload(api_client):
         "start_at": "2020-01-01T12:00:00+00:00",
         "status": "OPEN",
     }
+
+
+@pytest.fixture
+def numbered_port(api_client):
+    """Create through the same preview/confirm contract as the port form."""
+    def create(device_id, prefix='sfp+', numbering_format='N', positions=(), number=1, description=None):
+        catalogs = api_client.get('/api/port-nomenclatures?include_inactive=true&limit=200').json()
+        catalog = next((row for row in catalogs if row['prefix'] == prefix), None)
+        if catalog is None:
+            response = api_client.post('/api/port-nomenclatures', json={
+                'name': prefix, 'prefix': prefix, 'formats': ['N', 'X/Y', 'X/Y/Z', 'W/X/Y/Z']})
+            assert response.status_code == 201, response.text
+            catalog = response.json()
+        payload = {'distribution_device_id': device_id, 'nomenclature_id': catalog['id'],
+                   'numbering_format': numbering_format, 'positions': list(positions), 'start': number,
+                   'description': description}
+        checked = api_client.post('/api/distribution-ports/preview', json=payload)
+        assert checked.status_code == 200, checked.text
+        response = api_client.post('/api/distribution-ports', json={**payload, 'preview_token': checked.json()['preview_token']})
+        assert response.status_code == 201, response.text
+        return response.json()
+    return create

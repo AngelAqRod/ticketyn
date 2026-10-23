@@ -1,7 +1,7 @@
 """Registros operativos de circuitos; independientes de tickets."""
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Identity, Index, Numeric, String, Text, func, text
+from sqlalchemy import Boolean, BigInteger, CheckConstraint, DateTime, ForeignKey, Identity, Index, Numeric, String, Text, func, text
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 from ticketyn.db.base import Base
 from ticketyn.models.common import CommonFields
@@ -48,7 +48,13 @@ class OperationFields:
 
 class Activation(OperationFields, Base):
     __tablename__ = 'activations'
+    distribution_recorded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('false'))
+    distribution_device_name: Mapped[str | None] = mapped_column(String(255))
+    distribution_port_name: Mapped[str | None] = mapped_column(String(255))
     activation_notes: Mapped[str | None] = mapped_column(Text)
+    customer_activation_notes: Mapped[str | None] = mapped_column(Text)
+    customer_name_snapshot: Mapped[str | None] = mapped_column(Text)
+    circuit_code_snapshot: Mapped[str | None] = mapped_column(Text)
     cpe_activation: Mapped[str | None] = mapped_column(Text)
     service_type_name: Mapped[str | None] = mapped_column(String)
     initial_capacity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
@@ -57,7 +63,10 @@ class Activation(OperationFields, Base):
     reference: Mapped[str] = mapped_column(String, unique=True)
     circuit: Mapped['Circuit'] = relationship(lazy='joined')
     responsible: Mapped['Responsible'] = relationship(lazy='joined')
-    __table_args__ = (CheckConstraint("(initial_capacity IS NULL AND initial_capacity_unit IS NULL) OR (initial_capacity IS NOT NULL AND initial_capacity > 0 AND initial_capacity <> 'NaN'::numeric AND initial_capacity_unit IS NOT NULL AND initial_capacity_unit IN ('Mbps','Gbps'))", name='initial_capacity_valid'), CheckConstraint('activation_number > 0', name='positive_number'), Index('ix_activations_chronology', 'circuit_id', 'effective_at', 'id'))
+    __table_args__ = (
+        CheckConstraint('distribution_recorded OR (distribution_device_name IS NULL AND distribution_port_name IS NULL)', name='distribution_recorded_valid'),
+        CheckConstraint('distribution_port_name IS NULL OR distribution_device_name IS NOT NULL', name='distribution_device_required'),
+        CheckConstraint("(initial_capacity IS NULL AND initial_capacity_unit IS NULL) OR (initial_capacity IS NOT NULL AND initial_capacity > 0 AND initial_capacity <> 'NaN'::numeric AND initial_capacity_unit IS NOT NULL AND initial_capacity_unit IN ('Mbps','Gbps'))", name='initial_capacity_valid'), CheckConstraint('activation_number > 0', name='positive_number'), Index('ix_activations_chronology', 'circuit_id', 'effective_at', 'id'))
 
 
 class ActivationIntervention(Base):

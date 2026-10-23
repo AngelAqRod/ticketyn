@@ -116,81 +116,138 @@ def export_xlsx(session, filters, summary, output):
 def export_pdf(session, filters, summary, output):
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.platypus import KeepTogether, PageBreak, Spacer
-    from ticketyn.api.documents import (build_pdf, fonts, paragraph, section, metric_strip,
-        modern_table, ticket_pdf_table, TrendGraphic, BarsGraphic, ActivityGraphic, analytical_block)
+    from ticketyn.api.documents import (
+        AMBER, BLUE, EMERALD, MUTED, PURPLE, ActivityGraphic, BarsGraphic,
+        ModularHeading, TrendGraphic, analytical_block, build_pdf, fonts,
+        modern_table, modular_metric_strip, paragraph, report_identification,
+        ticket_pdf_table,
+    )
     fonts()
     zone = ZoneInfo(filters.timezone)
     width = landscape(A4)[0] - 60
     title = report_title(summary)
-    context = ' · '.join(f'{label}: {value["name"]}' for label, value in [('Nodo', summary.node), ('Responsable', summary.responsible)] if value)
+    is_internal = getattr(summary, 'report_kind', None) == 'internal'
+    accent = PURPLE if is_internal else BLUE
+    category = 'Reportería Estadística · NOC Interno' if is_internal else 'Reportería Estadística · Tickets de Clientes'
+
     period_label = f'{summary.period.from_at.astimezone(zone):%d/%m/%Y %H:%M} — {summary.period.to_exclusive.astimezone(zone):%d/%m/%Y %H:%M} (fin exclusivo)' if summary.period.from_at else 'Todos · Sin restricción temporal'
-    story = [paragraph(title, size=21, bold=True),
-        paragraph(f"Período: {period_label}", size=9),
-        paragraph(f"Sector: {summary.sector['name'] if summary.sector else 'Todos los sectores'} · Generado: {summary.generated_at.astimezone(zone):%d/%m/%Y %H:%M}", size=8),
-        paragraph(context, size=8), Spacer(1, 8), section('Resumen', 1), metric_strip([
-            ('INICIADAS', summary.kpis.started), ('CERRADAS', summary.kpis.closed),
-            ('DURACIÓN PROMEDIO', duration_text(summary.kpis.average_duration_seconds)),
-            ('DURACIÓN ACUMULADA', duration_text(summary.kpis.total_duration_seconds))], width), Spacer(1, 8),
-        paragraph('Iniciadas, evolución, rankings y detalle: Inicio en el período. Cerradas y duraciones: estado Cerrado y Fin en el período, incluso si comenzaron antes. Cerrados sin Fin no aportan duración. Rankings de Nodo/Responsable: solo asignados.', size=7),
-        KeepTogether([section('Evolución de incidencias', 2), TrendGraphic(summary.trend, zone, width, summary.period.granularity)]), Spacer(1, 8)]
-    story.append(KeepTogether([section('Iniciadas vs cerradas', 3), ActivityGraphic(summary.activity, zone, width, summary.period.granularity)]))
-    if getattr(summary, 'report_kind', None) == 'internal':
-        story.extend([paragraph(' · '.join(summary.applied_filters), size=8), modern_table(['Indicador', 'Valor'], metadata(summary)[-5:], [width * .65, width * .35])])
+
+    context_parts = []
+    if not is_internal:
+        if summary.sector:
+            context_parts.append(f"Sector: {summary.sector['name']}")
+        else:
+            context_parts.append("Sector: Todos los sectores")
+    if summary.node:
+        context_parts.append(f"Nodo: {summary.node['name']}")
+    if summary.responsible:
+        context_parts.append(f"Responsable: {summary.responsible['name']}")
+    if is_internal and summary.applied_filters:
+        context_parts.extend(summary.applied_filters)
+    context_str = ' · '.join(context_parts) if context_parts else 'Todos los registros'
+
+    generated_str = summary.generated_at.astimezone(zone).strftime('%d/%m/%Y %H:%M')
+
+    story = [
+        report_identification(
+            title,
+            period=period_label,
+            filters=context_str,
+            accent=accent,
+            category=category,
+            width=width,
+        ),
+    ]
+
+    primary_kpis = [
+        ('INICIADAS', summary.kpis.started, accent),
+        ('CERRADAS', summary.kpis.closed, EMERALD),
+        ('DURACIÓN PROMEDIO', duration_text(summary.kpis.average_duration_seconds), accent),
+        ('DURACIÓN ACUMULADA', duration_text(summary.kpis.total_duration_seconds), accent),
+    ]
+    story.append(modular_metric_strip(primary_kpis, width, accent=accent))
+
+    if is_internal:
+        internal_kpis = [
+            ('ABIERTOS (INICIADOS)', summary.open_tickets, AMBER),
+            ('CERRADOS (INICIADOS)', summary.closed_tickets, EMERALD),
+            ('TICKETS CLIENTES VINCULADOS', summary.related_tickets, PURPLE),
+            ('INCIDENCIAS CON VINCULADOS', summary.with_related, PURPLE),
+        ]
+        story.append(modular_metric_strip(internal_kpis, width, accent=PURPLE))
+
+    story.append(paragraph('Iniciadas, evolución, rankings y detalle: Inicio en el período. Cerradas y duraciones: estado Cerrado y Fin en el período, incluso si comenzaron antes. Cerrados sin Fin no aportan duración. Rankings de Nodo/Responsable: solo asignados.', size=7, color=MUTED))
+    story.append(Spacer(1, 6))
+
+    story.append(KeepTogether([
+        ModularHeading('Evolución de incidencias', accent=accent, size=10.5),
+        TrendGraphic(summary.trend, zone, width, summary.period.granularity, accent=accent),
+    ]))
+    story.append(Spacer(1, 8))
+
+    story.append(KeepTogether([
+        ModularHeading('Iniciadas vs cerradas', accent=accent, size=10.5),
+        ActivityGraphic(summary.activity, zone, width, summary.period.granularity, accent=accent),
+    ]))
+    story.append(Spacer(1, 8))
     number = 4
     for key, name in report_dimensions(summary):
         if (key == 'sectors' and summary.sector) or (key == 'nodes' and summary.node) or (key == 'responsibles' and summary.responsible): continue
         ranking = getattr(summary, key)
-        heading = section(f'{name} · ranking completo ({len(ranking)})', number)
+        heading = ModularHeading(f'{name} · ranking completo ({len(ranking)})', accent=accent, size=10.5)
         number += 1
-        graphic = BarsGraphic(ranking, width) if ranking else None
+        graphic = BarsGraphic(ranking, width, accent=accent) if ranking else None
         if key == 'circuits':
             rows = ([index, row.label, ' — '.join(part for part in [row.customer_code, row.customer_name] if part), row.count] for index, row in enumerate(ranking, 1))
-            table = modern_table(['Posición', 'Circuito', 'Cliente', 'Incidencias'], rows, [55, width * .40, width - 55 - width * .40 - 85, 85])
+            table = modern_table(['Posición', 'Circuito', 'Cliente', 'Incidencias'], rows, [55, width * .40, width - 55 - width * .40 - 85, 85], light=True, accent=accent)
         else:
             table = modern_table(['Posición', 'Nombre / código', 'Incidencias'],
-                ([index, row.label, row.count] for index, row in enumerate(ranking, 1)), [55, width - 140, 85])
+                ([index, row.label, row.count] for index, row in enumerate(ranking, 1)), [55, width - 140, 85], light=True, accent=accent)
         story.extend(analytical_block(heading, graphic, table, width))
-        story.append(Spacer(1, 12))
-    story.extend(analytical_block(section('Tiempo de resolución por departamento', number),
-        BarsGraphic(summary.department_durations, width, value_field='average_duration_seconds'),
+        story.append(Spacer(1, 10))
+    story.extend(analytical_block(ModularHeading('Tiempo de resolución por departamento', accent=accent, size=10.5),
+        BarsGraphic(summary.department_durations, width, value_field='average_duration_seconds', accent=accent),
         modern_table(['Departamento', 'Cierres', 'Duración promedio'],
-            ([row.label, row.count, duration_text(row.average_duration_seconds)] for row in summary.department_durations), [width - 210, 85, 125]), width))
+            ([row.label, row.count, duration_text(row.average_duration_seconds)] for row in summary.department_durations), [width - 210, 85, 125], light=True, accent=accent), width))
     number += 1
     for key, name in [('hours', 'Distribución por hora del día'), ('weekdays', 'Distribución por día de semana')]:
         values = getattr(summary, key)
-        heading, graphic = section(name, number), BarsGraphic(values, width, limit=24)
+        heading, graphic = ModularHeading(name, accent=accent, size=10.5), BarsGraphic(values, width, limit=24, accent=accent)
         if key == 'hours':
             story.append(KeepTogether([heading, graphic]))
         else:
-            table = modern_table(['Período', 'Incidencias'], ([row.label, row.count] for row in values), [width - 85, 85])
+            table = modern_table(['Período', 'Incidencias'], ([row.label, row.count] for row in values), [width - 85, 85], light=True, accent=accent)
             story.extend(analytical_block(heading, graphic, table, width))
         number += 1
     if not summary.sector:
-        story.extend(analytical_block(section('Duración promedio por sector', number),
-            BarsGraphic(summary.sector_durations, width, value_field='average_duration_seconds'),
+        story.extend(analytical_block(ModularHeading('Duración promedio por sector', accent=accent, size=10.5),
+            BarsGraphic(summary.sector_durations, width, value_field='average_duration_seconds', accent=accent),
             modern_table(['Sector', 'Cierres', 'Duración promedio'],
-                ([row.label, row.count, duration_text(row.average_duration_seconds)] for row in summary.sector_durations), [width - 210, 85, 125]), width))
+                ([row.label, row.count, duration_text(row.average_duration_seconds)] for row in summary.sector_durations), [width - 210, 85, 125], light=True, accent=accent), width))
         number += 1
     if summary.escalations is not None:
         data = summary.escalations
-        story.extend(analytical_block(section('Estadísticas de escalamientos', number), None,
-            modern_table(['Indicador', 'Valor'], escalation_metadata(data), [width * .45, width * .55]), width))
+        story.extend(analytical_block(ModularHeading('Estadísticas de escalamientos', accent=accent, size=10.5), None,
+            modern_table(['Indicador', 'Valor'], escalation_metadata(data), [width * .45, width * .55], light=True, accent=accent), width))
         number += 1
-        story.append(paragraph(f'Destinatario ID: {filters.recipient_id if filters.recipient_id else "Todos"}. Este filtro no modifica las estadísticas generales de tickets.', size=8))
-        story.extend(analytical_block(section('Escalamientos recibidos por persona', number), BarsGraphic(data.recipients, width),
-            modern_table(['Destinatario', 'Eventos'], ([row.label, row.count] for row in data.recipients), [width - 100, 100]), width))
+        story.append(paragraph(f'Destinatario ID: {filters.recipient_id if filters.recipient_id else "Todos"}. Este filtro no modifica las estadísticas generales de tickets.', size=8, color=MUTED))
+        story.extend(analytical_block(ModularHeading('Escalamientos recibidos por persona', accent=accent, size=10.5), BarsGraphic(data.recipients, width, accent=accent),
+            modern_table(['Destinatario', 'Eventos'], ([row.label, row.count] for row in data.recipients), [width - 100, 100], light=True, accent=accent), width))
         number += 1
-        story.extend(analytical_block(section('Escalamientos por departamento', number), BarsGraphic(data.departments, width), modern_table(['Departamento', 'Eventos'], ([row.label, row.count] for row in data.departments), [width - 100, 100]), width))
+        story.extend(analytical_block(ModularHeading('Escalamientos por departamento', accent=accent, size=10.5), BarsGraphic(data.departments, width, accent=accent), modern_table(['Departamento', 'Eventos'], ([row.label, row.count] for row in data.departments), [width - 100, 100], light=True, accent=accent), width))
         number += 1
-        story.append(KeepTogether([section('Evolución de escalamientos', number), TrendGraphic(data.trend, zone, width, data.granularity)]))
+        story.append(KeepTogether([ModularHeading('Evolución de escalamientos', accent=accent, size=10.5), TrendGraphic(data.trend, zone, width, data.granularity, accent=accent)]))
         number += 1
     if getattr(summary, 'report_kind', None) == 'internal':
         from ticketyn.api.internal_ticket_exports import export_rows
-        table = modern_table(['Correlativo', 'Incidencia', 'Estado', 'Sector', 'Nodo', 'Depto.', 'Responsable', 'Tipo interno', 'Proveedor', 'Inicio', 'Duración', 'Tickets de clientes'], export_rows(session, filters), [width * fraction for fraction in [.10,.13,.06,.07,.07,.07,.09,.09,.09,.085,.065,.08]], reference=True)
+        table = modern_table(['Correlativo', 'Incidencia', 'Estado', 'Sector', 'Nodo', 'Depto.', 'Responsable', 'Tipo interno', 'Proveedor', 'Inicio', 'Duración', 'Tickets de clientes'], export_rows(session, filters), [width * fraction for fraction in [.10,.13,.06,.07,.07,.07,.09,.09,.09,.085,.065,.08]], reference=True, light=True, accent=PURPLE)
     else:
-        table = ticket_pdf_table(report_tickets(session, filters), zone, width)
-    story.extend([PageBreak(), section('Detalle de tickets — todos los iniciados en el período', number, keep=False), table])
-    build_pdf(output, title, filters.timezone, story)
+        table = ticket_pdf_table(report_tickets(session, filters), zone, width, light=True, accent=BLUE)
+    story.extend([PageBreak(), ModularHeading('Detalle de tickets — todos los iniciados en el período', accent=accent, size=11, keep=False), table])
+    build_pdf(output, title, filters.timezone, story,
+              issued_at=generated_str,
+              subtitle=category,
+              modular=True, landscape_mode=True, reference=title, accent=accent)
 
 
 def report_title(summary):

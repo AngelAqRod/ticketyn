@@ -62,6 +62,11 @@ def activation_report(id: Id, session: DBSession, options: Annotated[ActivationR
     return activation_report_response(session, id, options)
 
 
+@router.get('/activations/{id}/reports/customer/pdf')
+def customer_activation_certificate(id: Id, session: DBSession, options: Annotated[ActivationReportOptions, Query()]):
+    return activation_report_response(session, id, options, customer=True)
+
+
 @router.get('/activations/{id}/interventions', response_model=list[InterventionResponse])
 def interventions(id: Id, session: DBSession, limit: Limit = 50, offset: Offset = 0):
     get_or_404(session, Activation, id)

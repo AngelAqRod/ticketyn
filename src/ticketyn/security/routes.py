@@ -61,6 +61,24 @@ route('GET', '/api/circuits/{id}/operational-detail', any_of=('circuits.view', '
 route('GET', '/api/circuits/{id}/cpe-configuration', 'cpe.view')
 route('PATCH', '/api/circuits/{id}/cpe-configuration', 'cpe.edit')
 
+for resource, module in [('distribution-devices', 'distribution_devices'), ('distribution-ports', 'distribution_ports')]:
+    base = '/api/' + resource
+    route('GET', base, any_of=(module + '.view', module + '.lookup'))
+    route('GET', base + '/{id}', any_of=(module + '.view', module + '.lookup'))
+    route('POST', base, module + '.create')
+    route('PATCH', base + '/{id}', module + '.edit')
+    route('POST', base + '/{id}/move', module + '.move')
+    route('PATCH', base + '/{id}/status', module + '.set_active')
+    route('DELETE', base + '/{id}', module + '.delete')
+for action, method in [('view', 'GET'), ('create', 'POST')]:
+    route(method, '/api/port-nomenclatures', any_of=('catalogs.port_nomenclatures.view', 'catalogs.port_nomenclatures.lookup') if action == 'view' else ('catalogs.port_nomenclatures.create',))
+route('GET', '/api/port-nomenclatures/{id}', any_of=('catalogs.port_nomenclatures.view', 'catalogs.port_nomenclatures.lookup'))
+route('PATCH', '/api/port-nomenclatures/{id}', 'catalogs.port_nomenclatures.edit')
+route('DELETE', '/api/port-nomenclatures/{id}', 'catalogs.port_nomenclatures.delete')
+route('POST', '/api/distribution-ports/preview', 'distribution_ports.create')
+route('POST', '/api/distribution-ports/batch', 'distribution_ports.create')
+route('GET', '/api/distribution-devices/{id}/circuits', 'distribution_devices.view', 'circuits.view')
+
 CATALOG_PATHS = ('sectors', 'departments', 'incident-types', 'nodes', 'responsibles', 'positions',
                  'escalation-reasons', 'service-types', 'deactivation-reasons', 'cpe-models',
                  'internal-incident-types', 'providers', 'change-completion-types', 'change-types')
@@ -84,6 +102,7 @@ for resource, module in [('activations', 'activations'), ('capacity-changes', 'c
     route('GET', '/api/' + resource + '/export/{format}', any_of=(module + '.export', 'reports.' + module + '.export'))
 route('GET', '/api/activations/{id}', 'activations.view')
 route('GET', '/api/activations/{id}/reports/pdf', 'activations.export')
+route('GET', '/api/activations/{id}/reports/customer/pdf', 'activations.export')
 route('GET', '/api/activations/{id}/interventions', 'activations.view')
 route('POST', '/api/activations/{id}/interventions', 'activations.followup')
 route('GET', '/api/activations/{id}/notification', 'activations.view')

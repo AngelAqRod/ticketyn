@@ -11,7 +11,7 @@ vi.mock('../components/ReportCharts',()=>({TrendChart:()=> <div/>,DistributionCh
 const catalog={id:1,name:'NOC',active:true,created_at:'2026-01-01T00:00:00Z'}
 const person={...catalog,name:'Encargado NOC',department_id:1,department:catalog}
 const item:Change={change_type_id:1,change_type:catalog,id:1,reference:'CAM-0000001',ticket_number:1,title:'Actualización de transporte',description:'Configuración histórica',sector_id:1,node_id:null,manager_id:1,manager_name:person.name,department_id:1,department_name:'NOC',support:[],status:'FINISHED',proposed_start:'2026-10-15T17:00:00Z',proposed_end:'2026-10-15T21:00:00Z',actual_start:'2026-10-15T19:00:00Z',actual_end:'2026-10-15T21:00:00Z',completion_type_id:1,completion_name:'Finalizado con éxito',efficiency_eligible:true,final_notes:'Finalizado',created_at:'2026-10-16T00:00:00Z',updated_at:'2026-10-16T00:00:00Z',sector:catalog,node:null,internal_tickets:[],planned_seconds:14400,actual_seconds:7200,efficiency:'BETTER',efficiency_label:'Mayor eficiencia',variation_percent:50,saved_seconds:7200,exceeded_seconds:0,late_start:true}
-function setup(path='/changes',empty=false,initialSupport:Change['support']=[],overrides:Partial<Change>={},unavailable=false){
+function setup(path='/changes',empty=false,initialSupport:Change['support']=[],overrides:Partial<Change>={},unavailable=false,customItems?:Change[]){
  vi.stubGlobal('URL',class extends URL {static createObjectURL=vi.fn(()=> 'blob:changes');static revokeObjectURL=vi.fn()})
  const click=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{})
  const mock=vi.fn((url:string,init?:RequestInit)=>{
@@ -20,7 +20,7 @@ function setup(path='/changes',empty=false,initialSupport:Change['support']=[],o
   if(u.pathname==='/api/system/version')return Promise.resolve(jsonResponse({version:'0.5.0'}))
   if(u.pathname.includes('/export/')||u.pathname.endsWith('/reports/pdf'))return Promise.resolve(new Response(new Blob(['pdf'])))
   if(init?.method==='POST'||init?.method==='PATCH')return Promise.resolve(jsonResponse({...item,...JSON.parse(String(init.body))},init.method==='POST'?201:200))
-  if(u.pathname==='/api/changes')return Promise.resolve(jsonResponse({total:empty?0:1,items:empty?[]:[item]}))
+  if(u.pathname==='/api/changes')return Promise.resolve(jsonResponse({total:empty?0:(customItems?customItems.length:1),items:empty?[]:(customItems??[item])}))
   if(u.pathname==='/api/changes/1')return Promise.resolve(jsonResponse({...item,...overrides,support:initialSupport}))
   if(u.pathname.endsWith('/updates'))return Promise.resolve(jsonResponse({total:0,items:[]}))
   if(u.pathname.endsWith('/audit'))return Promise.resolve(jsonResponse([]))
@@ -73,19 +73,19 @@ describe('Control de cambios',()=>{
   expect(localStorage.getItem('ticketyn-change-view')).toBe('list')
   click.mockRestore()
  })
- it.each(['month','week','day'])('mantiene eventos y encabezados de días alineados en vista %s',async mode=>{
+ it.each(['month','week'])('mantiene eventos y encabezados de días alineados en vista %s',async mode=>{
   const {click}=setup('/changes?view=calendar&calendar='+mode+'&day=2026-10-15')
   const calendar=await screen.findByLabelText('Calendario de cambios')
   const headers=within(calendar).getByLabelText('Días de la semana')
-  expect(Array.from(headers.children).map(child=>child.textContent)).toEqual(mode==='day'?['Jueves']:['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'])
+  expect(Array.from(headers.children).map(child=>child.textContent)).toEqual(['LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO','DOMINGO'])
   const date=within(calendar).getByRole('link',{name:'Jueves, 2026-10-15'})
   expect(date).toHaveAttribute('href','/changes/new?date=2026-10-15')
   expect(date).toHaveClass('change-calendar-date')
   const event=within(calendar).getByRole('link',{name:/CAM-0000001/})
   expect(event).toHaveClass('change-calendar-event','change-status-FINISHED')
   expect(event).toHaveAttribute('href','/changes/1')
-  expect(Array.from(event.children).map(child=>child.textContent)).toEqual(['11:00 — 2026-10-15 15:00','CAM-0000001','Actualización de transporte','Finalizado'])
-  expect(calendar.querySelectorAll('.change-calendar-cell')).toHaveLength(mode==='month'?31:mode==='week'?7:1)
+  expect(Array.from(event.children).map(child=>child.textContent)).toEqual(['15/10 11:00 → 15/10 15:00','CAM-0000001','Actualización de transporte','Finalizado'])
+  expect(calendar.querySelectorAll('.change-calendar-cell')).toHaveLength(mode==='month'?31:7)
   if(mode==='month')expect(calendar.querySelectorAll('.change-calendar-placeholder')).toHaveLength(3)
   click.mockRestore()
  })
@@ -96,6 +96,265 @@ describe('Control de cambios',()=>{
   const current=calendar.querySelectorAll('[aria-current="date"]')
   expect(current).toHaveLength(1)
   expect(current[0]).toHaveAttribute('href','/changes/new?date='+today)
+  click.mockRestore()
+ })
+ it('implementa Industrial Split Cut 2.0, Technical Frame B y Corner Frame E con fidelidad visual',async()=>{
+  const {click}=setup('/changes?view=calendar&calendar=month&day=2026-10-15')
+  const header=await screen.findByLabelText('Cabecera del calendario')
+  expect(header).toHaveClass('industrial-split-cut-header')
+  expect(header.querySelector('.isc-top-accent')).toBeInTheDocument()
+  expect(header.querySelector('.isc-diagonal-border')).toBeInTheDocument()
+
+  // Nivel superior: bloque de fecha e información temporal
+  expect(within(header).getByText('OCT')).toBeInTheDocument()
+  expect(within(header).getByText('15')).toBeInTheDocument()
+  expect(within(header).getByText('Octubre 2026')).toBeInTheDocument()
+  expect(within(header).getByText(/Jueves · Semana 42/)).toBeInTheDocument()
+
+  // Nivel inferior: controles existentes
+  expect(within(header).getByRole('button',{name:'Período anterior'})).toBeInTheDocument()
+  expect(within(header).getByRole('button',{name:'Período siguiente'})).toBeInTheDocument()
+  expect(within(header).getByRole('button',{name:'Hoy'})).toBeInTheDocument()
+  expect(within(header).getByLabelText('Fecha del calendario')).toHaveValue('2026-10-15')
+  expect(within(header).getByRole('button',{name:'Mes'})).toHaveAttribute('aria-pressed','true')
+
+  // Technical Frame B
+  const calendar=await screen.findByLabelText('Calendario de cambios')
+  const weekdayHeaders=calendar.querySelectorAll('.technical-frame-b')
+  expect(weekdayHeaders).toHaveLength(7)
+  for(let i=0;i<5;i++){
+   expect(weekdayHeaders[i]).toHaveClass('technical-frame-b--weekday')
+   expect(weekdayHeaders[i].querySelector('.tf-b-bracket-tl')).toBeInTheDocument()
+   expect(weekdayHeaders[i].querySelector('.tf-b-bracket-br')).toBeInTheDocument()
+   expect(weekdayHeaders[i].querySelector('.tf-b-top-line')).toBeInTheDocument()
+   expect(weekdayHeaders[i].querySelector('.tf-b-diagonal-line')).toBeInTheDocument()
+  }
+  expect(weekdayHeaders[5]).toHaveClass('technical-frame-b--weekend')
+  expect(weekdayHeaders[6]).toHaveClass('technical-frame-b--weekend')
+
+  // Corner Frame E
+  const cellWithChanges=calendar.querySelector('.corner-frame-e--has-changes')
+  expect(cellWithChanges).toBeInTheDocument()
+  expect(cellWithChanges?.querySelector('.cf-e-bracket-tl')).toBeInTheDocument()
+  expect(cellWithChanges?.querySelector('.cf-e-bracket-br')).toBeInTheDocument()
+  expect(cellWithChanges?.querySelector('.cf-e-top-line')).toBeInTheDocument()
+  expect(cellWithChanges?.querySelector('.cf-e-diagonal-line')).toBeInTheDocument()
+
+  const cellNoChanges=calendar.querySelector('.corner-frame-e--no-changes')
+  expect(cellNoChanges).toBeInTheDocument()
+
+  click.mockRestore()
+ })
+ it('destaca HOY y activa segmentos ámbar cuando la fecha seleccionada es hoy',async()=>{
+  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Guatemala',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
+  const {click}=setup('/changes?view=calendar&calendar=month&day='+today)
+  const header=await screen.findByLabelText('Cabecera del calendario')
+  expect(within(header).getByText('HOY')).toHaveClass('isc-date-block-today')
+  const calendar=await screen.findByLabelText('Calendario de cambios')
+  const todayCell=calendar.querySelector('.corner-frame-e--today')
+  expect(todayCell).toBeInTheDocument()
+  click.mockRestore()
+ })
+ it('renderiza tarjetas de cambios con diseño Technical Cut y formato de intervalo completo',async()=>{
+  const midnightScheduled: Change = {
+   ...item,
+   id: 2,
+   reference: 'CAM-0000002',
+   title: 'Mantenimiento de fibra',
+   status: 'SCHEDULED',
+   proposed_start: '2026-10-16T05:00:00Z',
+   proposed_end: '2026-10-16T09:00:00Z',
+  }
+  const executingChange: Change = {
+   ...item,
+   id: 3,
+   reference: 'CAM-0000003',
+   title: 'Corte de energía programado',
+   status: 'EXECUTING',
+   proposed_start: '2026-10-15T15:00:00Z',
+   proposed_end: '2026-10-15T16:30:00Z',
+  }
+  const {click}=setup('/changes?view=calendar&calendar=month&day=2026-10-15',false,[],{},false,[item,midnightScheduled,executingChange])
+  const calendar=await screen.findByLabelText('Calendario de cambios')
+
+  // 1. Tarjeta FINISHED
+  const finishedCard=within(calendar).getByRole('link',{name:/CAM-0000001/})
+  expect(finishedCard).toHaveClass('change-calendar-event','technical-cut-card','change-status-FINISHED')
+  expect(finishedCard).toHaveAttribute('href','/changes/1')
+  expect(Array.from(finishedCard.children).map(child=>child.textContent)).toEqual([
+   '15/10 11:00 → 15/10 15:00',
+   'CAM-0000001',
+   'Actualización de transporte',
+   'Finalizado'
+  ])
+
+  // 2. Tarjeta SCHEDULED (cruce de medianoche)
+  const scheduledCard=within(calendar).getByRole('link',{name:/CAM-0000002/})
+  expect(scheduledCard).toHaveClass('change-calendar-event','technical-cut-card','change-status-SCHEDULED')
+  expect(scheduledCard).toHaveAttribute('href','/changes/2')
+  expect(Array.from(scheduledCard.children).map(child=>child.textContent)).toEqual([
+   '15/10 23:00 → 16/10 03:00',
+   'CAM-0000002',
+   'Mantenimiento de fibra',
+   'Agendado'
+  ])
+
+  // 3. Tarjeta EXECUTING
+  const executingCard=within(calendar).getByRole('link',{name:/CAM-0000003/})
+  expect(executingCard).toHaveClass('change-calendar-event','technical-cut-card','change-status-EXECUTING')
+  expect(executingCard).toHaveAttribute('href','/changes/3')
+  expect(Array.from(executingCard.children).map(child=>child.textContent)).toEqual([
+   '15/10 09:00 → 15/10 10:30',
+   'CAM-0000003',
+   'Corte de energía programado',
+   'En ejecución'
+  ])
+
+  click.mockRestore()
+ })
+ it('implementa vista semanal Extended Grid con 7 columnas, Technical Frame B, Corner Frame E y eventos estructurados',async()=>{
+  const {click}=setup('/changes?view=calendar&calendar=week&day=2026-10-15')
+  const calendar=await screen.findByLabelText('Calendario de cambios')
+
+  // Clase específica de vista semanal
+  expect(calendar).toHaveClass('change-calendar','change-calendar-week')
+
+  // 7 encabezados LUNES a DOMINGO
+  const headers=within(calendar).getByLabelText('Días de la semana')
+  expect(Array.from(headers.children).map(child=>child.textContent)).toEqual(['LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO','DOMINGO'])
+
+  // 7 celdas alineadas
+  const cells=calendar.querySelectorAll('.change-calendar-cell')
+  expect(cells).toHaveLength(7)
+
+  // Celdas de fin de semana (Sábado y Domingo, índices 5 y 6) tienen variante borgoña
+  expect(cells[5]).toHaveClass('corner-frame-e--weekend')
+  expect(cells[6]).toHaveClass('corner-frame-e--weekend')
+
+  // Celdas de lunes a viernes no son fin de semana
+  for(let i=0;i<5;i++){
+   expect(cells[i]).not.toHaveClass('corner-frame-e--weekend')
+  }
+
+  // Día jueves 15/10 (índice 3) tiene cambios y contenedor de eventos estructurado
+  const thursdayCell=cells[3]
+  expect(thursdayCell).toHaveClass('corner-frame-e--has-changes')
+  const eventsContainer=thursdayCell.querySelector('.change-calendar-events')
+  expect(eventsContainer).toBeInTheDocument()
+
+  // Tarjeta de cambio dentro del contenedor de eventos
+  const event=within(thursdayCell as HTMLElement).getByRole('link',{name:/CAM-0000001/})
+  expect(event).toHaveClass('change-calendar-event','technical-cut-card','change-status-FINISHED')
+  expect(event).toHaveAttribute('href','/changes/1')
+
+  // Cápsula de fecha siempre visible en el heading
+  const dateLink=within(thursdayCell as HTMLElement).getByRole('link',{name:'Jueves, 2026-10-15'})
+  expect(dateLink).toHaveAttribute('href','/changes/new?date=2026-10-15')
+
+  // Días sin cambios tienen clase corner-frame-e--no-changes
+  expect(cells[0]).toHaveClass('corner-frame-e--no-changes')
+
+  click.mockRestore()
+ })
+ it('implementa vista diaria Technical Timeline Expandida (B2) con cronología, encabezado de jornada y tarjeta expandida',async()=>{
+  const {click}=setup('/changes?view=calendar&calendar=day&day=2026-10-15')
+  const calendar=await screen.findByLabelText('Calendario de cambios')
+  expect(calendar).toHaveClass('change-calendar-day-timeline')
+
+  // Encabezado de jornada
+  const dayHeader=within(calendar).getByLabelText('Encabezado de jornada')
+  expect(dayHeader).toHaveClass('timeline-day-header')
+  expect(within(dayHeader).getByText('JUEVES · 15 OCTUBRE 2026')).toBeInTheDocument()
+
+  // Cronología
+  const stream=within(calendar).getByLabelText('Cronología de cambios')
+  expect(stream).toHaveClass('timeline-stream')
+
+  // Columna horaria izquierda
+  expect(within(stream).getByText('11:00')).toHaveClass('timeline-time-start')
+  expect(within(stream).getByText('Fin: 15:00')).toHaveClass('timeline-time-end')
+
+  // Tarjeta Technical Cut expandida
+  const event=within(stream).getByRole('link',{name:/CAM-0000001/})
+  expect(event).toHaveClass('change-calendar-event','technical-cut-card','timeline-expanded-card','change-status-FINISHED')
+  expect(event).toHaveAttribute('href','/changes/1')
+
+  // Jerarquía: Código, Estado, Título, Intervalo
+  expect(within(event).getByText('CAM-0000001')).toHaveClass('change-card-ref')
+  expect(within(event).getByText('Finalizado')).toHaveClass('change-card-status')
+  expect(within(event).getByText('Actualización de transporte')).toHaveClass('change-card-title')
+  expect(within(event).getByText('15/10 11:00 → 15/10 15:00')).toBeInTheDocument()
+
+  click.mockRestore()
+ })
+ it('muestra estado vacío discreto en vista diaria cuando no hay ventanas de mantenimiento',async()=>{
+  const {click}=setup('/changes?view=calendar&calendar=day&day=2026-10-15',true)
+  const calendar=await screen.findByLabelText('Calendario de cambios')
+
+  // Encabezado de jornada se conserva
+  expect(within(calendar).getByText('JUEVES · 15 OCTUBRE 2026')).toBeInTheDocument()
+
+  // Mensaje discreto de estado vacío
+  expect(within(calendar).getByText('Sin ventanas de mantenimiento programadas para este día')).toBeInTheDocument()
+  expect(calendar.querySelector('.timeline-stream')).not.toBeInTheDocument()
+
+  click.mockRestore()
+ })
+ it('ordena cronológicamente múltiples eventos y cruces de medianoche en la vista diaria',async()=>{
+  const changeEarly: Change = {
+   ...item,
+   id: 10,
+   reference: 'CAM-0000010',
+   title: 'Revisión matutina',
+   status: 'FINISHED',
+   proposed_start: '2026-10-15T14:00:00Z',
+   proposed_end: '2026-10-15T15:30:00Z',
+  }
+  const changeMid: Change = {
+   ...item,
+   id: 11,
+   reference: 'CAM-0000011',
+   title: 'Migración en ejecución',
+   status: 'EXECUTING',
+   proposed_start: '2026-10-15T18:00:00Z',
+   proposed_end: '2026-10-15T20:00:00Z',
+  }
+  const changeLateMidnight: Change = {
+   ...item,
+   id: 12,
+   reference: 'CAM-0000012',
+   title: 'Corte nocturno con cruce de medianoche',
+   status: 'SCHEDULED',
+   proposed_start: '2026-10-16T05:00:00Z',
+   proposed_end: '2026-10-16T09:00:00Z',
+  }
+
+  // Desordenados intencionalmente en la respuesta simulada
+  const {click}=setup('/changes?view=calendar&calendar=day&day=2026-10-15',false,[],{},false,[changeLateMidnight, changeEarly, changeMid])
+  const calendar=await screen.findByLabelText('Calendario de cambios')
+  const stream=within(calendar).getByLabelText('Cronología de cambios')
+  const itemsRendered=stream.querySelectorAll('.timeline-item')
+  expect(itemsRendered).toHaveLength(3)
+
+  // 1. Primer evento ordenado: 08:00 (changeEarly)
+  expect(within(itemsRendered[0] as HTMLElement).getByText('08:00')).toBeInTheDocument()
+  expect(within(itemsRendered[0] as HTMLElement).getByText('Fin: 09:30')).toBeInTheDocument()
+  expect(within(itemsRendered[0] as HTMLElement).getByText('CAM-0000010')).toBeInTheDocument()
+  expect(within(itemsRendered[0] as HTMLElement).getByText('Finalizado')).toBeInTheDocument()
+
+  // 2. Segundo evento ordenado: 12:00 (changeMid)
+  expect(within(itemsRendered[1] as HTMLElement).getByText('12:00')).toBeInTheDocument()
+  expect(within(itemsRendered[1] as HTMLElement).getByText('Fin: 14:00')).toBeInTheDocument()
+  expect(within(itemsRendered[1] as HTMLElement).getByText('CAM-0000011')).toBeInTheDocument()
+  expect(within(itemsRendered[1] as HTMLElement).getByText('En ejecución')).toBeInTheDocument()
+
+  // 3. Tercer evento ordenado: 23:00 con cruce de medianoche (changeLateMidnight)
+  expect(within(itemsRendered[2] as HTMLElement).getByText('23:00')).toBeInTheDocument()
+  expect(within(itemsRendered[2] as HTMLElement).getByText('Fin: 03:00')).toBeInTheDocument()
+  expect(within(itemsRendered[2] as HTMLElement).getByText('CAM-0000012')).toBeInTheDocument()
+  expect(within(itemsRendered[2] as HTMLElement).getByText('Agendado')).toBeInTheDocument()
+  expect(within(itemsRendered[2] as HTMLElement).getByText('15/10 23:00 → 16/10 03:00')).toBeInTheDocument()
+
   click.mockRestore()
  })
  it.each(['list','calendar'])('comparte filtro por tipo de cambio en %s',async view=>{

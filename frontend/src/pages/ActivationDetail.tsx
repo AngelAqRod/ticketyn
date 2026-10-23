@@ -7,11 +7,11 @@ import type { FormEvent } from 'react'
 import { getJson } from '../api/client'
 import { Link, useParams } from 'react-router'
 import { listResponsibles } from '../api'
-import { getActivation, listActivationInterventions, createActivationIntervention, downloadActivationReport } from '../api/fms'
+import { getActivation, listActivationInterventions, createActivationIntervention, downloadActivationReport, downloadCustomerActivationReport } from '../api/fms'
 import type { ActivationIntervention, Operation } from '../types/fms'
 import type { Customer, NamedCatalog } from '../types/catalog'
 import { ticketynDateTimeValue, ticketynDateTimeToIso, ticketynTimezone } from '../lib/datetime'
-import { capacityLabel } from '../types/fms'
+import { capacityLabel, activationDistributionLabel } from '../types/fms'
 import { formatDate } from '../lib/format'
 import { PageHeading } from '../components/PageHeading'
 import { FormField } from '../components/FormField'
@@ -24,10 +24,10 @@ export function ActivationDetail() {
   const id = Number(useParams().id), [activation, setActivation] = useState<Operation | null>(null), [items, setItems] = useState<ActivationIntervention[]>([]), [people, setPeople] = useState<NamedCatalog[]>([])
   const exportingRef = useRef(false)
   const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState<string | null>(null)
-  async function exportPdf() {
+  async function exportPdf(customer = false) {
     if (exportingRef.current) return
     exportingRef.current = true; setExporting(true); setExportError(null)
-    try { await downloadActivationReport(id) }
+    try { await (customer ? downloadCustomerActivationReport(id) : downloadActivationReport(id)) }
     catch (failure) { setExportError(failure instanceof Error ? failure.message : 'No se pudo exportar la activación.') }
     finally { exportingRef.current = false; setExporting(false) }
   }
@@ -46,7 +46,7 @@ export function ActivationDetail() {
       description="Activación e intervenciones técnicas, independientes de tickets."
       telemetry={<span className="heading-telemetry"><span className="telemetry-value--emerald">{items.length}</span> intervenciones</span>}
       action={<div className="flex flex-wrap items-center gap-2">
-        <Can permission="activations.export"><button type="button" className="button-secondary rounded-full shadow-xs text-xs" disabled={exporting} onClick={exportPdf}><FileDown size={14} aria-hidden="true" />Exportar PDF</button></Can>
+        <Can permission="activations.export"><button type="button" className="button-secondary rounded-full shadow-xs text-xs" disabled={exporting} onClick={() => void exportPdf()}><FileDown size={14} aria-hidden="true" />Descargar PDF interno</button><button type="button" className="button-secondary rounded-full shadow-xs text-xs" disabled={exporting} onClick={() => void exportPdf(true)}><FileDown size={14} aria-hidden="true" />Descargar PDF para cliente</button></Can>
         <ActivationNotificationActions key={id} activationId={id} />
       </div>}
     />
@@ -88,6 +88,14 @@ export function ActivationDetail() {
             <dd className="mt-1 font-mono text-slate-300 text-sm">{activation.sector?.name ?? 'Sin registrar'}</dd>
           </div>
           <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Equipo de distribución</dt>
+            <dd className="mt-1 text-slate-300 text-sm [overflow-wrap:anywhere]">{activationDistributionLabel(activation, 'distribution_device_name')}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Puerto</dt>
+            <dd className="mt-1 text-slate-300 text-sm [overflow-wrap:anywhere]">{activationDistributionLabel(activation, 'distribution_port_name')}</dd>
+          </div>
+          <div>
             <dt className="font-mono text-xs uppercase tracking-wider text-slate-400">Fecha efectiva de activación</dt>
             <dd className="mt-1 font-mono text-slate-300 text-sm">{formatDate(activation.effective_at, ticketynTimezone)}</dd>
           </div>
@@ -115,7 +123,7 @@ export function ActivationDetail() {
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
             <Cpu size={14} />
           </span>
-          <h2 id="activation-notes-title" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Notas de activación</h2>
+          <h2 id="activation-notes-title" className="text-xs font-bold font-mono text-white uppercase tracking-wider">Notas internas de activación</h2>
         </div>
         <div>
           <span className="block font-mono text-xs uppercase tracking-wider text-slate-400 mb-1.5">CPE de activación</span>
@@ -133,6 +141,11 @@ export function ActivationDetail() {
         </div>
       </section>
     </div>
+
+    <section className="panel p-6 rounded-2xl bg-[#0b1426] border border-emerald-500/20 shadow-xl mb-6" aria-labelledby="customer-activation-notes-title">
+      <h2 id="customer-activation-notes-title" className="mb-3 text-xs font-bold font-mono text-white uppercase tracking-wider">Notas para cliente</h2>
+      <p className="text-sm whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-slate-200">{activation.customer_activation_notes || 'Sin notas para cliente registradas.'}</p>
+    </section>
 
     <section className="panel p-6 rounded-2xl bg-[#0b1426] border border-emerald-500/20 shadow-xl" aria-labelledby="activation-log-title">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-emerald-500/15 pb-3">

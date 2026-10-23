@@ -2,6 +2,7 @@ from ticketyn.models.cpe_model import CpeModel
 """Registro de modelos para SQLAlchemy y Alembic."""
 
 from ticketyn.models.circuit import Circuit
+from ticketyn.models.distribution import DistributionDevice, DistributionPort, DistributionAudit
 from ticketyn.models.customer import Customer
 from ticketyn.models.sector import Sector
 from ticketyn.models.department import Department
@@ -24,6 +25,7 @@ __all__ += ["Activation", "ActivationNumberConfig", "ActivationIntervention", "C
 
 from ticketyn.models.service_type import ServiceType
 __all__ += ["ServiceType", "CpeModel"]
+__all__ += ['DistributionDevice', 'DistributionPort', 'DistributionAudit']
 
 from ticketyn.models.internal_ticket import InternalTicket, InternalTicketUpdate, InternalEscalation, InternalEscalationAudit, InternalTicketNumberConfig, InternalIncidentType, Provider
 
@@ -34,3 +36,5 @@ from ticketyn.models.mail_notifications import MailTransportConfig, MailEventCon
 from ticketyn.models.mail_jobs import MailProcessorControl, MailNotificationRequest
 
 from ticketyn.models.security import SecurityRole, SecurityPermission, SecurityRolePermission, SecurityConfig, SecurityAudit
+
+from ticketyn.models.distribution import PortNomenclature

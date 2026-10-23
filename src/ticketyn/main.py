@@ -113,6 +113,8 @@ def create_app(*, start_notifications=True, notification_engine=None, security_s
     app.include_router(positions_router)
     app.include_router(customers_router)
     app.include_router(circuits_router)
+    from ticketyn.api.distribution import router as distribution_router
+    app.include_router(distribution_router)
     app.include_router(sectors_router)
     app.include_router(departments_router)
     app.include_router(incident_types_router)
@@ -121,6 +123,8 @@ def create_app(*, start_notifications=True, notification_engine=None, security_s
     app.include_router(ticket_updates_router)
     app.include_router(ticket_reports_router)
     app.include_router(reports_router)
+    from ticketyn.api.port_nomenclatures import router as nomenclature_router
+    app.include_router(nomenclature_router)
     from ticketyn.security.routes import validate_coverage
     validate_coverage(app)
     return app

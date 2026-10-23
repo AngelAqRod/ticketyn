@@ -18,19 +18,21 @@ class OperationCreate(InputSchema):
 
 
 class ActivationCreate(OperationCreate):
-    nullable_fields = {'customer_id', 'activation_notes'}
+    nullable_fields = {'customer_id', 'activation_notes', 'customer_activation_notes'}
     customer_id: PositiveId | None = None
     activation_notes: Annotated[str, Field(max_length=10000)] | None = None
+    customer_activation_notes: Annotated[str, Field(max_length=10000)] | None = None
 
     @model_validator(mode='before')
     @classmethod
     def normalize_notes(cls, values):
         if isinstance(values, dict):
-            notes = values.get('activation_notes')
-            # Normalize only this field before InputSchema rejects blank strings.
-            # Oversized input must still fail validation, including whitespace.
-            if isinstance(notes, str) and len(notes) <= 10000 and not notes.strip():
-                return {**values, 'activation_notes': None}
+            values = dict(values)
+            for field in ('activation_notes', 'customer_activation_notes'):
+                notes = values.get(field)
+                # Preserve text; only normalize empty notes within the accepted limit.
+                if isinstance(notes, str) and len(notes) <= 10000 and not notes.strip():
+                    values[field] = None
         return values
 
 
@@ -93,7 +95,11 @@ class OperationResponse(BaseModel):
 
 
 class ActivationResponse(OperationResponse):
+    distribution_recorded: bool
+    distribution_device_name: str | None
+    distribution_port_name: str | None
     activation_notes: str | None
+    customer_activation_notes: str | None
     cpe_activation: str | None
     service_type_name: str | None
     initial_capacity: Decimal | None

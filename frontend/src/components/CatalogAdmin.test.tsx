@@ -122,7 +122,7 @@ describe('administración de catálogos', () => {
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
     const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: 1 } : { name: 'Nuevo registro', active: true }
-    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null, operational_selectable: true } : resource === 'circuits' ? { ...expected, sector_id: 1, cpe_model_id: null, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
+    expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null, operational_selectable: true } : resource === 'circuits' ? { ...expected, sector_id: 1, cpe_management_ip: null, cpe_model_id: null, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
     fireEvent.change(field(resource === 'circuits' ? 'Descripción' : 'Nombre'), { target: { value: 'Corregido' } })

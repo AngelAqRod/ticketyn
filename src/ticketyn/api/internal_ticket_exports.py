@@ -5,7 +5,10 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import Spacer
 from sqlalchemy import func, select
 from ticketyn.api import internal_ticket_data as data
-from ticketyn.api.documents import build_pdf, duration_text, fonts, modern_table, paragraph, section
+from ticketyn.api.documents import (
+    AMBER, EMERALD, PURPLE, build_pdf, duration_text, fonts,
+    modern_table, modular_metric_strip, paragraph, report_identification,
+)
 from ticketyn.api.ticket_exports import write_export_xlsx
 from ticketyn.models import InternalTicket, Ticket
 
@@ -51,18 +54,76 @@ def export_rows(session, filters, *, excel=False):
 
 def export_pdf(session, filters, output):
     fonts()
-    total = session.scalar(select(func.count()).select_from(data.statement(filters.model_dump()).order_by(None).subquery()))
-    generated = datetime.now(timezone.utc).astimezone(ZoneInfo(filters.timezone))
+    zone = ZoneInfo(filters.timezone)
+    stmt = data.statement(filters.model_dump()).order_by(None).subquery()
+    counts = session.execute(
+        select(
+            func.count().label('total'),
+            func.count().filter(stmt.c.status == 'OPEN').label('open_count'),
+            func.count().filter(stmt.c.status == 'CLOSED').label('closed_count'),
+        ).select_from(stmt)
+    ).one()
+    total = counts.total or 0
+    open_count = counts.open_count or 0
+    closed_count = counts.closed_count or 0
+
+    related_total = session.scalar(
+        select(func.count(Ticket.id)).select_from(Ticket).join(stmt, Ticket.internal_ticket_id == stmt.c.id)
+    ) or 0
+
+    generated = datetime.now(timezone.utc).astimezone(zone)
+    from_str = filters.from_at.astimezone(zone).strftime('%d/%m/%Y %H:%M') if filters.from_at else None
+    to_str = filters.to_at.astimezone(zone).strftime('%d/%m/%Y %H:%M') if filters.to_at else None
+    if from_str and to_str:
+        period_str = f'{from_str} — {to_str}'
+    elif from_str:
+        period_str = f'Desde (incluido): {from_str}'
+    elif to_str:
+        period_str = f'Hasta (excluido): {to_str}'
+    else:
+        period_str = 'Sin límite temporal'
+
+    filter_tokens = friendly_filters(session, filters)
+    filters_str = ' · '.join(filter_tokens)
     width = landscape(A4)[0] - 60
+
+    metrics = [
+        ('TOTAL TICKETS INTERNOS', total, PURPLE),
+        ('ABIERTOS / EN CURSO', open_count, AMBER),
+        ('CERRADOS', closed_count, EMERALD),
+        ('TICKETS CLIENTES VINCULADOS', related_total, PURPLE),
+    ]
+
     fractions = [.10, .13, .06, .07, .07, .07, .09, .09, .09, .085, .065, .08]
     pdf_headers = [*HEADERS[:5], 'Depto.', HEADERS[6], 'Tipo interno',
                    'Proveedor atribuible', 'Inicio', HEADERS[10], 'Tickets de clientes']
-    story = [paragraph('Tickets internos', size=21, bold=True),
-             paragraph(f'Generado: {generated:%d/%m/%Y %H:%M} · Total encontrado: {total}', size=9),
-             paragraph(' · '.join(friendly_filters(session, filters)), size=8), Spacer(1, 10),
-             section('Tickets internos', 1, keep=False),
-             modern_table(pdf_headers, export_rows(session, filters), [width * fraction for fraction in fractions], reference=True)]
-    build_pdf(output, 'Tickets internos', filters.timezone, story)
+
+    table = modern_table(
+        pdf_headers,
+        export_rows(session, filters),
+        [width * fraction for fraction in fractions],
+        reference=True,
+        light=True,
+        accent=PURPLE,
+    )
+
+    story = [
+        report_identification(
+            'Tickets internos',
+            period=period_str,
+            filters=filters_str,
+            total=total,
+            accent=PURPLE,
+            category='Gestión de Incidencias · NOC Interno',
+            width=width,
+        ),
+        modular_metric_strip(metrics, width, accent=PURPLE),
+        table,
+    ]
+    build_pdf(output, 'Tickets internos', filters.timezone, story,
+              issued_at=generated.strftime('%d/%m/%Y %H:%M'),
+              subtitle='GESTIÓN DE INCIDENCIAS · NOC INTERNO',
+              modular=True, landscape_mode=True, reference='Tickets internos', accent=PURPLE)
 
 
 def export_xlsx(session, filters, output):

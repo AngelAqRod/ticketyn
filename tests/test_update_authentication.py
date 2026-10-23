@@ -261,7 +261,7 @@ def test_062_to_authentication_with_real_schema_and_manual_initialization_only(t
             assert service['active'] and service['enabled'] and not obj.state.exists()
             assert (obj.target / 'bootstrap-superadmin.sh').stat().st_mode & 0o111
         assert obj.current.resolve() == obj.target and old.exists() and backup.exists()
-        assert read_revision(database) == '0032_responsible_selectable'  # current never downgrades DB
+        assert read_revision(database) == obj.data['target_head']  # current never downgrades DB
         with database.connect() as connection:
             assert connection.execute(text('SELECT id,name,active FROM responsibles')).all() == original
             assert connection.scalar(text('SELECT count(*) FROM responsibles WHERE access_granted OR username IS NOT NULL')) == 0

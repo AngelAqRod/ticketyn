@@ -341,9 +341,11 @@ def test_read_only_context_requires_a_real_relationship(security_client,ticket_p
 def test_custom_operator_copy_role_with_create_denies_edit_execute_link_and_followup(security_client):
     from test_changes import payload
     client, app, factory = security_client
-    # 9. Confirmar que el rol Operador predeterminado conserva sus 72 permisos y no recibe changes.create
+    # Preserve the historical 72-permission scope; v0.8 explicitly adds distribution
+    # to the built-in Operator, without changing previously copied custom roles.
     operator_grants = DEFAULT_GRANTS['OPERATOR']
-    assert len(operator_grants) == 72
+    legacy_operator_grants = {code for code in operator_grants if not code.startswith(('distribution_devices.', 'distribution_ports.', 'catalogs.port_nomenclatures.'))}
+    assert len(legacy_operator_grants) == 72
     assert 'changes.create' not in operator_grants
     assert 'changes.view' in operator_grants
     assert 'changes.export' in operator_grants
@@ -357,7 +359,7 @@ def test_custom_operator_copy_role_with_create_denies_edit_execute_link_and_foll
     url = f"/api/changes/{cid}"
 
     # Crear cuenta para ANDRES con rol personalizado 'Operador (copia)' (73 permisos)
-    custom_grants = list(operator_grants) + ['changes.create']
+    custom_grants = list(legacy_operator_grants) + ['changes.create']
     assert len(custom_grants) == 73
 
     with factory() as s:
@@ -377,6 +379,7 @@ def test_custom_operator_copy_role_with_create_denies_edit_execute_link_and_foll
     authorize(client, login(client, username='andres'))
     me = client.get('/api/auth/me').json()
     assert len(me['permissions']) == 73
+    assert not any(code.startswith(('distribution_devices.', 'distribution_ports.')) for code in me['permissions'])
     assert 'changes.create' in me['permissions']
     assert 'changes.view' in me['permissions']
     assert 'changes.export' in me['permissions']

@@ -1,0 +1,22 @@
+/* Themes come from moduleIdentity; inactive links retain the global sidebar style. */
+.nav-link {
+  --nav-fill: var(--primary);
+  --nav-accent: var(--sidebar-light);
+  --nav-text: white;
+}
+.nav-link[data-theme="purple"] { --nav-fill: #7c3aed; --nav-accent: #c084fc; }
+.nav-link[data-theme="amber"] { --nav-fill: #d97706; --nav-accent: #fbbf24; --nav-text: #040812; }
+.nav-link[data-theme="cyan"] { --nav-fill: #22d3ee; --nav-accent: #67e8f9; --nav-text: #040812; }
+.nav-link[data-theme="emerald"] { --nav-fill: #059669; --nav-accent: #34d399; --nav-text: #040812; }
+.nav-link[data-theme="slate"] { --nav-fill: #475569; --nav-accent: #cbd5e1; }
+.nav-link[aria-current="page"] {
+  background: var(--nav-fill);
+  color: var(--nav-text);
+  border-color: color-mix(in srgb, var(--nav-accent) 55%, transparent);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--nav-fill) 40%, transparent);
+}
+.nav-link[aria-current="page"]:hover { border-color: var(--nav-accent); }
+.nav-link[aria-current="page"]:focus-visible { outline-color: var(--nav-accent); }
+@media (forced-colors: active) {
+  .nav-link[aria-current="page"] { color: Highlight; border-color: Highlight; box-shadow: none; }
+}

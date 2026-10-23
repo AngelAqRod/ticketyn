@@ -12,7 +12,25 @@ export interface Customer extends NamedCatalog {
 
 export type ServiceType = NamedCatalog
 
+export interface DistributionDevice extends NamedCatalog {
+  node_id: number
+  description: string | null
+  port_count: number
+  circuit_count: number
+}
+export interface DistributionPort extends NamedCatalog {
+  distribution_device_id: number
+  description: string | null
+  circuit_count: number
+}
+export type DistributionSummary = Pick<NamedCatalog, 'id' | 'name' | 'active'>
+
 export interface Circuit {
+  cpe_management_ip?: string | null
+  distribution_device_id?: number | null
+  distribution_port_id?: number | null
+  distribution_device?: DistributionSummary | null
+  distribution_port?: DistributionSummary | null
   cpe_model_id?: number | null
   cpe_model?: Pick<NamedCatalog, 'id' | 'name' | 'active'> | null
   sector_id?: number | null
@@ -48,5 +66,5 @@ export type IncidentType = NamedCatalog
 
 export interface NamedCatalogInput { name: string; active: boolean; description?: string | null; applies_efficiency?: boolean }
 export interface CustomerInput extends NamedCatalogInput { customer_code: string }
-export interface CircuitInput { cpe_model_id?: number | null; sector_id: number; service_type_id?: number | null; initial_capacity?: string | null; initial_capacity_unit?: string | null; node_id: number; customer_id: number; circuit_code: string; description: string; active: boolean }
+export interface CircuitInput { cpe_management_ip?: string | null; distribution_device_id?: number | null; distribution_port_id?: number | null; cpe_model_id?: number | null; sector_id: number; service_type_id?: number | null; initial_capacity?: string | null; initial_capacity_unit?: string | null; node_id: number; customer_id: number; circuit_code: string; description: string; active: boolean }
 export type CatalogKind = 'change-types' | 'change-completion-types' | 'internal-incident-types' | 'providers' | 'cpe-models' | 'customers' | 'circuits' | 'sectors' | 'departments' | 'incident-types' | 'nodes' | 'responsibles' | 'escalation-reasons' | 'positions' | 'deactivation-reasons' | 'service-types'
