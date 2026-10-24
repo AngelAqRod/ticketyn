@@ -114,11 +114,12 @@ class NumberedCanvas(Canvas):
 
 
 def branding_logo():
-    root = Path(__file__).resolve().parents[3]
-    for directory in ('frontend/dist/branding', 'frontend/public/branding'):
-        logo = root / directory / 'logo_horizontal_claro.png'
-        if logo.is_file():
-            return logo
+    # El instalador coloca el paquete en .venv; el frontend permanece en el release.
+    for root in Path(__file__).resolve().parents:
+        for directory in ('frontend/dist/branding', 'frontend/public/branding'):
+            logo = root / directory / 'logo_horizontal_claro.png'
+            if logo.is_file():
+                return logo
     raise FileNotFoundError('No se encontró el logotipo local de Ticketyn.')
 
 

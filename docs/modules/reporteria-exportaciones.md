@@ -67,10 +67,11 @@ Este documento debe actualizarse ante cualquier cambio en las fórmulas de cálc
 - `ticket_reports.intervention_block(..., modular=True)` permite continuidad de
   texto largo en el formato vertical; su opción predeterminada sigue siendo la
   horizontal utilizada por activaciones y Control de cambios.
-- El PNG oficial `logo_horizontal_claro.png` se busca respecto a `__file__`, en
-  `frontend/dist/branding` y luego `frontend/public/branding`. No depende del cwd,
-  no usa HTTP ni fuentes del sistema. El paquete instalado debe conservar ese
-  recurso de branding, que ya forma parte del frontend distribuido.
+- El PNG oficial `logo_horizontal_claro.png` se busca en los directorios ascendientes
+  del módulo resuelto, comprobando `frontend/dist/branding` y luego
+  `frontend/public/branding` en cada nivel. Funciona desde `src` y desde el paquete
+  instalado en `.venv` del release, sin depender del cwd ni usar HTTP o fuentes del
+  sistema. El frontend distribuido debe conservar ese recurso de branding.
 - La proyección `CustomerReport` y su consulta positiva no se amplían. Nodos,
   sectores, responsables, departamentos, proveedores, escalamientos, relaciones
   internas y distribución continúan fuera del documento para cliente.

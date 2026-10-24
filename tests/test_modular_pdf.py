@@ -47,6 +47,30 @@ def test_legacy_layout_remains_landscape_and_modular_is_opt_in(tmp_path, monkeyp
         assert (b'/Subtype /Image' in data) == modular
 
 
+@pytest.mark.parametrize('layout', ['source', 'installed'])
+@pytest.mark.parametrize('branding', ['dist', 'public'])
+def test_modular_pdf_finds_release_logo(layout, branding, tmp_path, monkeypatch):
+    logo_data = documents.branding_logo().read_bytes()
+    release = tmp_path / 'release'
+    package = 'src' if layout == 'source' else '.venv/lib/python3.12/site-packages'
+    module = release / package / 'ticketyn/api/documents.py'
+    module.parent.mkdir(parents=True)
+    module.touch()
+    logo = release / 'frontend' / branding / 'branding/logo_horizontal_claro.png'
+    logo.parent.mkdir(parents=True)
+    logo.write_bytes(logo_data)
+    monkeypatch.setattr(documents, '__file__', str(module))
+    monkeypatch.chdir(tmp_path)
+
+    assert documents.branding_logo() == logo
+    documents.fonts()
+    output = BytesIO()
+    documents.build_pdf(output, 'Listado de tickets', 'UTC',
+        [documents.paragraph('Contenido')], modular=True, landscape_mode=True)
+    assert b'/Subtype /Image' in output.getvalue()
+    assert output.getvalue().rstrip().endswith(b'%%EOF')
+
+
 def test_modular_metadata_escapes_values_and_keeps_odd_field(rendered):
     documents.fonts()
     rows = [('Etiqueta <&>', 'Valor <tag> & texto\nOtra línea'), ('Nodo', 'NOC'), ('Final', 'CAMPO-IMPAR')]
