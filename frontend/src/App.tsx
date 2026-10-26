@@ -15,6 +15,7 @@ import { lazy, Suspense } from 'react'
 import { Link, Route, Routes } from 'react-router'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
+import { MyTickets } from './pages/MyTickets'
 import { Tickets } from './pages/Tickets'
 import { TicketDetail } from './pages/TicketDetail'
 import { NewTicket } from './pages/NewTicket'
@@ -30,6 +31,11 @@ const Reports = lazy(() => import('./pages/Reports').then((module) => ({ default
 export default function App() {
   return <AuthGate><Routes><Route element={<Layout />}>
     <Route index element={<Dashboard />} />
+    <Route path="dashboard" element={<Dashboard />} />
+    <Route path="my-tickets" element={<MyTickets />} />
+    <Route path="my-tickets/:tab" element={<MyTickets />} />
+    <Route path="mis-tickets" element={<MyTickets />} />
+    <Route path="mis-tickets/:tab" element={<MyTickets />} />
     <Route path="internal-tickets" element={<InternalTickets />} />
     <Route path="internal-tickets/new" element={<InternalTicketEditor />} />
     <Route path="internal-tickets/:id" element={<InternalTicketDetail />} />

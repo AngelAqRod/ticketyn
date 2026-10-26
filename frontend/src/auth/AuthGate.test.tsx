@@ -133,3 +133,35 @@ it('la aplicación completa inicia protegida sin consultas operativas anónimas'
   expect(screen.getByRole('heading', { name: 'Iniciar sesión en Ticketyn' })).toBeVisible()
   expect(fetcher).not.toHaveBeenCalled()
 })
+
+it('redirige a Mis tickets al iniciar sesión cuando la preferencia es MY_TICKETS', async () => {
+  const { default: App } = await import('../App')
+  const user = { ...identity, preferred_home_page: 'MY_TICKETS', token: 'test-token' }
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (url.endsWith('/api/auth/login')) return Promise.resolve(response(user))
+    if (url.endsWith('/api/my-tickets/summary')) return Promise.resolve(response({ assigned_active: 0, assigned_recommended: 0, participated: 0, escalations_active: 0, to_verify: 0 }))
+    if (url.includes('/api/my-tickets')) return Promise.resolve(response({ items: [], total: 0, limit: 50, offset: 0 }))
+    if (url.endsWith('/health')) return Promise.resolve(response({ status: 'ok' }))
+    if (url.endsWith('/version')) return Promise.resolve(response({ version: '0.8.1' }))
+    return Promise.resolve(response({}))
+  }))
+  render(<MemoryRouter initialEntries={['/login']}><App /></MemoryRouter>)
+  fireEvent.change(screen.getByLabelText('Usuario'), { target: { value: 'noc' } })
+  fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'secret' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+  expect(await screen.findByRole('heading', { level: 1, name: 'Mis tickets' })).toBeInTheDocument()
+})
+
+it('permite acceso explícito a Dashboard cuando Mis tickets es el inicio preferido', async () => {
+  const { default: App } = await import('../App')
+  setSessionToken('active-token')
+  const user = { ...identity, preferred_home_page: 'MY_TICKETS' }
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (url.endsWith('/api/auth/me')) return Promise.resolve(response(user))
+    if (url.endsWith('/health')) return Promise.resolve(response({ status: 'ok' }))
+    if (url.endsWith('/version')) return Promise.resolve(response({ version: '0.8.1' }))
+    return Promise.resolve(response({}))
+  }))
+  render(<MemoryRouter initialEntries={[{ pathname: '/', state: { explicit: true } }]}><App /></MemoryRouter>)
+  expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
+})

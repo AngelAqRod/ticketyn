@@ -14,7 +14,7 @@ import { FeedbackMessage } from './FeedbackMessage'
 import { ApiError } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { Network, Users, Ticket, Pencil, Power, Trash2, Plus, Layers3 } from 'lucide-react'
+import { Network, Users, Ticket, Pencil, Power, Trash2, Plus, Layers3, ArrowUpRight } from 'lucide-react'
 import { CatalogDeleteConfirmation } from './CatalogDeleteConfirmation'
 import { QuickCatalogCreate } from './QuickCatalogCreate'
 import { SearchableSelect } from './SearchableSelect'
@@ -22,7 +22,7 @@ import { useUrlFilters } from '../hooks/useUrlFilters'
 import { circuitFilterKeys } from '../lib/ticketFilters'
 import type { FormEvent } from 'react'
 import * as api from '../api'
-import type { CatalogKind, Circuit, Customer, NamedCatalog, Position } from '../types/catalog'
+import type { CatalogKind, Circuit, Customer, NamedCatalog, Position, PositionInput } from '../types/catalog'
 import { formatDate, formatTableDate } from '../lib/format'
 import { FormField } from './FormField'
 import { PageHeading } from './PageHeading'
@@ -48,8 +48,8 @@ const labels = {
 }
 
 type CatalogItem = Customer | Circuit | NamedCatalog
-interface Draft { cpeManagementIp: string; appliesEfficiency: boolean; sectorId: string; id: number | null; code: string; name: string; customerId: string; nodeId: string; distributionDeviceId: string; distributionPortId: string; active: boolean; detail: string; departmentId: string; positionId: string; operationalSelectable: boolean; capacity: string; capacityUnit: string; serviceTypeId: string; cpeModelId: string }
-const blank = (): Draft => ({ cpeManagementIp: '', operationalSelectable: true, appliesEfficiency: false, sectorId: '', id: null, code: '', name: '', customerId: '', nodeId: '', distributionDeviceId: '', distributionPortId: '', active: true, detail: '', departmentId: '', positionId: '', capacity: '', capacityUnit: 'Mbps', serviceTypeId: '', cpeModelId: '' })
+interface Draft { cpeManagementIp: string; appliesEfficiency: boolean; sectorId: string; id: number | null; code: string; name: string; customerId: string; nodeId: string; distributionDeviceId: string; distributionPortId: string; active: boolean; detail: string; departmentId: string; positionId: string; operationalSelectable: boolean; capacity: string; capacityUnit: string; serviceTypeId: string; cpeModelId: string; escalationMode: 'GENERAL' | 'INDIVIDUAL'; generalEscalationTime: string; escalationDestinations: { target_position_id: number; time_minutes: string }[] }
+const blank = (): Draft => ({ cpeManagementIp: '', operationalSelectable: true, appliesEfficiency: false, sectorId: '', id: null, code: '', name: '', customerId: '', nodeId: '', distributionDeviceId: '', distributionPortId: '', active: true, detail: '', departmentId: '', positionId: '', capacity: '', capacityUnit: 'Mbps', serviceTypeId: '', cpeModelId: '', escalationMode: 'GENERAL', generalEscalationTime: '', escalationDestinations: [] })
 const message = (error: unknown) => error instanceof Error ? error.message : 'Ocurrió un error inesperado.'
 
 function list(kind: CatalogKind, signal: AbortSignal, filters?: URLSearchParams): Promise<CatalogItem[]> {
@@ -85,7 +85,26 @@ function save(kind: CatalogKind, draft: Draft, original?: CatalogItem): Promise<
     case 'service-types': return id === null ? api.createServiceType(named) : api.updateServiceType(id, named)
     case 'deactivation-reasons': { const payload = { ...named, description: draft.detail.trim() || null }; return id === null ? api.createDeactivationReason(payload) : api.updateDeactivationReason(id, payload) }
     case 'escalation-reasons': { const payload = { ...named, description: draft.detail.trim() || null }; return id === null ? api.createEscalationReason(payload) : api.updateEscalationReason(id, payload) }
-    case 'positions': { const payload = { ...named, department_id: Number(draft.departmentId), description: draft.detail.trim() || null }; return id === null ? api.createPosition(payload) : api.updatePosition(id, payload) }
+    case 'positions': {
+      const prevDestinations = original && 'destinations' in (original as Position) ? (original as Position).destinations : undefined
+      const hasDestinations = draft.escalationDestinations.length > 0
+      const payload: PositionInput = {
+        ...named,
+        department_id: Number(draft.departmentId),
+        description: draft.detail.trim() || null,
+        ...(hasDestinations ? {
+          escalation_mode: draft.escalationMode,
+          general_escalation_time_minutes: draft.escalationMode === 'GENERAL' && draft.generalEscalationTime ? Number(draft.generalEscalationTime) : null,
+          destinations: draft.escalationDestinations.map((d) => ({
+            target_position_id: d.target_position_id,
+            time_minutes: draft.escalationMode === 'INDIVIDUAL' && d.time_minutes ? Number(d.time_minutes) : null,
+          })),
+        } : (prevDestinations && prevDestinations.length > 0 ? {
+          destinations: [],
+        } : {})),
+      }
+      return id === null ? api.createPosition(payload) : api.updatePosition(id, payload)
+    }
     case 'nodes': return id === null ? api.createNode(named) : api.updateNode(id, named)
     case 'responsibles': { const payload = { ...named, operational_selectable: draft.operationalSelectable, department_id: draft.departmentId ? Number(draft.departmentId) : null, position_id: draft.positionId ? Number(draft.positionId) : null }; return id === null ? api.createResponsible(payload) : api.updateResponsible(id, payload) }
     case 'customers': {
@@ -136,7 +155,33 @@ function changeActive(kind: CatalogKind, id: number, active: boolean): Promise<C
 const catalogName = (item: CatalogItem) => 'circuit_code' in item ? item.description : item.name
 const catalogCode = (item: CatalogItem) => 'customer_code' in item ? item.customer_code : 'circuit_code' in item ? item.circuit_code : ''
 function draftFor(item: CatalogItem, kind: CatalogKind): Draft {
-  return { cpeManagementIp: 'cpe_management_ip' in item ? item.cpe_management_ip ?? '' : '', distributionDeviceId: 'distribution_device_id' in item && item.distribution_device_id ? String(item.distribution_device_id) : '', distributionPortId: 'distribution_port_id' in item && item.distribution_port_id ? String(item.distribution_port_id) : '', operationalSelectable: !('operational_selectable' in item) || item.operational_selectable !== false, appliesEfficiency: 'applies_efficiency' in item && Boolean(item.applies_efficiency), cpeModelId: 'cpe_model_id' in item && item.cpe_model_id ? String(item.cpe_model_id) : '', sectorId: 'sector_id' in item && item.sector_id ? String(item.sector_id) : '', id: item.id, serviceTypeId: 'service_type_id' in item && item.service_type_id ? String(item.service_type_id) : '', capacity: 'initial_capacity' in item ? String(item.initial_capacity ?? '') : '', capacityUnit: 'initial_capacity_unit' in item ? item.initial_capacity_unit ?? 'Mbps' : 'Mbps', code: catalogCode(item), name: catalogName(item), nodeId: 'node_id' in item && item.node_id ? String(item.node_id) : '', customerId: 'customer_id' in item ? String(item.customer_id) : '', active: item.active, departmentId: 'department_id' in item && item.department_id ? String(item.department_id) : '', positionId: 'position_id' in item && item.position_id ? String(item.position_id) : '', detail: (kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && 'description' in item ? String(item.description ?? '') : '' }
+  const pos = item as Position
+  return {
+    cpeManagementIp: 'cpe_management_ip' in item ? item.cpe_management_ip ?? '' : '',
+    distributionDeviceId: 'distribution_device_id' in item && item.distribution_device_id ? String(item.distribution_device_id) : '',
+    distributionPortId: 'distribution_port_id' in item && item.distribution_port_id ? String(item.distribution_port_id) : '',
+    operationalSelectable: !('operational_selectable' in item) || item.operational_selectable !== false,
+    appliesEfficiency: 'applies_efficiency' in item && Boolean(item.applies_efficiency),
+    cpeModelId: 'cpe_model_id' in item && item.cpe_model_id ? String(item.cpe_model_id) : '',
+    sectorId: 'sector_id' in item && item.sector_id ? String(item.sector_id) : '',
+    id: item.id,
+    serviceTypeId: 'service_type_id' in item && item.service_type_id ? String(item.service_type_id) : '',
+    capacity: 'initial_capacity' in item ? String(item.initial_capacity ?? '') : '',
+    capacityUnit: 'initial_capacity_unit' in item ? item.initial_capacity_unit ?? 'Mbps' : 'Mbps',
+    code: catalogCode(item),
+    name: catalogName(item),
+    nodeId: 'node_id' in item && item.node_id ? String(item.node_id) : '',
+    customerId: 'customer_id' in item ? String(item.customer_id) : '',
+    active: item.active,
+    departmentId: 'department_id' in item && item.department_id ? String(item.department_id) : '',
+    positionId: 'position_id' in item && item.position_id ? String(item.position_id) : '',
+    detail: (kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && 'description' in item ? String(item.description ?? '') : '',
+    escalationMode: kind === 'positions' && 'escalation_mode' in pos && pos.escalation_mode ? pos.escalation_mode : 'GENERAL',
+    generalEscalationTime: kind === 'positions' && 'general_escalation_time_minutes' in pos && pos.general_escalation_time_minutes ? String(pos.general_escalation_time_minutes) : '',
+    escalationDestinations: kind === 'positions' && 'destinations' in pos && Array.isArray(pos.destinations)
+      ? pos.destinations.map(d => ({ target_position_id: d.target_position_id, time_minutes: d.time_minutes ? String(d.time_minutes) : '' }))
+      : [],
+  }
 }
 
 export function CatalogAdmin({ kind, embedded = false, administrativeAccess = false, circuitEditor }: { kind: CatalogKind; embedded?: boolean; administrativeAccess?: boolean; circuitEditor?: { item: Circuit; onSaved: (item: Circuit) => void; onCancel: () => void; onBusyChange: (busy: boolean) => void } }) {
@@ -191,7 +236,7 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true); setLoadError(null)
-    Promise.all([editorItem ? Promise.resolve([editorItem]) : (kind === 'responsibles' && !access.can('catalogs.responsibles.view') ? allPages<Account>('/api/responsibles/access', controller.signal) : list(kind, controller.signal, new URLSearchParams(filterKey))), kind === 'circuits' ? (customerCache.current ? Promise.resolve(customerCache.current) : api.listCustomers(controller.signal, true)) : Promise.resolve([]), kind === 'circuits' ? api.listNodes(controller.signal, true) : Promise.resolve([]), kind === 'positions' || kind === 'responsibles' && access.can('catalogs.departments.lookup') ? api.listDepartments(controller.signal, true) : Promise.resolve([]), kind === 'responsibles' && access.can('catalogs.positions.lookup') ? api.listPositions(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listServiceTypes(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listSectors(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listCpeModels(controller.signal, true) : Promise.resolve([])]).then(([rows, clients, nodeRows, departmentRows, positionRows, serviceRows, sectorRows, cpeRows]) => {
+    Promise.all([editorItem ? Promise.resolve([editorItem]) : (kind === 'responsibles' && !access.can('catalogs.responsibles.view') ? allPages<Account>('/api/responsibles/access', controller.signal) : list(kind, controller.signal, new URLSearchParams(filterKey))), kind === 'circuits' ? (customerCache.current ? Promise.resolve(customerCache.current) : api.listCustomers(controller.signal, true)) : Promise.resolve([]), kind === 'circuits' ? api.listNodes(controller.signal, true) : Promise.resolve([]), kind === 'positions' || kind === 'responsibles' && access.can('catalogs.departments.lookup') ? api.listDepartments(controller.signal, true) : Promise.resolve([]), (kind === 'positions' || (kind === 'responsibles' && access.can('catalogs.positions.lookup'))) ? api.listPositions(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listServiceTypes(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listSectors(controller.signal, true) : Promise.resolve([]), kind === 'circuits' ? api.listCpeModels(controller.signal, true) : Promise.resolve([])]).then(([rows, clients, nodeRows, departmentRows, positionRows, serviceRows, sectorRows, cpeRows]) => {
       if (!controller.signal.aborted) { setCpeModels(cpeRows); setSectors(sectorRows); setServiceTypes(serviceRows); setItems(rows); setCustomers(clients); setNodes(nodeRows); setDepartments(departmentRows); setPositions(positionRows); if (kind === 'circuits') customerCache.current = clients; setLoading(false) }
     }).catch((failure: unknown) => {
       if (!controller.signal.aborted) { setLoadError(message(failure)); setLoading(false) }
@@ -248,6 +293,26 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
     setApiInvalidFields([])
     if (!draft.name.trim() || ((kind === 'customers' || kind === 'circuits') && !draft.code.trim()) || (kind === 'circuits' && !draft.customerId) || (kind === 'positions' && !draft.departmentId)) {
       setError('Completa los campos obligatorios antes de guardar.'); return
+    }
+    if (kind === 'positions' && draft) {
+      if (draft.escalationDestinations.length > 0) {
+        if (draft.escalationMode === 'GENERAL') {
+          const generalTime = Number(draft.generalEscalationTime)
+          if (!draft.generalEscalationTime.trim() || isNaN(generalTime) || generalTime <= 0 || !Number.isInteger(generalTime)) {
+            setError('Indica un tiempo general de escalamiento en minutos (número entero mayor a 0).')
+            return
+          }
+        } else if (draft.escalationMode === 'INDIVIDUAL') {
+          const invalidDest = draft.escalationDestinations.some(d => {
+            const t = Number(d.time_minutes)
+            return !d.time_minutes.trim() || isNaN(t) || t <= 0 || !Number.isInteger(t)
+          })
+          if (invalidDest) {
+            setError('Todos los destinos deben tener un tiempo de escalamiento en minutos (número entero mayor a 0).')
+            return
+          }
+        }
+      }
     }
     if (kind === 'circuits' && draft.capacity) { try { capacityInMicroMbps(draft.capacity, draft.capacityUnit) } catch (failure) { setError(message(failure)); return } }
     if (!draft.active && (draft.id === null || items.find((item) => item.id === draft.id)?.active) && !confirmDeactivation()) return
@@ -352,7 +417,33 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
           </div>
         )}
         <fieldset disabled={busy || Boolean(circuitEditor && (loading || loadError))} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Datos del registro</legend>
-          {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.customerId.trim()) || apiInvalidFields.includes("customer_id")} id="admin-customer" label="Cliente" required><select id="admin-customer" className="form-input" required value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}><option value="">Selecciona un cliente</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.customer_code} — {item.name}{item.active ? '' : ' (Inactivo)'}</option>)}</select></FormField>}
+          {kind === 'circuits' && (
+            <FormField
+              describedBy={error ? "catalog-form-error" : undefined}
+              invalid={(error === "Completa los campos obligatorios antes de guardar." && !draft.customerId.trim()) || apiInvalidFields.includes("customer_id")}
+              id="admin-customer"
+              label="Cliente"
+              required
+            >
+              <SearchableSelect
+                id="admin-customer"
+                label="Cliente"
+                required
+                value={draft.customerId}
+                onChange={(value) => setDraft({ ...draft, customerId: value })}
+                options={customers
+                  .filter((item) => item.active || String(item.id) === draft.customerId)
+                  .map((item) => ({
+                    value: String(item.id),
+                    label: item.customer_code && item.name ? `${item.customer_code} — ${item.name}` : (item.customer_code || item.name || 'Cliente'),
+                    disabled: !item.active,
+                  }))}
+                placeholder="Selecciona un cliente"
+                emptyMessage="No hay clientes activos."
+                noMatchMessage="No se encontraron clientes."
+              />
+            </FormField>
+          )}
           {kind === 'circuits' && <FormField describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.nodeId) || apiInvalidFields.includes("node_id")} id="admin-node" required label="Nodo"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="admin-node" required label="Nodo" value={draft.nodeId} onChange={(value) => setDraft(current => current ? { ...current, nodeId: value, ...(value !== current.nodeId ? { distributionDeviceId: '', distributionPortId: '' } : {}) } : current)} options={nodes.filter((item) => item.active || String(item.id) === draft.nodeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Selecciona un nodo" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><Can anyOf={["catalogs.nodes.create","context.nodes.create"]}><button type="button" className="button-secondary" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></Can></div></FormField>}
           {kind === 'circuits' && <CircuitDistributionFields key={draft.id ?? 'new'} nodeId={draft.nodeId} nodeName={nodes.find(node => String(node.id) === draft.nodeId)?.name ?? ''} deviceId={draft.distributionDeviceId} portId={draft.distributionPortId}
             original={items.find((item): item is Circuit => item.id === draft.id && 'circuit_code' in item)} disabled={busy} invalidFields={apiInvalidFields} onModalChange={setDistributionOpen}
@@ -364,6 +455,183 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
           {kind === 'responsibles' && <label className="flex items-center gap-2"><input type="checkbox" checked={draft.operationalSelectable} onChange={e => setDraft({ ...draft, operationalSelectable: e.target.checked })} />Seleccionable en operaciones</label>}
           {kind === 'responsibles' && draft.id !== null && (() => { const item = items.find((row) => row.id === draft.id); return item && 'attention_level' in item && item.attention_level ? <p className="text-xs text-muted sm:col-span-2">Dato anterior conservado (solo lectura): {String(item.attention_level)}</p> : null })()}
           {(kind === 'positions' || kind === 'escalation-reasons' || kind === 'deactivation-reasons' || kind === 'providers' || kind === 'change-types' || kind === 'change-completion-types') && <FormField id="admin-detail" label="Descripción (opcional)"><input id="admin-detail" className="form-input" maxLength={10000} value={draft.detail} onChange={(event) => setDraft({ ...draft, detail: event.target.value })} /></FormField>}
+          {kind === 'positions' && (() => {
+            const availablePositions = (positions.length > 0 ? positions : (items as Position[])).filter(p => p.id !== draft.id)
+            return (
+              <div className="sm:col-span-2 mt-2 pt-4 border-t border-slate-700/60 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                    <ArrowUpRight size={16} className="text-sky-400" />
+                    Escala a
+                  </h3>
+                  <span className="text-xs text-slate-400">Configuración opcional de recomendaciones</span>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-300">Puestos destino</label>
+                  <div className="grid gap-2 sm:grid-cols-2 max-h-48 overflow-y-auto p-3 rounded-xl bg-slate-900/60 border border-slate-700/60">
+                    {availablePositions.map(pos => {
+                      const isSelected = draft.escalationDestinations.some(d => d.target_position_id === pos.id)
+                      const isInactive = !pos.active
+                      const disabled = isInactive && !isSelected
+                      return (
+                        <label
+                          key={pos.id}
+                          className={`flex items-center gap-2 text-xs p-2 rounded-lg cursor-pointer transition-colors ${
+                            isSelected ? 'bg-sky-500/15 border border-sky-500/30 text-white' : 'hover:bg-slate-800/60 text-slate-300'
+                          } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            disabled={disabled}
+                            checked={isSelected}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setDraft({
+                                  ...draft,
+                                  escalationDestinations: [
+                                    ...draft.escalationDestinations,
+                                    { target_position_id: pos.id, time_minutes: '' }
+                                  ]
+                                })
+                              } else {
+                                setDraft({
+                                  ...draft,
+                                  escalationDestinations: draft.escalationDestinations.filter(d => d.target_position_id !== pos.id)
+                                })
+                              }
+                            }}
+                            className="rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/20"
+                          />
+                          <span className="truncate">{pos.name}</span>
+                          {isInactive && (
+                            <span className="text-[10px] text-amber-400/80 font-mono">(Inactivo)</span>
+                          )}
+                        </label>
+                      )
+                    })}
+                    {availablePositions.length === 0 && (
+                      <p className="text-xs text-slate-500 col-span-2 py-2 text-center">No hay otros puestos disponibles.</p>
+                    )}
+                  </div>
+                </div>
+
+                {draft.escalationDestinations.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-300">Modalidad de tiempo</label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="escalation-mode"
+                            value="GENERAL"
+                            checked={draft.escalationMode === 'GENERAL'}
+                            onChange={() => setDraft({ ...draft, escalationMode: 'GENERAL' })}
+                            className="text-sky-500 bg-slate-800 border-slate-600 focus:ring-sky-500/20"
+                          />
+                          Tiempo general (predeterminado)
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="escalation-mode"
+                            value="INDIVIDUAL"
+                            checked={draft.escalationMode === 'INDIVIDUAL'}
+                            onChange={() => setDraft({ ...draft, escalationMode: 'INDIVIDUAL' })}
+                            className="text-sky-500 bg-slate-800 border-slate-600 focus:ring-sky-500/20"
+                          />
+                          Tiempo individual por destino
+                        </label>
+                      </div>
+                    </div>
+
+                    {draft.escalationMode === 'GENERAL' ? (
+                      <FormField
+                        id="admin-general-escalation-time"
+                        label="Tiempo general de escalamiento (minutos)"
+                        required
+                        describedBy={error ? "catalog-form-error" : undefined}
+                      >
+                        <input
+                          id="admin-general-escalation-time"
+                          type="number"
+                          min="1"
+                          step="1"
+                          className="form-input font-mono max-w-xs"
+                          placeholder="Ej. 30"
+                          value={draft.generalEscalationTime}
+                          onChange={e => setDraft({ ...draft, generalEscalationTime: e.target.value })}
+                        />
+                      </FormField>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-slate-300">Umbral por destino (minutos)</label>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {draft.escalationDestinations.map(dest => {
+                            const targetPos = availablePositions.find(p => p.id === dest.target_position_id)
+                            return (
+                              <div
+                                key={dest.target_position_id}
+                                className="flex items-center gap-3 p-2 rounded-xl bg-slate-900/60 border border-slate-700/60"
+                              >
+                                <span className="text-xs font-medium text-slate-200 flex-1 truncate">
+                                  {targetPos?.name ?? `Puesto #${dest.target_position_id}`}
+                                </span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  required
+                                  placeholder="Minutos"
+                                  value={dest.time_minutes}
+                                  onChange={e => {
+                                    const val = e.target.value
+                                    setDraft({
+                                      ...draft,
+                                      escalationDestinations: draft.escalationDestinations.map(d =>
+                                        d.target_position_id === dest.target_position_id ? { ...d, time_minutes: val } : d
+                                      )
+                                    })
+                                  }}
+                                  className="form-input font-mono text-xs w-24 py-1 px-2"
+                                />
+                                <span className="text-xs text-slate-400 font-mono">min</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 rounded-xl bg-sky-500/5 border border-sky-500/20 text-xs">
+                      <span className="font-semibold text-sky-400 block mb-1">Resumen de escalamiento:</span>
+                      <p className="text-slate-300">
+                        {draft.escalationMode === 'GENERAL' ? (
+                          <>
+                            Escala simultáneamente a {draft.escalationDestinations.length} destino(s) tras{' '}
+                            <strong className="text-white font-mono">{draft.generalEscalationTime ? `${draft.generalEscalationTime} min` : '—'}</strong>:{' '}
+                            {draft.escalationDestinations
+                              .map(d => availablePositions.find(p => p.id === d.target_position_id)?.name ?? `#${d.target_position_id}`)
+                              .join(', ')}.
+                          </>
+                        ) : (
+                          <>
+                            Escala individualmente a:{' '}
+                            {draft.escalationDestinations
+                              .map(d => {
+                                const posName = availablePositions.find(p => p.id === d.target_position_id)?.name ?? `#${d.target_position_id}`
+                                return `${posName} (${d.time_minutes ? `${d.time_minutes} min` : 'sin tiempo'})`
+                              })
+                              .join(', ')}.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
           {kind === 'circuits' && <FormField id="admin-sector" label="Sector" required describedBy={error ? "catalog-form-error" : undefined} invalid={Boolean(error && !draft.sectorId) || apiInvalidFields.includes("sector_id")}><select disabled={draft.id!==null&&!access.can("tickets.edit")} id="admin-sector" className="form-input" required value={draft.sectorId} onChange={event => setDraft({ ...draft, sectorId: event.target.value })}><option value="">Selecciona un sector</option>{sectors.filter(item => item.active || String(item.id) === draft.sectorId).map(item => <option key={item.id} value={item.id} disabled={!item.active}>{item.name}</option>)}</select></FormField>}
           {kind === 'circuits' && <FormField id="admin-service-type" label="Tipo de servicio" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes("service_type_id")}><SearchableSelect id="admin-service-type" label="Tipo de servicio" value={draft.serviceTypeId} onChange={(value) => setDraft({ ...draft, serviceTypeId: value })} options={serviceTypes.filter((item) => item.active || String(item.id) === draft.serviceTypeId).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay tipos de servicio activos." noMatchMessage="Sin coincidencias." /></FormField>}
           {kind === 'circuits' && <FormField id="admin-cpe-management-ip" label="IP de gestión CPE" describedBy={error ? "catalog-form-error" : undefined} invalid={apiInvalidFields.includes('cpe_management_ip')}><input id="admin-cpe-management-ip" className="form-input" type="text" placeholder="192.0.2.10" value={draft.cpeManagementIp} onChange={event => setDraft({ ...draft, cpeManagementIp: event.target.value })} /></FormField>}
@@ -560,13 +828,13 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
       )
     })()}
     {loading || loadError || !ordered.length ? <RequestState loading={loading} loadingText={`Cargando ${info.empty}...`} error={loadError ? `Error al cargar ${info.empty}: ${loadError}` : null} errorTitle="" onRetry={() => setRetry(retry + 1)} empty={!ordered.length} emptyTitle={items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`} emptyDescription="" compact={!refreshedModule && loading} /> : <div className={`panel table-surface overflow-x-auto rounded-2xl bg-[#0b1426] border ${kind === 'customers' || kind === 'circuits' ? 'border-sky-500/20' : 'table-surface--slate'} shadow-xl`}><table className="operation-table min-w-[650px]"><caption className="table-title">{info.title}</caption>
-      <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente', 'Nodo', 'Sector'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', ...(kind === 'change-types' ? ['Descripción'] : kind === 'change-completion-types' ? ['Descripción', 'Aplica para eficiencia'] : []), ...(kind === 'positions' || kind === 'responsibles' ? ['Departamento'] : []), ...(kind === 'responsibles' ? ['Puesto', 'Seleccionable en operaciones', ...(manageAccess ? ['Acceso a Ticketyn'] : [])] : []), 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+      <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente', 'Nodo', 'Sector'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', ...(kind === 'change-types' ? ['Descripción'] : kind === 'change-completion-types' ? ['Descripción', 'Aplica para eficiencia'] : []), ...(kind === 'positions' || kind === 'responsibles' ? ['Departamento'] : []), ...(kind === 'positions' ? ['Escala a'] : []), ...(kind === 'responsibles' ? ['Puesto', 'Seleccionable en operaciones', ...(manageAccess ? ['Acceso a Ticketyn'] : [])] : []), 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
       <tbody>{ordered.map((item) => <tr key={item.id}>
         {(kind === 'customers' || kind === 'circuits') && <th scope="row" className="record-code">{kind === 'circuits' ? <Link to={`/circuits/${item.id}`} className="font-mono font-bold text-sky-400 hover:text-sky-300 hover:underline tracking-wide">{code(item)}</Link> : <span className="font-mono font-bold text-sky-400 tracking-wide">{code(item)}</span>}</th>}
         {kind === 'circuits' && 'customer_id' in item && <td className="text-slate-300">{customerLabel(item.customer_id)}</td>}
         {kind === 'circuits' && 'circuit_code' in item && <td className="text-slate-400 font-mono text-xs">{item.node?.name ?? 'Sin asignar'}</td>}
         {kind === 'circuits' && 'circuit_code' in item && <td className="text-slate-400 font-mono text-xs">{item.sector?.name ?? 'Sin asignar'}</td>}
-        <td className={kind === 'customers' || kind === 'circuits' ? 'font-semibold text-white' : undefined}>{name(item)}</td>{kind === 'change-types' && <td>{'description' in item ? String(item.description ?? '—') : '—'}</td>}{kind === 'change-completion-types' && <><td>{'description' in item ? String(item.description ?? '—') : '—'}</td><td>{'applies_efficiency' in item && item.applies_efficiency ? 'Sí' : 'No'}</td></>}{(kind === 'positions' || kind === 'responsibles') && <td>{'department' in item && item.department ? (item.department as NamedCatalog).name : 'Sin asignar'}</td>}{kind === 'responsibles' && <td>{'position' in item && item.position ? (item.position as NamedCatalog).name : 'Sin asignar'}</td>}{kind === 'responsibles' && <td>{'operational_selectable' in item && item.operational_selectable === false ? 'No' : 'Sí'}</td>}{manageAccess && <td>{(() => { const row = accessRows.find(p => p.id === item.id); return row ? <>{row.username ?? 'Sin acceso configurado'}<span className="block text-xs text-muted">{row.effective_access ? 'Habilitado' : row.access_granted && !row.active ? 'Bloqueado por inactividad' : 'Deshabilitado'}{row.role_name ? ` · ${row.role_name}` : ''}</span></> : 'Administración de acceso restringida' })()}</td>}<td><span className={`status-badge ${item.active ? 'status-active' : 'status-neutral'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
+        <td className={kind === 'customers' || kind === 'circuits' ? 'font-semibold text-white' : undefined}>{name(item)}</td>{kind === 'change-types' && <td>{'description' in item ? String(item.description ?? '—') : '—'}</td>}{kind === 'change-completion-types' && <><td>{'description' in item ? String(item.description ?? '—') : '—'}</td><td>{'applies_efficiency' in item && item.applies_efficiency ? 'Sí' : 'No'}</td></>}{(kind === 'positions' || kind === 'responsibles') && <td>{'department' in item && item.department ? (item.department as NamedCatalog).name : 'Sin asignar'}</td>}{kind === 'positions' && <td className="text-xs text-slate-300">{(() => { const pos = item as Position; if (!pos.destinations || pos.destinations.length === 0) return <span className="text-slate-500 italic">Sin destinos</span>; if (pos.escalation_mode === 'GENERAL') return <span>{pos.destinations.map(d => d.target_position_name).join(', ')} <span className="text-sky-400 font-mono">({pos.general_escalation_time_minutes ?? '—'}m)</span></span>; return <span className="space-x-1">{pos.destinations.map(d => <span key={d.target_position_id} className="inline-block whitespace-nowrap">{d.target_position_name} <span className="text-sky-400 font-mono">({d.time_minutes ?? '—'}m)</span></span>)}</span> })()}</td>}{kind === 'responsibles' && <td>{'position' in item && item.position ? (item.position as NamedCatalog).name : 'Sin asignar'}</td>}{kind === 'responsibles' && <td>{'operational_selectable' in item && item.operational_selectable === false ? 'No' : 'Sí'}</td>}{manageAccess && <td>{(() => { const row = accessRows.find(p => p.id === item.id); return row ? <>{row.username ?? 'Sin acceso configurado'}<span className="block text-xs text-muted">{row.effective_access ? 'Habilitado' : row.access_granted && !row.active ? 'Bloqueado por inactividad' : 'Deshabilitado'}{row.role_name ? ` · ${row.role_name}` : ''}</span></> : 'Administración de acceso restringida' })()}</td>}<td><span className={`status-badge ${item.active ? 'status-active' : 'status-neutral'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
         <td className="whitespace-nowrap text-xs tabular-nums text-slate-400 font-mono"><time dateTime={item.created_at} title={formatDate(item.created_at)}>{formatTableDate(item.created_at)}</time></td><td><div className="table-actions">
           {manageAccess && accessRows.some(p => p.id === item.id) && <button type="button" className="button-secondary table-action rounded-full" disabled={busy || Boolean(draft)} onClick={() => setAccessId(item.id)} aria-label={`Administrar acceso de ${name(item)}`}>{accessRows.find(p => p.id === item.id)?.account_exists ? 'Administrar acceso' : 'Configurar acceso'}</button>}
           {kind === 'customers' && <><Can permission="circuits.view"><Link className="button-ghost table-action rounded-full text-sky-400 hover:text-sky-300 font-mono text-xs" to={`/circuits?customer_id=${item.id}`} aria-label={`Ver circuitos de ${code(item)}`}><Network size={13} aria-hidden="true" />Circuitos</Link></Can><Can permission="tickets.view"><Link className="button-ghost table-action rounded-full text-sky-400 hover:text-sky-300 font-mono text-xs" to={`/tickets?customer_id=${item.id}`} aria-label={`Ver tickets de ${code(item)}`}><Ticket size={13} aria-hidden="true" />Tickets</Link></Can></>}

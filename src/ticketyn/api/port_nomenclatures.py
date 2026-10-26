@@ -68,6 +68,21 @@ def delete_nomenclature(id: int, session: DBSession, request: Request):
     return Response(status_code=204)
 
 
+def normalized_port_names(session, names):
+    return list(session.scalars(text("SELECT lower(btrim(regexp_replace(value, '[[:space:]]+', ' ', 'g')) COLLATE \"C.utf8\") FROM unnest(CAST(:names AS text[])) AS value"), {'names': names}))
+
+
+def insert_ports(session, actor_id, device_id, rows):
+    """Insert classification + audit in the caller's single topology transaction."""
+    created = [DistributionPort(distribution_device_id=device_id, active=True, **row) for row in rows]
+    session.add_all(created)
+    session.flush()
+    for port in created:
+        record(session, actor_id, port, 'CREATE', flush=False)
+    session.flush()
+    return created
+
+
 def preview(session, payload):
     device = active_device(session, payload.distribution_device_id)
     nomenclature = get_or_404(session, PortNomenclature, payload.nomenclature_id)
@@ -76,7 +91,7 @@ def preview(session, payload):
     names = generated_names(nomenclature.prefix, payload.numbering_format, payload.positions,
                             payload.start, payload.start if payload.end is None else payload.end)
     # Use exactly the DB index expression, including its Unicode collation and whitespace rules.
-    keys = list(session.scalars(text("SELECT lower(btrim(regexp_replace(value, '[[:space:]]+', ' ', 'g')) COLLATE \"C.utf8\") FROM unnest(CAST(:names AS text[])) AS value"), {'names': names}))
+    keys = normalized_port_names(session, names)
     existing = session.execute(select(DistributionPort.id, DistributionPort.name, DistributionPort.active,
         normalized_name(DistributionPort.name).label('key')).where(DistributionPort.distribution_device_id == payload.distribution_device_id,
         normalized_name(DistributionPort.name).in_(keys))).mappings().all()
@@ -109,17 +124,10 @@ def create_ports(payload: PortGeneration, session: DBSession, request: Request):
             raise HTTPException(409, 'El rango contiene puertos existentes; no se creó ningún puerto')
         if checked['create_count'] == 0:
             return {'created': [], 'existing_count': checked['existing_count'], 'total': checked['total']}
-        created = []
-        for number, item in enumerate(checked['names'], payload.start):
-            if item['existing']: continue
-            port = DistributionPort(distribution_device_id=payload.distribution_device_id,
-                nomenclature_id=payload.nomenclature_id, numbering_format=payload.numbering_format,
-                number_components=[*payload.positions, number], name=item['name'], description=payload.description, active=True)
-            session.add(port); created.append(port)
-        session.flush()
-        for port in created:
-            record(session, request.state.principal.id, port, 'CREATE', flush=False)
-        session.flush()
+        rows = [dict(nomenclature_id=payload.nomenclature_id, numbering_format=payload.numbering_format,
+                     number_components=[*payload.positions, number], name=item['name'], description=payload.description)
+                for number, item in enumerate(checked['names'], payload.start) if not item['existing']]
+        created = insert_ports(session, request.state.principal.id, payload.distribution_device_id, rows)
         result = {'created': [port_response((port, 0)) for port in created], 'existing_count': checked['existing_count'], 'total': checked['total']}
     return result
 

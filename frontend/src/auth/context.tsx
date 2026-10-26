@@ -5,6 +5,7 @@ export interface Identity {
   password_change_required: boolean; operational_access: boolean
   permissions: string[]; role_id?: number
   expires_in: number; warning_seconds: number; role_revision: number
+  preferred_home_page?: string | null
 }
 export interface AuthState {
   identity: Identity

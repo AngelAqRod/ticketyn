@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, aggregate_order_by
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from ticketyn.api.crud import UNIQUE_ERRORS
-from ticketyn.models import Circuit, DistributionAudit, DistributionDevice, DistributionPort, Node, PortNomenclature
+from ticketyn.models import Circuit, DistributionAudit, DistributionDevice, DistributionPort, Node, PortNomenclature, DistributionDeviceTemplate
 
 TOPOLOGY_LOCK = 7808001
 ASSIGNMENT_FIELDS = ('node_id', 'distribution_device_id', 'distribution_port_id')
@@ -45,6 +45,8 @@ def distribution_write(session):
         constraint = getattr(getattr(error.orig, 'diag', None), 'constraint_name', '') or ''
         if constraint == 'uq_port_nomenclatures_prefix_ci':
             detail = 'Ya existe una nomenclatura con ese prefijo, incluso si está inactiva.'
+        elif constraint == 'uq_distribution_device_templates_name':
+            detail = 'Ya existe una plantilla con un nombre equivalente.'
         elif constraint in {'uq_distribution_devices_name_normalized', 'uq_distribution_ports_name_normalized'}:
             detail = 'Ya existe un nombre equivalente dentro del mismo nodo o equipo.'
         else:
@@ -112,6 +114,9 @@ def validate_circuit_distribution(session, values, item=None):
 
 
 def snapshot(item):
+    if isinstance(item, DistributionDeviceTemplate):
+        return {**{key: getattr(item, key) for key in ('name', 'manufacturer', 'description', 'active')},
+                'groups': [dict(nomenclature_id=g.nomenclature_id, **g.definition) for g in item.groups]}
     if isinstance(item, PortNomenclature):
         fields = ('name', 'prefix', 'formats', 'active')
     elif isinstance(item, DistributionDevice):
@@ -126,7 +131,7 @@ def snapshot(item):
 
 
 def record(session, actor_id, item, action, before=None, *, deleted=False, flush=True):
-    resource_type = 'NOMENCL' if isinstance(item, PortNomenclature) else 'DEVICE' if isinstance(item, DistributionDevice) else 'PORT' if isinstance(item, DistributionPort) else 'CIRCUIT'
+    resource_type = 'TEMPLATE' if isinstance(item, DistributionDeviceTemplate) else 'NOMENCL' if isinstance(item, PortNomenclature) else 'DEVICE' if isinstance(item, DistributionDevice) else 'PORT' if isinstance(item, DistributionPort) else 'CIRCUIT'
     after = None if deleted else snapshot(item)
     if before == after:
         return

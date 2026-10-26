@@ -25,11 +25,12 @@ afterAll(() => {
 const catalog={id:1,name:'NOC',active:true,created_at:'2026-01-01T12:00:00Z'}
 const ticket: InternalTicket={id:7,ticket_number:1,reference:'INT-0000001',title:'Energía en nodo central',description:'Sin energía comercial',sector_id:1,node_id:null,department_id:1,incident_type_id:1,responsible_id:null,provider_id:null,resolution:null,start_at:'2026-10-15T14:00:00Z',end_at:null,status:'OPEN',duration_seconds:null,created_at:'2026-10-15T14:05:00Z',updated_at:'2026-10-15T14:05:00Z',sector:catalog,node:null,department:catalog,incident_type:catalog,responsible:null,provider:null,related_count:0}
 function setup(path='/internal-tickets', overrides: Partial<typeof ticket> = {}) {
-  const current = {...ticket, ...overrides}
+  let current = {...ticket, ...overrides}
   const mock=vi.fn((url:string,init?:RequestInit)=>{
     const u=new URL(url,'http://test')
     if(u.pathname==='/health')return Promise.resolve(jsonResponse({status:'ok'}))
     if(u.pathname==='/api/system/version')return Promise.resolve(jsonResponse({version:'0.5.0'}))
+    if(u.pathname.endsWith('/close') && init?.method==='POST'){current={...current,status:'CLOSED',end_at:'2026-10-15T15:00:00Z',duration_seconds:3600};return Promise.resolve(jsonResponse(current))}
     if(init?.method==='POST'||init?.method==='PATCH')return Promise.resolve(jsonResponse({...current,...JSON.parse(String(init.body))},201))
     if(u.pathname.endsWith('/related'))return Promise.resolve(jsonResponse({total:0,items:[]}))
     if(u.pathname.endsWith('/updates'))return Promise.resolve(jsonResponse({items:[],next_cursor:null}))
@@ -43,6 +44,22 @@ function setup(path='/internal-tickets', overrides: Partial<typeof ticket> = {})
   return mock
 }
 describe('Tickets internos',()=>{
+  it('cierra desde cabecera sin campo de cliente y conserva la edición',async()=>{
+    const mock=setup('/internal-tickets/7')
+    const close=await screen.findByRole('button',{name:'Cerrar ticket'})
+    expect(close.nextElementSibling).toBe(screen.getByRole('link',{name:'Editar ticket interno'}))
+    expect(close.parentElement?.previousElementSibling).toBe(screen.getByRole('link',{name:'Volver a tickets internos'}))
+    expect(close).toHaveClass('text-emerald-300','bg-emerald-500/10')
+    fireEvent.click(close)
+    expect(screen.getByRole('dialog',{name:'Cerrar ticket interno'})).toBeVisible()
+    expect(screen.queryByLabelText('Resolución para el cliente — Opcional')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button',{name:'Confirmar cierre'}))
+    expect(await screen.findByText('Ticket cerrado correctamente.')).toBeVisible()
+    expect(screen.getByText('Cerrado')).toBeVisible()
+    expect(screen.queryByRole('button',{name:'Cerrar ticket'})).not.toBeInTheDocument()
+    expect(screen.getByRole('link',{name:'Editar ticket interno'})).toBeVisible()
+    expect(mock.mock.calls.filter(([path,init])=>path.endsWith('/close')&&init?.method==='POST')).toHaveLength(1)
+  })
   it('lista sin columnas de cliente/circuito y consulta filtros desde backend',async()=>{
     const mock=setup();const table=await screen.findByRole('table',{name:'Tickets internos'})
     expect(within(table).getByRole('link',{name:'INT-0000001'})).toHaveAttribute('href','/internal-tickets/7')
@@ -155,4 +172,19 @@ it('permite atribuir proveedor a un interno cerrado conservando estado y fin',as
   await waitFor(()=>expect(mock.mock.calls.some(([url,init])=>url==='/api/internal-tickets/7'&&init?.method==='PATCH')).toBe(true))
   const call=mock.mock.calls.find(([url,init])=>url==='/api/internal-tickets/7'&&init?.method==='PATCH')!
   expect(JSON.parse(String(call[1]!.body))).toMatchObject({provider_id:1,status:'CLOSED',end_at:'2026-10-15T16:00:00Z'})
+})
+
+it('sincroniza el estado de un ticket interno cerrado remotamente y detiene sus recomendaciones', async () => {
+  const mock = setup('/internal-tickets/7')
+  const original = mock.getMockImplementation()!
+  mock.mockImplementation((url, init) => {
+    if (url === '/api/internal-tickets/7') return Promise.resolve(jsonResponse({ ...ticket, status: 'CLOSED', end_at: '2026-10-25T12:00:00Z' }))
+    if (url.endsWith('/recommendations')) return Promise.resolve(jsonResponse({ ticket_id: 7, ticket_status: 'CLOSED',
+      stage_name: 'Ticket cerrado', reference_position_id: null, reference_position_name: null, stage_started_at: null,
+      elapsed_minutes: 0, has_active_ack: false, active_ack: null, can_acknowledge: false, recommendations: [] }))
+    return original(url, init)
+  })
+  await screen.findByText('Cerrado')
+  expect(mock.mock.calls.filter(([url]) => url === '/api/internal-tickets/7')).toHaveLength(2)
+  expect(mock.mock.calls.filter(([url]) => url.endsWith('/recommendations'))).toHaveLength(1)
 })

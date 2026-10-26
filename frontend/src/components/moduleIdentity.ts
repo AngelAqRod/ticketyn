@@ -8,6 +8,7 @@ export interface ModuleDefinition {
 }
 
 export const moduleIdentity: Omit<ModuleDefinition, 'number'>[] = [
+  { path: '/my-tickets', title: 'Mis tickets', group: 'Operación', theme: 'blue', badge: 'PERSONAL' },
   { path: '/', title: 'Dashboard', group: 'Operación', theme: 'cyan', badge: 'RESUMEN NOC' },
   { path: '/tickets', title: 'Tickets', group: 'Operación', theme: 'blue', badge: 'CLIENTES' },
   { path: '/internal-tickets', title: 'Tickets internos', group: 'Operación', theme: 'purple', badge: 'INFRAESTRUCTURA NOC' },

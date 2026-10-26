@@ -20,6 +20,9 @@ class DeviceCreate(InputSchema):
     name: Name
     description: Description | None = None
     # Creation is always active; only the dedicated status action may change it.
+    template_id: PositiveId | None = None
+    template_token: Annotated[str, Field(min_length=64, max_length=64)] | None = None
+
 
 
 class DeviceMove(InputSchema):

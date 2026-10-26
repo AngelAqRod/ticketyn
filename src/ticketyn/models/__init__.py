@@ -13,11 +13,12 @@ from ticketyn.models.ticket_update import TicketUpdate
 
 from ticketyn.models.node import Node
 from ticketyn.models.responsible import Responsible
-from ticketyn.models.position import Position
+from ticketyn.models.position import Position, PositionEscalationDestination
+from ticketyn.models.ack import TicketEscalationAck, InternalTicketEscalationAck
 
 from ticketyn.models.escalation import EscalationReason, TicketEscalation, EscalationAudit
 
-__all__ = ["EscalationAudit", "Position", "EscalationReason", "TicketEscalation", "Customer", "Circuit", "Sector", "Department", "IncidentType", "TicketNumberConfig", "Ticket", "Node", "Responsible", "TicketUpdate"]
+__all__ = ["EscalationAudit", "Position", "PositionEscalationDestination", "EscalationReason", "TicketEscalation", "TicketEscalationAck", "InternalTicketEscalationAck", "Customer", "Circuit", "Sector", "Department", "IncidentType", "TicketNumberConfig", "Ticket", "Node", "Responsible", "TicketUpdate"]
 
 from ticketyn.models.fms import Activation, ActivationNumberConfig, ActivationIntervention, CapacityChange, CircuitLifecycleOperation, DeactivationReason
 
@@ -38,3 +39,5 @@ from ticketyn.models.mail_jobs import MailProcessorControl, MailNotificationRequ
 from ticketyn.models.security import SecurityRole, SecurityPermission, SecurityRolePermission, SecurityConfig, SecurityAudit
 
 from ticketyn.models.distribution import PortNomenclature
+
+from .distribution import DistributionDeviceTemplate, DistributionDeviceTemplateGroup

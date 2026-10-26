@@ -28,6 +28,12 @@
   - Cerrar, reabrir o cancelar el ticket interno jamás altera el estado de los tickets de clientes vinculados.
 - **Numeración concurrente independiente:**
   - Esquema secuencial aislado del módulo de clientes, protegido contra colisiones mediante bloqueo de fila `SELECT ... FOR UPDATE` en `internal_ticket_number_configs`.
+- **Escalamientos inteligentes y reconocimiento ACK en Tickets Internos:**
+  - Aplica simétricamente el motor de recomendaciones por etapas, tiempos configurables del catálogo de puestos y reconocimientos ACK (`InternalTicketEscalationAck`).
+  - Endpoints dedicados: `/api/internal-tickets/{id}/recommendations`, `/api/internal-tickets/{id}/ack`, `/api/internal-tickets/{id}/ack/revoke`.
+  - El escalamiento interno registra `position_id` para evaluar recomendaciones de la etapa escalada.
+  - Al igual que en tickets de clientes, el escalamiento interno jamás modifica el responsable del ticket interno ni altera su estado.
+  - Al cerrar un ticket interno, los reconocimientos ACK activos concluyen automáticamente.
 
 ## Arquitectura y dependencias
 - **Componentes backend:** Endpoints en `src/ticketyn/api/` (`internal_tickets.py`, `internal_ticket_data.py`, `internal_ticket_exports.py`, `internal_ticket_reports.py`), modelo en `src/ticketyn/models/internal_ticket.py` (contiene `InternalTicket`, `InternalTicketUpdate`, `InternalEscalation`, `Provider`, `InternalIncidentType`), esquemas en `src/ticketyn/schemas/internal_ticket.py`.
@@ -56,3 +62,22 @@
 
 ## Mantenimiento
 Este documento debe actualizarse ante cualquier cambio en el modelo `InternalTicket`, adición de campos de infraestructura o modificaciones en la lógica de vinculación masiva con incidencias de clientes.
+
+
+## Rendimiento de recomendaciones y ACK
+
+- Retorno temprano para tickets cerrados: no calcula etapa, destinos ni ACK y no modifica historial. El endpoint conserva `ticket_status`; datos de etapa no aplicables son null y contador 0 en esa respuesta.
+- `TicketRecommendationNotice` recibe el estado de la ficha: actualización única cada 60 segundos tras completar la consulta, solo para el ticket abierto visible. Pausa en pestaña oculta, limpia al desmontar/cambiar de ticket y detiene el ciclo ante cierre remoto, sincronizando la ficha una vez.
+- Creación, edición y finalización de escalamientos, así como creación/retiro de ACK, invalidan inmediatamente la recomendación sin solicitudes superpuestas. ACK vigente no detiene ni reinicia la etapa y no necesita temporizadores por destino.
+- Consultas acotadas con LIMIT 1 para la etapa y carga conjunta de destinos, sin cargar grafos ORM operativos desde identidad/ACK. No hay vigilancia global ni nueva infraestructura.
+- Ver [auditoría SQL, pruebas y límites de reapertura remota](../escalation-recommendation-performance.md). Pruebas específicas en `tests/test_recommendation_performance.py` y `frontend/src/components/TicketRecommendationPolling.test.tsx`.
+
+
+## Cierre rápido desde la ficha
+
+- Acción adicional `Cerrar ticket` para OPEN con permiso de cierre; no sustituye la edición ni la reapertura.
+- `POST /api/internal-tickets/{id}/close`: `expected_updated_at` obligatorio; `end_at` omitido/null usa hora del servidor al confirmar, o fecha ISO con zona explícita. Resolución interna opcional; no acepta campos de cliente. No se crea ningún permiso ni migración.
+- Bloqueo de fila y revisión optimista: cambios concurrentes o ticket ya cerrado → 409, sin sobrescrituras. Se reutiliza la persistencia previa para estado/fecha/resoluciones y cierre de ACK, atómicamente. No crea ni finaliza escalamientos.
+- Fecha manual en America/Guatemala, validada y convertida explícitamente a UTC; no anterior a apertura ni futura en el cierre rápido. La edición tradicional conserva sus reglas.
+- `TicketQuickClose.tsx` compartido: precarga, envío solo de resoluciones cambiadas, cancelación, doble envío y actualización inmediata. Pruebas `tests/test_ticket_quick_close.py` y `frontend/src/components/TicketQuickClose.test.tsx`.
+- Contrato completo y validación: [cierre rápido](../quick-ticket-close.md).

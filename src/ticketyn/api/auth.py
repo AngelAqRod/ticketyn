@@ -73,6 +73,7 @@ def view(request, user=None, item=None):
             'password_change_required': user.temporary,
             'operational_access': bool(user.permissions) and not user.temporary,
             'role_id': user.role_id, 'permissions': sorted(user.permissions),
+            'preferred_home_page': user.preferred_home_page,
             'expires_in': max(0, user.idle_seconds - (request.app.state.security.clock() - item.last_activity)),
             'warning_seconds': 120}
 

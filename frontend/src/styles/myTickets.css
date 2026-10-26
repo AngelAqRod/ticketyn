@@ -1,0 +1,156 @@
+/* Ticketyn — Electric Blue 2.0 / Industrial NOC Rounded: Mis tickets */
+
+.my-tickets-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.my-tickets-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .my-tickets-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.my-tickets-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.875rem 1rem;
+  background: #0b1426;
+  border: 1px solid #1e2c4a;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: left;
+}
+
+.my-tickets-card:hover {
+  background: #0f1c35;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.15);
+}
+
+.my-tickets-card[data-active="true"] {
+  border-color: #38bdf8;
+  background: #0d1e3d;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+}
+
+.my-tickets-card--warning[data-has-items="true"] {
+  border-color: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
+}
+
+.my-tickets-card--warning[data-active="true"][data-has-items="true"] {
+  border-color: #f59e0b;
+  background: #1e1708;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.35);
+}
+
+.my-tickets-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono, monospace);
+}
+
+.my-tickets-card-value {
+  margin-top: 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #f8fafc;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.my-tickets-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--font-mono, monospace);
+}
+
+.my-tickets-type-badge--customer {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.my-tickets-type-badge--internal {
+  background: rgba(192, 132, 252, 0.12);
+  border: 1px solid rgba(192, 132, 252, 0.35);
+  color: #c084fc;
+}
+
+.my-tickets-rec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  animation: my-tickets-pulse 2s infinite ease-in-out;
+}
+
+@keyframes my-tickets-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.3);
+  }
+}
+
+.my-tickets-overdue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+}
+
+.my-tickets-controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.my-tickets-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}

@@ -4,6 +4,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Identity, String, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ticketyn.models.circuit import Circuit
 from ticketyn.models.responsible import Responsible
+from ticketyn.models.position import Position
 
 from ticketyn.db.base import Base
 
@@ -35,7 +36,10 @@ class Ticket(Base):
     department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), index=True)
     incident_type_id: Mapped[int] = mapped_column(ForeignKey("incident_types.id"), index=True)
     responsible_id: Mapped[int | None] = mapped_column(ForeignKey("responsibles.id"), index=True)
+    initial_position_id: Mapped[int | None] = mapped_column(ForeignKey("positions.id", ondelete="SET NULL"), index=True)
+    closed_seconds: Mapped[int] = mapped_column(server_default="0")
     responsible: Mapped[Responsible | None] = relationship(lazy="joined")
+    initial_position: Mapped["Position | None"] = relationship(foreign_keys=[initial_position_id], lazy="joined")
     circuit: Mapped[Circuit] = relationship(lazy="joined")
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -54,3 +58,4 @@ class Ticket(Base):
         return (self.end_at - self.start_at).total_seconds()
 
     escalations: Mapped[list["TicketEscalation"]] = relationship(back_populates="ticket", lazy="raise")
+    acks: Mapped[list["TicketEscalationAck"]] = relationship(back_populates="ticket", lazy="raise", passive_deletes="all")

@@ -1,3 +1,4 @@
+import { TicketQuickClose } from '../components/TicketQuickClose'
 import { operationalChoice } from '../lib/responsibles'
 import { Can, usePermissions } from '../auth/permissions'
 import { RelatedChanges } from '../components/RelatedChanges'
@@ -123,7 +124,7 @@ function useInternal(id: string | undefined) {
     return () => c.abort()
   }, [id, retry])
 
-  return { item, error, retry: () => setRetry(retry + 1) }
+  return { item, error, accept: setItem, retry: () => setRetry(retry + 1) }
 }
 
 /** VISTA 1: LISTADO DE TICKETS INTERNOS */
@@ -1110,10 +1111,11 @@ export function InternalTicketDetail() {
       />
     )
   }
-  return <InternalDetail key={result.item.id} ticket={result.item} />
+  return <InternalDetail key={result.item.id} ticket={result.item} onTicketStatusChange={result.retry} onClosed={result.accept} />
 }
 
-function InternalDetail({ ticket: t }: { ticket: InternalTicket }) {
+function InternalDetail({ ticket: t, onTicketStatusChange, onClosed }: { ticket: InternalTicket; onTicketStatusChange: () => void; onClosed: (ticket: InternalTicket) => void }) {
+  const [closedNotice, setClosedNotice] = useState(false)
   const [related, setRelated] = useState<{ total: number; items: Ticket[] } | null>(null)
   const [offset, setOffset] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -1184,16 +1186,21 @@ function InternalDetail({ ticket: t }: { ticket: InternalTicket }) {
           <Link className="button-secondary rounded-full" to="/internal-tickets">
             Volver a tickets internos
           </Link>
-          <Can anyOf={['internal_tickets.edit', 'internal_tickets.close']}>
-            <Link
-              className="button-primary rounded-full shadow-lg shadow-sky-500/25"
-              to={`/internal-tickets/${t.id}/edit`}
-            >
-              Editar ticket interno
-            </Link>
-          </Can>
+          <div className="flex max-w-full flex-wrap items-center gap-2" role="group" aria-label="Acciones del ticket">
+            <TicketQuickClose ticket={t} internal onClosed={closed => { onClosed(closed); setClosedNotice(true) }} />
+            <Can anyOf={['internal_tickets.edit', 'internal_tickets.close']}>
+              <Link
+                className="button-primary rounded-full shadow-lg shadow-sky-500/25"
+                to={`/internal-tickets/${t.id}/edit`}
+              >
+                Editar ticket interno
+              </Link>
+            </Can>
+          </div>
         </div>
       </div>
+
+      {closedNotice && <FeedbackMessage variant="success">Ticket cerrado correctamente.</FeedbackMessage>}
 
       {/* 2 COLUMNAS EN ESCRITORIO: DESCRIPCIÓN Y RESOLUCIÓN */}
       <div className="grid gap-5 md:grid-cols-2">
@@ -1376,10 +1383,10 @@ function InternalDetail({ ticket: t }: { ticket: InternalTicket }) {
       </Can>
 
       {/* ESCALAMIENTOS */}
-      <TicketEscalations ticketId={t.id} internal />
+      <TicketEscalations ticketId={t.id} internal ticketStatus={t.status} onTicketStatusChange={onTicketStatusChange} />
 
       {/* SEGUIMIENTO E INTERVENCIONES */}
-      <TicketFollowUp ticketId={t.id} internal />
+      <TicketFollowUp key={`${t.id}:${t.updated_at}`} ticketId={t.id} internal />
 
       {/* TICKETS DE CLIENTES RELACIONADOS */}
       <section className="p-5 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl space-y-4">

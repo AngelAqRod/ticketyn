@@ -15,6 +15,8 @@ from ticketyn.schemas.internal_ticket import InternalTicketCreate, InternalTicke
 from ticketyn.schemas.ticket_update import TicketUpdateResponse, TicketUpdatePage
 from ticketyn.schemas.escalation import EscalationCreate, EscalationResponse, EscalationEdit, EscalationFinish, EscalationAuditResponse
 from ticketyn.schemas.ticket_number_config import TicketNumberConfigResponse, TicketNumberConfigUpdate
+from ticketyn.schemas.ticket_close import TicketClose
+from ticketyn.api.ticket_close import close_ticket
 
 from pydantic import BaseModel
 
@@ -86,6 +88,12 @@ def patch(id: RootId, payload: InternalTicketPatch, session: DBSession, request:
     if item is not None:
         ticket_mutation(request.state.principal, 'internal_tickets', payload.model_dump(exclude_unset=True), item)
     return data.response(session, data.persist(session, payload.model_dump(exclude_unset=True), id))
+
+@router.post('/api/internal-tickets/{id}/close', response_model=InternalTicketResponse)
+def quick_close(id: RootId, payload: TicketClose, session: DBSession, request: Request):
+    ticket = close_ticket(session, InternalTicket, id, payload, request.state.principal, 'internal_tickets',
+                          lambda session, id, changes: data.persist(session, changes, id))
+    return data.response(session, ticket)
 
 @router.get('/api/internal-tickets/{id}/related', response_model=dict)
 def related(id: RootId, session: DBSession, limit: Annotated[int, Query(ge=1, le=200)] = 50, offset: Annotated[int, Query(ge=0)] = 0, request: Request = None):

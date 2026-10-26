@@ -1,3 +1,4 @@
+import { DeviceTemplateChoice, manualTemplate, templatePayload, templateReady, type TemplateChoice } from './DeviceTemplateChoice'
 import '../styles/distribution.css'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -43,6 +44,7 @@ export function DeviceFormModal({
   const id = useId()
   const dialogRef = useDistributionDialog(isOpen)
   const isEdit = Boolean(device)
+  const [template, setTemplate] = useState<TemplateChoice>(manualTemplate)
   const [name, setName] = useState('')
   const [nodeId, setNodeId] = useState('')
   const [description, setDescription] = useState('')
@@ -53,6 +55,7 @@ export function DeviceFormModal({
 
   useEffect(() => {
     if (isOpen) {
+      setTemplate(manualTemplate)
       setName(device?.name ?? '')
       setNodeId(device ? String(device.node_id) : '')
       setDescription(device?.description ?? '')
@@ -67,7 +70,7 @@ export function DeviceFormModal({
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (sending.current) return
+    if (sending.current || (!isEdit && !templateReady(template))) return
     setError(null)
     setInvalidFields([])
 
@@ -102,6 +105,7 @@ export function DeviceFormModal({
         onSaved(updated)
       } else {
         const created = await createDistributionDevice({
+          ...templatePayload(template),
           node_id: Number(nodeId),
           name: trimmedName,
           description: trimmedDesc ? description : null,
@@ -139,6 +143,7 @@ export function DeviceFormModal({
       </p>
 
       <form onSubmit={submit} className="mt-4 space-y-4" noValidate>
+        {!isEdit && <DeviceTemplateChoice value={template} onChange={setTemplate} disabled={saving} />}
         {!isEdit && (
           <FormField
             id={`${id}-node`}
@@ -211,7 +216,7 @@ export function DeviceFormModal({
           <button
             type="submit"
             className="button-primary button-primary--purple rounded-full"
-            disabled={saving}
+            disabled={saving || (!isEdit && !templateReady(template))}
           >
             {saving ? 'Guardando...' : isEdit ? 'Actualizar equipo' : 'Crear equipo'}
           </button>

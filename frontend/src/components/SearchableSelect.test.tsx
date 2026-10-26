@@ -24,6 +24,17 @@ describe('SearchableSelect', () => {
     expect(input).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
+  it('normaliza acentos y diacríticos al buscar coincidencias', () => {
+    render(<Example />)
+    const input = screen.getByRole('combobox', { name: 'Cliente' })
+    fireEvent.click(input)
+    fireEvent.change(input, { target: { value: 'historico' } })
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    expect(screen.getByRole('option', { name: /OLD — Histórico/ })).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'SEGUNDO' } })
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    expect(screen.getByRole('option', { name: /OTHER — Segundo cliente/ })).toBeInTheDocument()
+  })
   it('ArrowDown/ArrowUp recorren opciones activas y Enter selecciona sin enviar', () => {
     render(<Example />)
     const input = screen.getByRole('combobox')

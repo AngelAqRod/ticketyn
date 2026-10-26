@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import type { Ticket } from '../types/ticket'
 import { formatDate, formatTableDate, formatDuration } from '../lib/format'
 import { StatusBadge } from './StatusBadge'
+import { CircuitLink } from './CircuitLink'
 
 export function TicketTable({ tickets }: { tickets: Ticket[] }) {
   return <div className="panel table-surface overflow-hidden">
@@ -20,7 +21,7 @@ export function TicketTable({ tickets }: { tickets: Ticket[] }) {
                 <th scope="row" className="w-36 whitespace-nowrap text-primary"><Can permission="tickets.view" fallback={<span>{ticket.reference}</span>}><Link to={`/tickets/${ticket.id}`} className="record-code hover:underline underline-offset-4">{ticket.reference}</Link></Can><span className="mt-0.5 block max-w-44 truncate text-sm font-normal text-slate-400 font-sans" title={ticket.title}>{ticket.title}</span></th>
                 <td className="w-24"><StatusBadge status={ticket.status} /></td>
                 <td className="max-w-44 text-sm text-slate-300" title={ticket.customer ? `${ticket.customer.customer_code} — ${ticket.customer.name}` : undefined}>{ticket.customer ? <><span className="customer-code-badge">{ticket.customer.customer_code}</span><span className="block truncate text-slate-200 mt-0.5">{ticket.customer.name}</span></> : '—'}</td>
-                <td className="max-w-36 text-sm" title={ticket.circuit?.description}>{ticket.circuit ? <span className="circuit-badge">{ticket.circuit.circuit_code}</span> : '—'}</td>
+                <td className="max-w-36 text-sm" title={ticket.circuit?.description}>{ticket.circuit ? <span className="circuit-badge whitespace-nowrap"><CircuitLink id={ticket.circuit.id === ticket.circuit_id ? ticket.circuit_id : null}>{ticket.circuit.circuit_code}</CircuitLink></span> : '—'}</td>
                 <td className="max-w-28 text-sm text-slate-300">{ticket.node?.name ?? 'Sin asignar'}</td>
                 <td className="max-w-28 text-sm">{ticket.responsible ? <span className="font-mono font-medium text-amber-300/90">{ticket.responsible.name}</span> : <span className="text-slate-400">Sin asignar</span>}</td>
                 <td className="max-w-28 text-sm text-slate-300"><span className="line-clamp-2">{ticket.sector?.name ?? '—'}</span></td>

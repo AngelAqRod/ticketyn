@@ -55,7 +55,8 @@ const combo = (name: string) => screen.getByRole('combobox', { name })
 async function choose(name: string, value: string) { const control = combo(name); await waitFor(() => expect(control).toBeEnabled()); fireEvent.click(control); fireEvent.click(screen.getByRole('option', { name: value })) }
 async function openList() { render(<MemoryRouter><CatalogAdmin kind="circuits" /></MemoryRouter>); await screen.findByRole('table'); fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' })) }
 async function fillCreate() {
-  fireEvent.change(screen.getByLabelText(/^Cliente/), { target: { value: '1' } }); fireEvent.change(screen.getByLabelText(/^Código de circuito/), { target: { value: 'C-2' } }); fireEvent.change(screen.getByLabelText(/^Descripción/), { target: { value: 'Datos escritos' } }); fireEvent.change(screen.getByLabelText(/^Sector/), { target: { value: '1' } })
+  await choose('Cliente', 'CLIENTE — Cliente')
+  fireEvent.change(screen.getByLabelText(/^Código de circuito/), { target: { value: 'C-2' } }); fireEvent.change(screen.getByLabelText(/^Descripción/), { target: { value: 'Datos escritos' } }); fireEvent.change(screen.getByLabelText(/^Sector/), { target: { value: '1' } })
   await choose('Nodo', 'Nodo A')
 }
 function openEdit(item = circuit) {

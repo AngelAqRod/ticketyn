@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Identity, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ticketyn.db.base import Base
 from ticketyn.models.common import CommonFields
@@ -69,7 +69,7 @@ Index('uq_distribution_ports_name_normalized', DistributionPort.distribution_dev
 class DistributionAudit(Base):
     __tablename__ = 'distribution_audit'
     __table_args__ = (
-        CheckConstraint("resource_type IN ('DEVICE','PORT','CIRCUIT','NOMENCL')", name='resource_valid'),
+        CheckConstraint("resource_type IN ('DEVICE','PORT','CIRCUIT','NOMENCL','TEMPLATE')", name='resource_valid'),
         CheckConstraint("action IN ('CREATE','EDIT','MOVE','SET_ACTIVE','DELETE','ASSIGN')", name='action_valid'),
         CheckConstraint('resource_id > 0', name='resource_id_valid'),
         Index('ix_distribution_audit_resource', 'resource_type', 'resource_id', 'occurred_at'),
@@ -83,3 +83,31 @@ class DistributionAudit(Base):
     action: Mapped[str] = mapped_column(String(12))
     before: Mapped[dict | None] = mapped_column(JSONB)
     after: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class DistributionDeviceTemplate(CommonFields, Base):
+    __tablename__ = 'distribution_device_templates'
+    __table_args__ = (CheckConstraint("length(btrim(name)) > 0", name='name_valid'),)
+    name: Mapped[str] = mapped_column(String(255))
+    manufacturer: Mapped[str | None] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text)
+    groups: Mapped[list['DistributionDeviceTemplateGroup']] = relationship(
+        cascade='all, delete-orphan', order_by='DistributionDeviceTemplateGroup.position', lazy='selectin')
+
+
+Index('uq_distribution_device_templates_name', normalized_name(DistributionDeviceTemplate.name), unique=True)
+
+
+class DistributionDeviceTemplateGroup(Base):
+    __tablename__ = 'distribution_device_template_groups'
+    __table_args__ = (
+        UniqueConstraint('template_id', 'position'),
+        CheckConstraint('position >= 0 AND position < 16', name='position_valid'),
+        CheckConstraint("jsonb_typeof(definition) = 'object'", name='definition_valid'),
+    )
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey('distribution_device_templates.id', ondelete='CASCADE'))
+    position: Mapped[int] = mapped_column()
+    nomenclature_id: Mapped[int] = mapped_column(ForeignKey('port_nomenclatures.id', ondelete='RESTRICT'), index=True)
+    # Same integer/array representation as port classification; no fixed-width numeric truncation.
+    definition: Mapped[dict] = mapped_column(JSONB)

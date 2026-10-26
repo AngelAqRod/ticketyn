@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ticketyn.db.base import Base
 from ticketyn.models.common import CommonFields
 from ticketyn.models.responsible import Responsible
+from ticketyn.models.position import Position
 
 
 class EscalationReason(CommonFields, Base):
@@ -36,6 +37,7 @@ class TicketEscalation(Base):
     description: Mapped[str] = mapped_column(Text)
     legacy_destination: Mapped[bool] = mapped_column(Boolean, server_default='false')
     department_id: Mapped[int | None] = mapped_column(ForeignKey('departments.id'), index=True)
+    position_id: Mapped[int | None] = mapped_column(ForeignKey('positions.id', ondelete='SET NULL'), index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
@@ -44,6 +46,7 @@ class TicketEscalation(Base):
     ticket: Mapped['Ticket'] = relationship(back_populates='escalations', lazy='raise')
     requester: Mapped[Responsible | None] = relationship(foreign_keys=[requester_id], lazy='joined')
     recipient: Mapped[Responsible | None] = relationship(foreign_keys=[recipient_id], lazy='joined')
+    position: Mapped[Position | None] = relationship(foreign_keys=[position_id], lazy='joined')
     reason: Mapped[EscalationReason] = relationship(lazy='joined')
 
 

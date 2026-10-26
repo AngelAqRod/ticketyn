@@ -1,3 +1,4 @@
+import type { DeviceCreateInput } from '../types/distribution'
 import type { NamedCatalog, DistributionDevice, DistributionPort } from '../types/catalog'
 import { getJson, postJson, patchJson, deleteResource, ApiError } from './client'
 import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
@@ -47,10 +48,20 @@ export async function listTickets(
 
 export const getTicket = (id: number, signal?: AbortSignal) => getJson<Ticket>(`/api/tickets/${id}`, signal)
 export const updateTicket = (id: number, payload: Partial<TicketCreateInput>, signal?: AbortSignal) => patchJson<Ticket>(`/api/tickets/${id}`, payload, signal)
-export async function getTicketCatalogs(ticket: Ticket, signal?: AbortSignal) {
+type TicketCatalogs = {
+  customer: Customer; circuit: Circuit; sector: Sector; department: Department; incidentType: IncidentType
+  responsible: Responsible | null; node: Ticket['node']
+}
+export type TicketDetailCatalogs = Omit<TicketCatalogs, 'circuit'> & { circuit: Circuit | null }
+export function getTicketCatalogs(ticket: Ticket, signal: AbortSignal | undefined, allowUnavailableCircuit: true): Promise<TicketDetailCatalogs>
+export function getTicketCatalogs(ticket: Ticket, signal?: AbortSignal): Promise<TicketCatalogs>
+export async function getTicketCatalogs(ticket: Ticket, signal?: AbortSignal, allowUnavailableCircuit = false): Promise<TicketDetailCatalogs> {
   const [customer, circuit, sector, department, incidentType] = await Promise.all([
     getJson<Customer>(`/api/customers/${ticket.customer_id}`, signal),
-    getJson<Circuit>(`/api/circuits/${ticket.circuit_id}`, signal),
+    allowUnavailableCircuit && !ticket.circuit_id ? Promise.resolve(null) : getJson<Circuit>(`/api/circuits/${ticket.circuit_id}`, signal).catch(error => {
+      if (allowUnavailableCircuit && error instanceof ApiError && (error.status === 403 || error.status === 404)) return null
+      throw error
+    }),
     getJson<Sector>(`/api/sectors/${ticket.sector_id}`, signal),
     getJson<Department>(`/api/departments/${ticket.department_id}`, signal),
     getJson<IncidentType>(`/api/incident-types/${ticket.incident_type_id}`, signal),
@@ -69,7 +80,7 @@ export const listDistributionDevices = (nodeId: number, signal?: AbortSignal, in
   catalogList<DistributionDevice>('/api/distribution-devices', signal, { node_id: String(nodeId) }, includeInactive)
 export const listDistributionPorts = (deviceId: number, signal?: AbortSignal, includeInactive = false) =>
   catalogList<DistributionPort>('/api/distribution-ports', signal, { distribution_device_id: String(deviceId) }, includeInactive)
-export const createDistributionDevice = (payload: { node_id: number; name: string; description?: string | null }, signal?: AbortSignal) =>
+export const createDistributionDevice = (payload: DeviceCreateInput, signal?: AbortSignal) =>
   postJson<DistributionDevice>('/api/distribution-devices', payload, signal)
 
 export const createSector = (payload: NamedCatalogInput, signal?: AbortSignal) => postJson<Sector>('/api/sectors', payload, signal)

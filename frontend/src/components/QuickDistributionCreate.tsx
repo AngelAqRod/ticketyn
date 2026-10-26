@@ -1,3 +1,4 @@
+import { DeviceTemplateChoice, manualTemplate, templatePayload, templateReady, type TemplateChoice } from './DeviceTemplateChoice'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -25,6 +26,7 @@ const message = (cause: unknown) => cause instanceof Error ? cause.message : 'No
 export function QuickDistributionCreate({ kind, parentId, parentName, onCreated, onCancel }: Props) {
   const access = usePermissions(), id = useId(), dialog = useRef<HTMLDialogElement>(null)
   const sending = useRef(false), request = useRef<AbortController | null>(null)
+  const [template, setTemplate] = useState<TemplateChoice>(manualTemplate)
   const [name, setName] = useState(''), [description, setDescription] = useState('')
   const [rows, setRows] = useState<Resource[]>([]), [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null), [retry, setRetry] = useState(0)
@@ -52,7 +54,7 @@ export function QuickDistributionCreate({ kind, parentId, parentName, onCreated,
   async function submit(event: FormEvent) {
     // Portals still bubble through React: never submit the enclosing circuit.
     event.preventDefault(); event.stopPropagation()
-    if (sending.current || loading || loadError || !canCreate) return
+    if (!templateReady(template) || sending.current || loading || loadError || !canCreate) return
     setError(null); setFields([])
     if (!name.trim() || Array.from(name.trim()).length > 255 || Array.from(description).length > 10000) {
       setError('Indica un nombre de hasta 255 caracteres y una descripción de hasta 10000 caracteres.'); setFields(['name', 'description']); return
@@ -68,7 +70,7 @@ export function QuickDistributionCreate({ kind, parentId, parentName, onCreated,
         setError(`Ya existe un ${noun} con ese nombre en este ${device ? 'nodo' : 'equipo'}, incluso si está inactivo.`); setFields(['name']); return
       }
       const content = { name: name.trim(), description: description.trim() ? description : null }
-      const created = await createDistributionDevice({ ...content, node_id: parentId }, controller.signal)
+      const created = await createDistributionDevice({ ...content, node_id: parentId, ...templatePayload(template) }, controller.signal)
       if (!controller.signal.aborted) onCreated(created)
     } catch (cause) {
       if (!controller.signal.aborted) {
@@ -92,6 +94,7 @@ export function QuickDistributionCreate({ kind, parentId, parentName, onCreated,
     <form aria-label={`Crear ${noun} de distribución`} onSubmit={submit} noValidate>
       <fieldset disabled={saving || loading || Boolean(loadError) || !canCreate} className="space-y-3">
         <legend className="sr-only">Datos del {noun}</legend>
+        <DeviceTemplateChoice value={template} onChange={setTemplate} disabled={saving} />
         <FormField id={`${id}-name`} label="Nombre" required invalid={fields.includes('name')} describedBy={error ? `${id}-error` : undefined}>
           <input autoFocus id={`${id}-name`} required className="form-input" value={name} onChange={event => setName(event.target.value)} />
           <p className="mt-1 text-xs text-slate-300">Hasta 255 caracteres.</p>
@@ -104,7 +107,7 @@ export function QuickDistributionCreate({ kind, parentId, parentName, onCreated,
       {error && <FeedbackMessage id={`${id}-error`} variant="error" className="mt-3">{error}</FeedbackMessage>}
       <div className="mt-5 flex justify-end gap-3">
         <button type="button" className="button-secondary rounded-full" disabled={saving} onClick={onCancel}>Cancelar</button>
-        <button type="submit" className="button-primary button-primary--blue rounded-full" disabled={saving || loading || Boolean(loadError) || !canCreate}>{saving ? 'Creando...' : 'Crear'}</button>
+        <button type="submit" className="button-primary button-primary--blue rounded-full" disabled={!templateReady(template) || saving || loading || Boolean(loadError) || !canCreate}>{saving ? 'Creando...' : 'Crear'}</button>
       </div>
     </form>
   </dialog>, document.body)

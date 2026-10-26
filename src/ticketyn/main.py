@@ -125,6 +125,12 @@ def create_app(*, start_notifications=True, notification_engine=None, security_s
     app.include_router(reports_router)
     from ticketyn.api.port_nomenclatures import router as nomenclature_router
     app.include_router(nomenclature_router)
+    from ticketyn.api.device_templates import router as template_router
+    app.include_router(template_router)
+    from ticketyn.api.recommendations import router as recommendations_router
+    app.include_router(recommendations_router)
+    from ticketyn.api.my_tickets import router as my_tickets_router
+    app.include_router(my_tickets_router)
     from ticketyn.security.routes import validate_coverage
     validate_coverage(app)
     return app

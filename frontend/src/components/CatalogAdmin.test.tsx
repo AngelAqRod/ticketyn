@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '../test/render'
+import { act, fireEvent, render, screen, waitFor, within } from '../test/render'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 // Authentication is exercised in auth/AuthGate.test.tsx; these tests isolate operational routing.
@@ -115,13 +115,19 @@ describe('administración de catálogos', () => {
     expect(mock).toHaveBeenCalledWith(`/api/${resource}?include_inactive=true&limit=200&offset=0`, expect.any(Object))
     fireEvent.click(screen.getByRole('button', { name: `Nuevo ${singular}` }))
     if (resource === 'customers' || resource === 'circuits') fireEvent.change(field(resource === 'customers' ? 'Código de cliente' : 'Código de circuito'), { target: { value: 'MANUAL-NEW' } })
-    if (resource === 'circuits') { fireEvent.click(screen.getByRole('combobox', { name: 'Nodo' })); fireEvent.click(screen.getByRole('listbox', { name: 'Nodo' }).querySelector('[role=option]')!); fireEvent.change(field('Cliente'), { target: { value: '2' } }); fireEvent.change(field('Sector'), { target: { value: '1' } }) }
+    if (resource === 'circuits') {
+      fireEvent.click(screen.getByRole('combobox', { name: 'Nodo' }));
+      fireEvent.click(screen.getByRole('listbox', { name: 'Nodo' }).querySelector('[role=option]')!);
+      fireEvent.click(screen.getByRole('combobox', { name: 'Cliente' }));
+      fireEvent.click(screen.getByRole('listbox', { name: 'Cliente' }).querySelector('[role=option]')!);
+      fireEvent.change(field('Sector'), { target: { value: '1' } });
+    }
     fireEvent.change(field(resource === 'circuits' ? 'Descripción' : 'Nombre'), { target: { value: 'Nuevo registro' } })
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     await screen.findByText('Registro creado correctamente.')
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
-    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 2, active: true, node_id: 1 } : { name: 'Nuevo registro', active: true }
+    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 1, active: true, node_id: 1 } : { name: 'Nuevo registro', active: true }
     expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null, operational_selectable: true } : resource === 'circuits' ? { ...expected, sector_id: 1, cpe_management_ip: null, cpe_model_id: null, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
@@ -235,7 +241,7 @@ describe('administración de catálogos', () => {
     const pending = new Promise<Response>((resolve) => { finish = resolve })
     const mock = mockApi({ write: () => pending }); open('/circuits'); await screen.findByRole('table')
     fireEvent.click(screen.getByRole('button', { name: 'Editar LINK-A' }))
-    expect(field('Cliente')).toHaveValue('2')
+    expect(field('Cliente')).toHaveValue('CUS-B — Empresa Beta')
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     expect(screen.getByRole('button', { name: 'Guardando...' })).toBeDisabled()
     fireEvent.submit(screen.getByRole('form', { name: 'Editar circuito' }))
@@ -300,7 +306,9 @@ it('crea Nodo desde CircuitForm sin guardar Circuito ni perder sus datos', async
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
     fireEvent.change(field('Código de circuito'), { target: { value: 'MANUAL' } })
     fireEvent.change(field('Descripción'), { target: { value: 'Escrito antes del nodo' } })
-    fireEvent.change(field('Cliente'), { target: { value: '1' } }); fireEvent.change(field('Sector'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Cliente' }));
+    fireEvent.click(screen.getByRole('listbox', { name: 'Cliente' }).querySelector('[role=option]')!);
+    fireEvent.change(field('Sector'), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo nodo' }))
     fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: 'Nodo creado' } })
     const form = screen.getByRole('form', { name: 'Crear nodo rápido' })
@@ -308,7 +316,7 @@ it('crea Nodo desde CircuitForm sin guardar Circuito ni perder sus datos', async
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(field('Código de circuito')).toHaveValue('MANUAL')
     expect(field('Descripción')).toHaveValue('Escrito antes del nodo')
-    expect(field('Cliente')).toHaveValue('1')
+    expect(field('Cliente')).toHaveValue('CUS-A — Empresa Alfa')
     expect(screen.getByRole('combobox', { name: 'Nodo' })).toHaveValue('Nodo creado')
     expect(writes(mock)).toHaveLength(1)
     expect(writes(mock)[0][0]).toBe('/api/nodes')
@@ -407,4 +415,92 @@ it.each([false, true])('revela el formulario solo al abrir Nuevo/Editar y respet
     fireEvent.click(screen.getByRole('button', { name: 'Editar CUS-A' }))
     expect(scroll).toHaveBeenCalledTimes(2)
   } finally { HTMLElement.prototype.scrollIntoView = oldScroll }
+})
+
+describe('Selector de clientes con búsqueda en Circuitos', () => {
+  it('permite buscar clientes por código, nombre parcial y acentos normalizados', async () => {
+    mockApi(); open('/circuits'); await screen.findByRole('table')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
+    const combo = screen.getByRole('combobox', { name: 'Cliente' })
+    expect(combo).toHaveAttribute('placeholder', 'Selecciona un cliente')
+
+    // Búsqueda por código
+    fireEvent.click(combo)
+    const listbox = () => screen.getByRole('listbox', { name: 'Cliente' })
+    fireEvent.change(combo, { target: { value: 'CUS-A' } })
+    expect(within(listbox()).getAllByRole('option')).toHaveLength(1)
+    expect(within(listbox()).getByRole('option', { name: 'CUS-A — Empresa Alfa' })).toBeInTheDocument()
+
+    // Búsqueda parcial por nombre ignorando mayúsculas y acentos
+    fireEvent.change(combo, { target: { value: 'álfa' } })
+    expect(within(listbox()).getAllByRole('option')).toHaveLength(1)
+    expect(within(listbox()).getByRole('option', { name: 'CUS-A — Empresa Alfa' })).toBeInTheDocument()
+
+    // Búsqueda sin coincidencias muestra mensaje de estado vacío
+    fireEvent.change(combo, { target: { value: 'inexistente-xyz' } })
+    expect(within(listbox()).queryAllByRole('option')).toHaveLength(0)
+    expect(screen.getByText('No se encontraron clientes.')).toBeInTheDocument()
+
+    // Limpiar búsqueda restaura la lista de opciones
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }))
+    expect(within(listbox()).getAllByRole('option')).toHaveLength(1)
+  })
+
+  it('permite seleccionar con teclado o ratón y valida obligatoriedad al guardar', async () => {
+    const mock = mockApi(); open('/circuits'); await screen.findByRole('table')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo circuito' }))
+    fireEvent.change(field('Código de circuito'), { target: { value: 'CIR-KEY' } })
+    fireEvent.change(field('Descripción'), { target: { value: 'Circuito con teclado' } })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Nodo' }))
+    fireEvent.click(screen.getByRole('listbox', { name: 'Nodo' }).querySelector('[role=option]')!)
+    fireEvent.change(field('Sector'), { target: { value: '1' } })
+
+    // Intentar guardar sin cliente debe fallar con validación
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('Completa los campos obligatorios antes de guardar.')
+    const combo = screen.getByRole('combobox', { name: 'Cliente' })
+    expect(combo).toHaveAttribute('aria-invalid', 'true')
+
+    // Seleccionar cliente con teclado (ArrowDown + Enter)
+    fireEvent.click(combo)
+    fireEvent.keyDown(combo, { key: 'ArrowDown' })
+    fireEvent.keyDown(combo, { key: 'Enter' })
+    expect(combo).toHaveValue('CUS-A — Empresa Alfa')
+
+    // Guardar exitosamente con customer_id: 1
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('Registro creado correctamente.')
+    const lastWrite = writes(mock)[0]
+    expect(lastWrite[0]).toBe('/api/circuits')
+    expect(JSON.parse(String(lastWrite[1]?.body))).toMatchObject({
+      circuit_code: 'CIR-KEY',
+      customer_id: 1,
+    })
+  })
+
+  it('en edición de circuito muestra cliente actual y no lo borra al escribir o limpiar búsqueda', async () => {
+    mockApi(); open('/circuits'); await screen.findByRole('table')
+    fireEvent.click(screen.getByRole('button', { name: 'Editar LINK-A' }))
+    const combo = screen.getByRole('combobox', { name: 'Cliente' })
+    // Cliente asociado a LINK-A es CUS-B — Empresa Beta (inactivo)
+    expect(combo).toHaveValue('CUS-B — Empresa Beta')
+
+    // Al buscar otro cliente, el valor previo se preserva si se cancela con Escape
+    fireEvent.click(combo)
+    fireEvent.change(combo, { target: { value: 'Alfa' } })
+    fireEvent.keyDown(combo, { key: 'Escape' })
+    expect(combo).toHaveValue('CUS-B — Empresa Beta')
+
+    // Escribir y usar "Limpiar búsqueda" limpia el filtro de búsqueda, manteniendo la selección activa
+    fireEvent.click(combo)
+    fireEvent.change(combo, { target: { value: 'Alfa' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }))
+    // Al cerrar con Escape, se confirma que el cliente sigue siendo CUS-B — Empresa Beta
+    fireEvent.keyDown(combo, { key: 'Escape' })
+    expect(combo).toHaveValue('CUS-B — Empresa Beta')
+
+    // Solo el botón "Limpiar Cliente" desasocia la selección
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar Cliente' }))
+    expect(combo).toHaveValue('')
+  })
 })

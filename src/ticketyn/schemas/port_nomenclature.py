@@ -32,17 +32,12 @@ class NomenclatureResponse(ResponseSchema):
     formats: list[NumberFormat]
 
 
-class PortGeneration(InputSchema):
-    nullable_fields = {'description', 'preview_token'}
-    distribution_device_id: PositiveId
+class PortNumbering(InputSchema):
     nomenclature_id: PositiveId
     numbering_format: NumberFormat
     positions: list[Number] = Field(default_factory=list, max_length=3)
     start: Number
     end: Number | None = None
-    mode: Literal['complete', 'missing'] = 'complete'
-    description: Annotated[str, Field(max_length=10000)] | None = None
-    preview_token: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode='after')
     def valid_range(self):
@@ -52,6 +47,14 @@ class PortGeneration(InputSchema):
         if len(self.positions) != self.numbering_format.count('/'):
             raise ValueError('Las posiciones no corresponden al formato numérico')
         return self
+
+
+class PortGeneration(PortNumbering):
+    nullable_fields = {'description', 'preview_token'}
+    distribution_device_id: PositiveId
+    mode: Literal['complete', 'missing'] = 'complete'
+    description: Annotated[str, Field(max_length=10000)] | None = None
+    preview_token: str | None = Field(default=None, max_length=64)
 
 
 from pydantic import BaseModel

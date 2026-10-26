@@ -70,3 +70,26 @@ Este documento debe actualizarse ante cualquier incorporación de nuevos catálo
 - El prefijo es único sin distinguir mayúsculas. Un registro activo exige formatos; prefijos referenciados y registros referenciados no se cambian/eliminan físicamente. Desactivar conserva puertos y asociaciones.
 - Excepción de lectura al catálogo general: Auditor tiene `catalogs.port_nomenclatures.view`. Admin/Superadmin administran; Operador solo lookup y creación de puertos con su permiso operativo existente. No se conceden mutaciones de catálogo por permisos operativos.
 - Backend: `src/ticketyn/api/port_nomenclatures.py`, `src/ticketyn/models/distribution.py`, `src/ticketyn/schemas/port_nomenclature.py`. Ver [contratos y pruebas](../port-nomenclatures-v0.8.0.md).
+
+
+## Plantillas de equipos de distribución
+
+- Administración → Catálogos → Plantillas de equipos, `DeviceTemplateAdmin.tsx` y `/api/distribution-device-templates`; nombre/modelo, fabricante informativo opcional, descripción, estado y grupos que referencian exclusivamente nomenclaturas existentes.
+- Máximo 16 grupos y 256 puertos por plantilla; formatos y generación compartidos con los puertos existentes. Vista previa en backend, colisiones entre grupos rechazadas y referencias inactivas preservadas pero bloqueadas para nuevos equipos.
+- `DeviceTemplateChoice.tsx` integra creación manual o desde plantilla en el modal de equipos y el alta rápida desde Circuitos. POST `/api/distribution-devices` admite `template_id`/`template_token`: equipo, puertos y bitácora se confirman en una sola transacción. No sincroniza equipos anteriores ni altera FMS.
+- Permisos `catalogs.distribution_device_templates.{view,lookup,create,edit}`; Admin/Superadmin administran, los creadores de equipos pueden aplicar definiciones mediante lectura contextual sin administrar catálogos.
+- Migración aditiva `0039_device_templates` → `0038_port_classification`; ver [contratos, límites y pruebas](../distribution-device-templates.md). Backend en `api/device_templates.py`, modelos en `models/distribution.py`, esquemas en `schemas/device_template.py`.
+
+## Catálogo de puestos: «Escala a»
+
+- **Configuración opcional:** Cada puesto puede definir cero, uno o varios puestos destino a los que se recomienda escalar.
+- **Modalidades de tiempo:**
+  - `GENERAL` (predeterminado): Un único umbral en minutos aplicable simultáneamente a todos los destinos configurados (`general_escalation_time_minutes`).
+  - `INDIVIDUAL`: Cada puesto destino define su propio umbral en minutos (`PositionEscalationDestination.time_minutes`).
+- **Validaciones e invariantes:**
+  - Tiempos en minutos enteros positivos (>= 1).
+  - Prohibido auto-escalamiento (`target_position_id != position_id`).
+  - Detección de ciclos mediante análisis de alcanzabilidad (BFS): no se permiten configuraciones que generen dependencias circulares entre puestos.
+  - Destinos inactivos rechazados para nuevas configuraciones; referencias existentes preservadas.
+  - La desactivación lógica de un puesto o la modificación de destinos no altera asignaciones históricas ni tickets anteriores.
+- **Persistencia:** Tabla `position_escalation_destinations` con clave foránea a `positions` (cascada de eliminación en relación de configuración) y campos `escalation_mode`, `general_escalation_time_minutes` en `positions`. Migración `0040_escalation_recommend_ack`.

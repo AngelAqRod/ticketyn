@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ticketyn.db.base import Base
 from ticketyn.models.common import CommonFields
 from ticketyn.models.responsible import Responsible
+from ticketyn.models.position import Position
 from ticketyn.models.escalation import EscalationReason
 
 class InternalIncidentType(CommonFields, Base):
@@ -43,7 +44,10 @@ class InternalTicket(Base):
     incident_type_id: Mapped[int] = mapped_column(ForeignKey('internal_incident_types.id'), index=True)
     provider_id: Mapped[int | None] = mapped_column(ForeignKey('providers.id'), index=True)
     responsible_id: Mapped[int | None] = mapped_column(ForeignKey('responsibles.id'), index=True)
+    initial_position_id: Mapped[int | None] = mapped_column(ForeignKey('positions.id', ondelete='SET NULL'), index=True)
+    closed_seconds: Mapped[int] = mapped_column(server_default=text('0'))
     responsible: Mapped[Responsible | None] = relationship(lazy='joined')
+    initial_position: Mapped[Position | None] = relationship(foreign_keys=[initial_position_id], lazy='joined')
     sector: Mapped['Sector'] = relationship(lazy='joined')
     node: Mapped['Node | None'] = relationship(lazy='joined')
     department: Mapped['Department'] = relationship(lazy='joined')
@@ -57,6 +61,7 @@ class InternalTicket(Base):
     @property
     def duration_seconds(self):
         return None if self.end_at is None else (self.end_at - self.start_at).total_seconds()
+    acks: Mapped[list['InternalTicketEscalationAck']] = relationship(back_populates='ticket', lazy='raise', passive_deletes='all')
 
 class InternalEscalation(Base):
     __tablename__ = 'internal_escalations'
@@ -72,6 +77,7 @@ class InternalEscalation(Base):
     description: Mapped[str] = mapped_column(Text)
     legacy_destination: Mapped[bool] = mapped_column(server_default=text('false'))
     department_id: Mapped[int | None] = mapped_column(ForeignKey('departments.id'))
+    position_id: Mapped[int | None] = mapped_column(ForeignKey('positions.id', ondelete='SET NULL'), index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
@@ -79,6 +85,7 @@ class InternalEscalation(Base):
     status: Mapped[str] = mapped_column(String(8), server_default=text("'ACTIVE'"))
     requester: Mapped[Responsible | None] = relationship(foreign_keys=[requester_id], lazy='joined')
     recipient: Mapped[Responsible | None] = relationship(foreign_keys=[recipient_id], lazy='joined')
+    position: Mapped[Position | None] = relationship(foreign_keys=[position_id], lazy='joined')
     reason: Mapped[EscalationReason] = relationship(lazy='joined')
 
 class InternalEscalationAudit(Base):

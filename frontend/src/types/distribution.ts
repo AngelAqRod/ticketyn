@@ -37,6 +37,8 @@ export interface DeviceCreateInput {
   node_id: number
   name: string
   description?: string | null
+  template_id?: number
+  template_token?: string
 }
 
 export type PortCreateInput = import('../api/portNomenclatures').PortGeneration

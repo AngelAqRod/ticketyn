@@ -10,6 +10,8 @@ from ticketyn.api import ticket_data
 from ticketyn.api.crud import DBSession, get_or_404
 from ticketyn.models import Ticket
 from ticketyn.schemas.ticket import TicketCreate, TicketFilters, TicketListResponse, TicketResponse, TicketStats, TicketUpdate
+from ticketyn.schemas.ticket_close import CustomerTicketClose
+from ticketyn.api.ticket_close import close_ticket
 
 router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 
@@ -48,4 +50,10 @@ def patch_ticket(id: Annotated[int, Path(gt=0)], payload: TicketUpdate, session:
     if item is not None:
         ticket_mutation(request.state.principal, 'tickets', payload.model_dump(exclude_unset=True), item)
     ticket = ticket_data.patch_ticket(session, id, payload.model_dump(exclude_unset=True))
+    return ticket_data.get_ticket(session, ticket.id)
+
+
+@router.post("/{id}/close", response_model=TicketListResponse)
+def quick_close(id: Annotated[int, Path(gt=0)], payload: CustomerTicketClose, session: DBSession, request: Request):
+    ticket = close_ticket(session, Ticket, id, payload, request.state.principal, 'tickets', ticket_data.patch_ticket)
     return ticket_data.get_ticket(session, ticket.id)

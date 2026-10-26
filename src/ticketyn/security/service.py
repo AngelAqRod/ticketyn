@@ -1,6 +1,7 @@
 """Transactional security mutations. Callers commit; audit failures roll back changes."""
 from dataclasses import dataclass
 from sqlalchemy import select, func, literal
+from sqlalchemy.orm import lazyload
 from sqlalchemy.dialects.postgresql import insert
 from fastapi import HTTPException
 from ticketyn.models import Responsible
@@ -19,6 +20,7 @@ class Principal:
     role_revision: int
     role_id: int = 0
     permissions: frozenset[str] = frozenset()
+    preferred_home_page: str = 'DASHBOARD'
 
 
 def seed_foundation(session):
@@ -46,7 +48,7 @@ def audit(session, event, target_id=None, actor_id=None, source='HTTP', success=
 
 
 def principal(session, account_id):
-    row = session.execute(select(Responsible, SecurityRole).join(SecurityRole, Responsible.security_role_id == SecurityRole.id).where(Responsible.id == account_id)).first()
+    row = session.execute(select(Responsible, SecurityRole).join(SecurityRole, Responsible.security_role_id == SecurityRole.id).where(Responsible.id == account_id).options(lazyload('*'))).first()
     if row is None:
         return None
     account, role = row
@@ -56,7 +58,7 @@ def principal(session, account_id):
     if config is None:
         return None
     from ticketyn.security.roles import effective_permissions
-    return Principal(account.id, account.username, account.name, role.code, account.access_revision, account.password_change_required, config.idle_minutes * 60, role.revision, role.id, effective_permissions(session, role))
+    return Principal(account.id, account.username, account.name, role.code, account.access_revision, account.password_change_required, config.idle_minutes * 60, role.revision, role.id, effective_permissions(session, role), account.preferred_home_page or 'DASHBOARD')
 
 
 def ensure_not_last_superadmin(session, item):

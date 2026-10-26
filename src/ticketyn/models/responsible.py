@@ -1,5 +1,5 @@
 from sqlalchemy import Index, func, Boolean, BigInteger, false, true
-from sqlalchemy import String, ForeignKey, ForeignKeyConstraint, CheckConstraint
+from sqlalchemy import String, ForeignKey, ForeignKeyConstraint, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ticketyn.db.base import Base
@@ -10,6 +10,7 @@ class Responsible(CommonFields, Base):
     __tablename__ = "responsibles"
 
     __table_args__ = (
+        CheckConstraint("preferred_home_page IN ('DASHBOARD', 'MY_TICKETS')", name='preferred_home_page_valid'),
         ForeignKeyConstraint(['position_id', 'department_id'], ['positions.id', 'positions.department_id'], name='fk_responsibles_position_department'),
         CheckConstraint('position_id IS NULL OR department_id IS NOT NULL', name='position_department'),
         CheckConstraint('NOT access_granted OR (username IS NOT NULL AND password_hash IS NOT NULL AND security_role_id IS NOT NULL)', name='access_complete'),
@@ -29,6 +30,8 @@ class Responsible(CommonFields, Base):
     security_role_id: Mapped[int | None] = mapped_column(ForeignKey('security_roles.id', ondelete='RESTRICT'), index=True)
     password_change_required: Mapped[bool] = mapped_column(Boolean, server_default=false())
     access_revision: Mapped[int] = mapped_column(BigInteger, server_default='0')
+
+    preferred_home_page: Mapped[str] = mapped_column(String(20), server_default=text("'DASHBOARD'"))
 
     attention_level: Mapped[str | None] = mapped_column(String(100))
 

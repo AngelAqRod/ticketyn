@@ -70,6 +70,10 @@ def create_ticket(session: Session, values: dict) -> Ticket:
         values['sector_id'] = resolve_sector(session, circuit, values.get('sector_id'))
         config = locked_number_config(session)
         validate_ticket_values(session, values, set(RELATED_MODELS) | {"responsible_id"})
+        if values.get("responsible_id"):
+            resp = session.scalar(select(Responsible).where(Responsible.id == values["responsible_id"]))
+            if resp and resp.position_id:
+                values["initial_position_id"] = resp.position_id
         if config.next_number >= 2147483647:
             raise HTTPException(status_code=409, detail="Se agotó el rango de numeración")
         ticket = Ticket(
@@ -119,6 +123,25 @@ def patch_ticket(session: Session, id: int, changes: dict) -> Ticket:
         validate_ticket_values(session, {**current, **changes}, changed_relations)
         if "resolution" in changes and changes["resolution"] != ticket.resolution:
             record_resolution_change(session, ticket, ticket.resolution, changes["resolution"])
+        if "status" in changes and changes["status"] != ticket.status:
+            if ticket.status == "CLOSED" and changes["status"] == "OPEN":
+                reopened_at = datetime.now(timezone.utc)
+                closed_from = ticket.end_at or ticket.updated_at
+                if closed_from:
+                    closed_duration = (reopened_at - closed_from).total_seconds()
+                    if closed_duration > 0:
+                        ticket.closed_seconds += int(closed_duration)
+            elif ticket.status == "OPEN" and changes["status"] == "CLOSED":
+                from ticketyn.models.ack import TicketEscalationAck
+                acks = session.scalars(select(TicketEscalationAck).where(TicketEscalationAck.ticket_id == ticket.id, TicketEscalationAck.active == True)).all()
+                for ack in acks:
+                    ack.active = False
+                    ack.revoked_reason = "Cierre de ticket"
+                    ack.revoked_at = datetime.now(timezone.utc)
+        if "responsible_id" in changes and changes["responsible_id"] and not ticket.initial_position_id:
+            resp = session.scalar(select(Responsible).where(Responsible.id == changes["responsible_id"]))
+            if resp and resp.position_id:
+                ticket.initial_position_id = resp.position_id
         for field, value in changes.items():
             setattr(ticket, field, value)
         return save_item(session, ticket)

@@ -39,6 +39,10 @@ def persist(session, values, id=None):
                 selectable(related)
             if not related.active: raise HTTPException(422, f'{model.__name__} está inactivo')
         if ticket is None:
+            if values.get('responsible_id'):
+                resp = session.scalar(select(Responsible).where(Responsible.id == values['responsible_id']))
+                if resp and resp.position_id:
+                    values['initial_position_id'] = resp.position_id
             config = locked_number_config(session, InternalTicketNumberConfig)
             if config.next_number >= 2147483647: raise HTTPException(409, 'Se agotó el rango de numeración')
             ticket = InternalTicket(**values, ticket_number=config.next_number, reference=format_reference(config.prefix, config.separator, config.next_number, config.padding))
@@ -46,6 +50,25 @@ def persist(session, values, id=None):
             session.add(ticket); session.flush()
             if ticket.resolution: evidence(session, ticket, 'resolución documentada', None, ticket.resolution)
         else:
+            if 'status' in values and values['status'] != ticket.status:
+                if ticket.status == 'CLOSED' and values['status'] == 'OPEN':
+                    reopened_at = datetime.now(timezone.utc)
+                    closed_from = ticket.end_at or ticket.updated_at
+                    if closed_from:
+                        closed_duration = (reopened_at - closed_from).total_seconds()
+                        if closed_duration > 0:
+                            ticket.closed_seconds += int(closed_duration)
+                elif ticket.status == 'OPEN' and values['status'] == 'CLOSED':
+                    from ticketyn.models.ack import InternalTicketEscalationAck
+                    acks = session.scalars(select(InternalTicketEscalationAck).where(InternalTicketEscalationAck.ticket_id == ticket.id, InternalTicketEscalationAck.active == True)).all()
+                    for ack in acks:
+                        ack.active = False
+                        ack.revoked_reason = 'Cierre de ticket'
+                        ack.revoked_at = datetime.now(timezone.utc)
+            if 'responsible_id' in values and values['responsible_id'] and not ticket.initial_position_id:
+                resp = session.scalar(select(Responsible).where(Responsible.id == values['responsible_id']))
+                if resp and resp.position_id:
+                    ticket.initial_position_id = resp.position_id
             for field, value in values.items():
                 if field in ('provider_id','resolution') and value != getattr(ticket, field):
                     # No authenticated actor exists; preserve evidence without inventing identity.

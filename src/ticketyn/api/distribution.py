@@ -81,8 +81,13 @@ def get_device(id: Id, session: DBSession):
 def create_device(payload: DeviceCreate, session: DBSession, request: Request):
     with distribution_write(session):
         active_node(session, payload.node_id)
-        item = DistributionDevice(**payload.model_dump(), active=True)
+        item = DistributionDevice(**payload.model_dump(exclude={'template_id', 'template_token'}), active=True)
         session.add(item); session.flush()
+        if payload.template_id is not None:
+            from ticketyn.api.device_templates import apply_template
+            apply_template(session, payload.template_id, payload.template_token, item, request.state.principal.id)
+        elif payload.template_token is not None:
+            raise HTTPException(422, 'Selecciona una plantilla para utilizar su comprobación')
         record(session, request.state.principal.id, item, 'CREATE')
         result = device_view(session, item.id)
     return result

@@ -1,3 +1,4 @@
+import { DeviceTemplateAdmin } from '../components/DeviceTemplateAdmin'
 import { Can, usePermissions, catalogModule } from '../auth/permissions'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Layers3 } from 'lucide-react'
@@ -22,9 +23,9 @@ function revealOption(viewport: HTMLDivElement, option: HTMLElement, behavior: S
 
 export function Catalogs() {
   const access=usePermissions()
-  const kinds:(CatalogKind | 'port-nomenclatures')[]=['sectors','departments','incident-types','nodes','positions','escalation-reasons','service-types','deactivation-reasons','cpe-models','internal-incident-types','providers','change-completion-types','change-types','port-nomenclatures']
+  const kinds:(CatalogKind | 'port-nomenclatures' | 'distribution-device-templates')[]=['sectors','departments','incident-types','nodes','positions','escalation-reasons','service-types','deactivation-reasons','cpe-models','internal-incident-types','providers','change-completion-types','change-types','port-nomenclatures', 'distribution-device-templates']
   const available=kinds.filter(value=>access.can(catalogModule(value)+'.view'))
-  const [selected, setKind] = useState<CatalogKind | 'port-nomenclatures'>('sectors')
+  const [selected, setKind] = useState<CatalogKind | 'port-nomenclatures' | 'distribution-device-templates'>('sectors')
   const kind=available.includes(selected)?selected:available[0]
   const viewport = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState({ previous: false, next: false })
@@ -63,11 +64,11 @@ export function Catalogs() {
       <span className="icon-surface catalog-selector-icon" aria-hidden="true"><Layers3 size={15} /></span>
       <div className="catalog-selector-window">
         <span className={'catalog-selector-overflow catalog-selector-overflow-left' + (edges.previous ? ' is-visible' : '')} aria-hidden="true" />
-        <div ref={viewport} id="catalog-selector-options" role="group" aria-label="Categorías de catálogos" className="catalog-selector-options">{available.map((value) => <button type="button" key={value} className="segment-button" aria-pressed={value === kind} onClick={() => setKind(value)} onFocus={event => { if (viewport.current) revealOption(viewport.current, event.currentTarget, scrollBehavior()) }}>{value === 'port-nomenclatures' ? 'Nomenclaturas de puertos' : value === 'change-types' ? 'Tipos de cambio' : value === 'change-completion-types' ? 'Tipos de finalización de cambios' : value === 'providers' ? 'Proveedores' : value === 'internal-incident-types' ? 'Tipos de incidencia interna' : value === 'cpe-models' ? 'Modelos de CPE' : value === 'service-types' ? 'Tipos de servicio' : value === 'deactivation-reasons' ? 'Motivos de baja' : value === 'positions' ? 'Puestos' : value === 'escalation-reasons' ? 'Motivos de escalamiento' : value === 'sectors' ? 'Sectores' : value === 'departments' ? 'Departamentos' : value === 'nodes' ? 'Nodos' : value === 'responsibles' ? 'Responsables' : 'Tipos de incidencia'}</button>)}</div>
+        <div ref={viewport} id="catalog-selector-options" role="group" aria-label="Categorías de catálogos" className="catalog-selector-options">{available.map((value) => <button type="button" key={value} className="segment-button" aria-pressed={value === kind} onClick={() => setKind(value)} onFocus={event => { if (viewport.current) revealOption(viewport.current, event.currentTarget, scrollBehavior()) }}>{value === 'distribution-device-templates' ? 'Plantillas de equipos' : value === 'port-nomenclatures' ? 'Nomenclaturas de puertos' : value === 'change-types' ? 'Tipos de cambio' : value === 'change-completion-types' ? 'Tipos de finalización de cambios' : value === 'providers' ? 'Proveedores' : value === 'internal-incident-types' ? 'Tipos de incidencia interna' : value === 'cpe-models' ? 'Modelos de CPE' : value === 'service-types' ? 'Tipos de servicio' : value === 'deactivation-reasons' ? 'Motivos de baja' : value === 'positions' ? 'Puestos' : value === 'escalation-reasons' ? 'Motivos de escalamiento' : value === 'sectors' ? 'Sectores' : value === 'departments' ? 'Departamentos' : value === 'nodes' ? 'Nodos' : value === 'responsibles' ? 'Responsables' : 'Tipos de incidencia'}</button>)}</div>
         <span className={'catalog-selector-overflow catalog-selector-overflow-right' + (edges.next ? ' is-visible' : '')} aria-hidden="true" />
       </div>
       <button type="button" className="catalog-selector-arrow" aria-label="Catálogos siguientes" aria-controls="catalog-selector-options" disabled={!edges.next} onClick={() => move(1)}><ChevronRight size={16} /></button>
     </nav>
-    {kind === 'port-nomenclatures' ? <PortNomenclatureAdmin /> : kind && <CatalogAdmin key={kind} kind={kind} />}
+    {kind === 'distribution-device-templates' ? <DeviceTemplateAdmin /> : kind === 'port-nomenclatures' ? <PortNomenclatureAdmin /> : kind && <CatalogAdmin key={kind} kind={kind} />}
   </>
 }

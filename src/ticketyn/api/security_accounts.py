@@ -1,7 +1,7 @@
 """Scoped account/profile/session contracts. No additional people or session tables."""
 from datetime import datetime, timezone, timedelta
 import secrets
-from typing import Annotated
+from typing import Annotated, Literal
 from fastapi import APIRouter, Request, HTTPException, Path, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
@@ -132,7 +132,24 @@ def profile(request: Request, session: DB):
     item = session.get(Responsible, request.state.principal.id)
     result = accounts.account_view(session, item)
     # Only the account owner can inspect this safe profile, never arbitrary ids.
-    return result
+    return {**result, 'preferences': {'home_page': item.preferred_home_page}}
+
+
+class ProfilePreferences(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    home_page: Literal['DASHBOARD', 'MY_TICKETS']
+
+
+@router.patch('/auth/profile/preferences')
+def update_profile_preferences(payload: ProfilePreferences, request: Request, session: DB):
+    lock_security(session)
+    actor = principal(session, request.state.principal.id)
+    if actor is None:
+        raise HTTPException(401, 'La cuenta ya no tiene acceso')
+    item = session.scalar(select(Responsible).where(Responsible.id == actor.id).with_for_update(of=Responsible))
+    item.preferred_home_page = payload.home_page
+    session.commit()
+    return {'home_page': payload.home_page}
 
 
 def session_rows(request, session, *, administrative=False):

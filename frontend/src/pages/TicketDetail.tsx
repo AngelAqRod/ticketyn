@@ -1,36 +1,39 @@
 import { Can } from '../auth/permissions'
 import { RelatedInternalTicket } from '../components/RelatedInternalTicket'
+import { CircuitLink } from '../components/CircuitLink'
 import { Check, Clock, FileText, Pencil, Tag, Ticket as TicketIcon } from 'lucide-react'
 import { TicketEscalations } from '../components/TicketEscalations'
 import { RequestState } from '../components/RequestState'
 import { FeedbackMessage } from '../components/FeedbackMessage'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
-import { getTicket, getTicketCatalogs } from '../api'
+import { getTicket, getTicketCatalogs, type TicketDetailCatalogs } from '../api'
 import type { Ticket } from '../types/ticket'
 import { ApiError } from '../api/client'
 import { formatDate, formatDuration } from '../lib/format'
 import { StatusBadge } from '../components/StatusBadge'
 import { TicketForm } from '../components/TicketForm'
 import { TicketReportDownload } from '../components/TicketReportDownload'
+import { TicketQuickClose } from '../components/TicketQuickClose'
 import { TicketFollowUp } from '../components/TicketFollowUp'
 
 export function TicketDetail({ edit = false }: { edit?: boolean }) {
   const { id } = useParams()
   const location = useLocation()
   const [ticket, setTicket] = useState<Ticket | null>(null)
-  const [catalogs, setCatalogs] = useState<Awaited<ReturnType<typeof getTicketCatalogs>> | null>(null)
+  const [catalogs, setCatalogs] = useState<TicketDetailCatalogs | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
+  const [closedReference, setClosedReference] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    setTicket(null); setCatalogs(null); setError(null)
+    setTicket(null); setCatalogs(null); setError(null); setClosedReference(null)
     async function load() {
       try {
         if (!id || !/^\d+$/.test(id) || Number(id) < 1) throw new ApiError('Ticket no encontrado.', 404)
         const current = await getTicket(Number(id), controller.signal)
-        const names = edit ? null : await getTicketCatalogs(current, controller.signal)
+        const names = edit ? null : await getTicketCatalogs(current, controller.signal, true)
         if (!controller.signal.aborted) { setTicket(current); setCatalogs(names) }
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure instanceof ApiError && failure.status === 404 ? 'Ticket o catálogo relacionado no encontrado.' : failure instanceof Error ? failure.message : 'No se pudo cargar el ticket.')
@@ -48,6 +51,7 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
   const state: unknown = location.state
   const saved = Boolean(state && typeof state === 'object' && 'saved' in state && (state as { saved?: unknown }).saved === true)
   const durationText = formatDuration(ticket.duration_seconds, ticket.status)
+  const circuit = catalogs.circuit ?? ticket.circuit
 
   return (
     <div className="space-y-4">
@@ -66,9 +70,9 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
             <div className="flex flex-wrap items-center gap-3 mt-0.5">
               <h1 className="font-mono text-2xl sm:text-3xl font-bold tracking-tight text-white">{ticket.reference}</h1>
               <StatusBadge status={ticket.status} />
-              {catalogs.circuit?.circuit_code && (
+              {circuit?.circuit_code && (
                 <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-mono bg-slate-900 border border-slate-700 text-slate-300">
-                  <span className="text-slate-500">CID:</span> <strong className="text-sky-300">{catalogs.circuit.circuit_code}</strong>
+                  <span className="text-slate-500">CID:</span> <strong className="text-sky-300">{circuit.circuit_code}</strong>
                 </span>
               )}
             </div>
@@ -83,15 +87,19 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
           <Link to="/tickets" className="button-secondary rounded-full">
             Volver a tickets
           </Link>
-          <Can anyOf={["tickets.edit", "tickets.close", "tickets.link"]}>
-            <Link to={`/tickets/${ticket.id}/edit`} className="button-primary rounded-full">
-              <Pencil size={14} className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Editar ticket</span>
-            </Link>
-          </Can>
+          <div className="flex max-w-full flex-wrap items-center gap-2" role="group" aria-label="Acciones del ticket">
+            <TicketQuickClose key={ticket.id} ticket={ticket} onClosed={closed => { setTicket(closed); setClosedReference(closed.reference) }} />
+            <Can anyOf={["tickets.edit", "tickets.close", "tickets.link"]}>
+              <Link to={`/tickets/${ticket.id}/edit`} className="button-primary rounded-full">
+                <Pencil size={14} className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Editar ticket</span>
+              </Link>
+            </Can>
+          </div>
         </div>
       </div>
 
+      {closedReference === ticket.reference && <FeedbackMessage variant="success">Ticket cerrado correctamente.</FeedbackMessage>}
       {saved && <FeedbackMessage variant="success" className="mb-3">Cambios guardados correctamente.</FeedbackMessage>}
 
       {/* 2. PANELES DE LECTURA (DESCRIPCIÓN Y RESOLUCIÓN EN 2 COLUMNAS EN ESCRITORIO) */}
@@ -144,7 +152,7 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
             <div>
               <dt className="font-mono text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Circuito</dt>
               <dd className="mt-1 text-sm font-semibold text-white flex items-center gap-2">
-                <span>{catalogs.circuit.circuit_code} — {catalogs.circuit.description}</span>
+                {circuit ? <CircuitLink id={catalogs.circuit?.id === ticket.circuit_id ? ticket.circuit_id : null}>{circuit.circuit_code} — {circuit.description}</CircuitLink> : <span>Sin circuito asociado</span>}
               </dd>
             </div>
 
@@ -241,8 +249,8 @@ export function TicketDetail({ edit = false }: { edit?: boolean }) {
       {/* 4. VÍNCULOS, ESCALAMIENTOS Y SEGUIMIENTO */}
       <div className="space-y-4">
         <RelatedInternalTicket id={ticket.internal_ticket_id} />
-        <TicketEscalations ticketId={ticket.id} />
-        <TicketFollowUp key={ticket.id} ticketId={ticket.id} />
+        <TicketEscalations ticketId={ticket.id} ticketStatus={ticket.status} onTicketStatusChange={() => setRetry(value => value + 1)} />
+        <TicketFollowUp key={`${ticket.id}:${ticket.updated_at}`} ticketId={ticket.id} />
       </div>
     </div>
   )

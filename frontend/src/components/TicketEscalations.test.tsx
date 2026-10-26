@@ -21,6 +21,9 @@ afterAll(() => {
 })
 function mockApi(rows: Escalation[] = [], options: { failSave?: boolean; failFinish?: boolean; pending?: boolean; failLoad?: boolean } = {}) {
   const mock = vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/recommendations')) return Promise.resolve(jsonResponse({ ticket_id: 1, ticket_status: 'OPEN',
+      stage_name: 'Etapa inicial', reference_position_id: null, reference_position_name: null, stage_started_at: null,
+      elapsed_minutes: 0, has_active_ack: false, active_ack: null, can_acknowledge: false, recommendations: [] }))
     if (url.includes('/responsibles?')) return Promise.resolve(jsonResponse([person, recipient]))
     if (url.includes('/departments?')) return Promise.resolve(jsonResponse([{ ...person, name: 'NOC' }]))
     if (url.includes('/audit')) return Promise.resolve(jsonResponse([]))
@@ -71,6 +74,7 @@ describe('Escalamientos', () => {
     const write = mock.mock.calls.find(([, init]) => init?.method === 'POST')!
     expect(JSON.parse(String(write[1]?.body))).toMatchObject({ recipient_id: 2, department_id: 1, started_at: expect.any(String), reason_id: 3, description: 'Ayuda BGP' })
     expect(mock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false)
+    await waitFor(() => expect(mock.mock.calls.filter(([url]) => url.endsWith('/recommendations'))).toHaveLength(2))
   })
   it('mantiene contenido y modal ante error, y bloquea envíos duplicados', async () => {
     const mock = mockApi([], { pending: true }); await open(); await fill()
@@ -93,7 +97,7 @@ describe('Escalamientos', () => {
     expect(button).toHaveFocus(); expect(mock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
   it('finaliza y conserva historial e intervenciones relacionadas', async () => {
-    mockApi([escalation]); render(<TicketEscalations ticketId={1} />)
+    const mock = mockApi([escalation]); render(<TicketEscalations ticketId={1} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ver intervenciones' }))
     expect(await screen.findByText('Intervención relacionada')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Finalizar escalamiento' }))
@@ -101,6 +105,7 @@ describe('Escalamientos', () => {
     expect(await screen.findByText('Finalizado')).toBeInTheDocument()
     expect(screen.getByText('Pedro → Ángel · N3')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Finalizar escalamiento' })).not.toBeInTheDocument()
+    await waitFor(() => expect(mock.mock.calls.filter(([url]) => url.endsWith('/recommendations'))).toHaveLength(2))
   })
   it('ofrece reintento ante error de carga', async () => {
     mockApi([], { failLoad: true }); render(<TicketEscalations ticketId={1} />)
@@ -167,6 +172,7 @@ it('corrige fechas sin reenviar metadatos ni alterar la precisión de fechas sin
   await screen.findByText('Escalamiento actualizado. La responsabilidad principal no cambia.')
   const write = mock.mock.calls.find(([, init]) => init?.method === 'PATCH')!
   expect(JSON.parse(String(write[1]?.body))).toEqual({ started_at: '2026-10-09T11:30:00.000Z' })
+  await waitFor(() => expect(mock.mock.calls.filter(([url]) => url.endsWith('/recommendations'))).toHaveLength(2))
   const metadata = screen.getByRole('region', { name: 'Metadatos del escalamiento' })
   await waitFor(() => expect(within(metadata).getByText(formatDate('2026-10-12T18:00:00Z', ticketynTimezone))).toBeInTheDocument())
   expect(within(metadata).getByText(formatDate(escalation.created_at, ticketynTimezone))).toBeInTheDocument()
@@ -203,4 +209,18 @@ it('muestra metadatos administrativos independientes en varios escalamientos sin
     expect(within(item).getByRole('button', { name: 'Ver intervenciones' })).toHaveAttribute('aria-expanded', 'false')
   })
   expect(mock.mock.calls.some(([url]) => url.includes('/audit') || url.includes('escalation_id='))).toBe(false)
+})
+
+it('crea escalamientos internos en su ámbito y actualiza recomendaciones inmediatamente', async () => {
+  const mock = mockApi()
+  render(<TicketEscalations ticketId={1} internal />)
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo escalamiento' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Registrar escalamiento' })).toBeEnabled())
+  await fill()
+  fireEvent.submit(screen.getByRole('form', { name: 'Registrar escalamiento' }))
+  await screen.findByText('Escalamiento registrado. La responsabilidad principal no cambia.')
+  const write = mock.mock.calls.find(([, init]) => init?.method === 'POST')!
+  expect(write[0]).toBe('/api/internal-tickets/1/escalations')
+  await waitFor(() => expect(mock.mock.calls.filter(([url]) => url.endsWith('/internal-tickets/1/recommendations'))).toHaveLength(2))
+  expect(mock.mock.calls.some(([url]) => url.startsWith('/api/tickets/'))).toBe(false)
 })

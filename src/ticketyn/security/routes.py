@@ -34,6 +34,7 @@ for resource, module in [('tickets', 'tickets'), ('internal-tickets', 'internal_
     route('POST', base, module + '.create')
     route('GET', base + '/{id}', any_of=(module + '.view', *(['tickets.view', 'changes.view'] if module == 'internal_tickets' else [])))
     route('PATCH', base + '/{id}', any_of=(module + '.edit', module + '.close', *(['tickets.link'] if module == 'tickets' else [])))
+    route('POST', base + '/{id}/close', module + '.close')
     route('GET', base + '/export/{format}', any_of=(module + '.export', report + '.export'))
     route('GET', base + '/{id}/updates', module + '.view')
     route('POST', base + '/{id}/updates', module + '.followup')
@@ -42,6 +43,11 @@ for resource, module in [('tickets', 'tickets'), ('internal-tickets', 'internal_
     route('PATCH', base + '/{id}/escalations/{escalation_id}', module + '.escalate')
     route('POST', base + '/{id}/escalations/{escalation_id}/finish', module + '.escalate')
     route('GET', base + '/{id}/escalations/{escalation_id}/audit', module + '.view')
+    route('GET', base + '/{id}/recommendations', module + '.view')
+    route('GET', base + '/{id}/ack', module + '.view')
+    route('POST', base + '/{id}/ack', module + '.escalate')
+    route('POST', base + '/{id}/ack/revoke', module + '.escalate')
+    route('GET', base + '/{id}/acks', module + '.view')
     route('GET', base + '/{id}/reports/internal/pdf', module + '.export')
 # Linking uses the existing list operation with a compact contextual response.
 RULES[('GET', '/api/internal-tickets')] = Rule(any_of=('internal_tickets.view', 'reports.internal_tickets.view', 'tickets.link', 'changes.link'))
@@ -50,6 +56,12 @@ route('GET', '/api/tickets/stats', 'tickets.view')
 route('GET', '/api/internal-tickets/{id}/related', 'internal_tickets.view')
 route('GET', '/api/escalations/summary', 'reports.escalations.view')
 route('GET', '/api/escalations/tickets', 'reports.escalations.view')
+route('GET', '/api/my-tickets', any_of=('tickets.view', 'internal_tickets.view'))
+route('GET', '/api/my-tickets/summary', any_of=('tickets.view', 'internal_tickets.view'))
+route('GET', '/api/my-tickets/assigned', any_of=('tickets.view', 'internal_tickets.view'))
+route('GET', '/api/my-tickets/participated', any_of=('tickets.view', 'internal_tickets.view'))
+route('GET', '/api/my-tickets/escalations', any_of=('tickets.view', 'internal_tickets.view'))
+route('GET', '/api/my-tickets/to-verify', any_of=('tickets.view', 'internal_tickets.view'))
 
 for resource in ('customers', 'circuits'):
     route('GET', '/api/' + resource, any_of=(resource + '.view', resource + '.lookup'))
@@ -157,6 +169,7 @@ route('POST', '/api/security/roles/{id}/duplicate', 'roles.manage')
 # Phase 3 self-service and scoped administration. Definitions stay independent.
 for path in ('/api/auth/profile', '/api/auth/sessions'):
     route('GET', path, self_service=True)
+route('PATCH', '/api/auth/profile/preferences', self_service=True)
 route('POST', '/api/auth/sessions/close-others', self_service=True)
 route('POST', '/api/auth/sessions/{session_id}/revoke', self_service=True)
 route('GET', '/api/responsibles/access', 'accounts.manage')
@@ -168,6 +181,14 @@ route('POST', '/api/security/sessions/{session_id}/revoke', 'sessions.manage')
 route('GET', '/api/security/audit', 'audit.view')
 route('GET', '/api/security/audit/retention', 'security.configure')
 route('PATCH', '/api/security/audit/retention', 'security.configure')
+
+for suffix in ('', '/{id}', '/{id}/preview'):
+    route('GET', '/api/distribution-device-templates' + suffix,
+          any_of=('catalogs.distribution_device_templates.view', 'catalogs.distribution_device_templates.lookup'))
+route('POST', '/api/distribution-device-templates/preview', any_of=('catalogs.distribution_device_templates.create', 'catalogs.distribution_device_templates.edit'))
+route('POST', '/api/distribution-device-templates', 'catalogs.distribution_device_templates.create')
+route('PATCH', '/api/distribution-device-templates/{id}', 'catalogs.distribution_device_templates.edit')
+
 
 _MATCHERS = sorted(((method, path, compile_path(path)[0], rule) for (method, path), rule in RULES.items()),
                    key=lambda entry: (entry[1].count('{'), -len(entry[1])))

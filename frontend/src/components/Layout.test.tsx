@@ -15,8 +15,8 @@ describe('Navegación Electric Blue', () => {
     setup()
     await screen.findByText('API conectada')
     const links = within(screen.getByRole('navigation')).getAllByRole('link')
-    expect(links.map(link => link.querySelector('.nav-number')?.textContent)).toEqual(Array.from({ length: 22 }, (_, i) => String(i + 1).padStart(2, '0')))
-    expect(links.map(link => link.getAttribute('href'))).toEqual(['/', '/tickets', '/internal-tickets', '/changes', '/customers', '/circuits', '/distribution-devices', '/activations', '/capacity-changes', '/circuit-lifecycle', '/reports', '/activation-reports', '/capacity-reports', '/lifecycle-reports', '/responsibles', '/security-roles', '/security-sessions', '/catalogs', '/settings', '/mail-notifications', '/mail-templates', '/security-audit'])
+    expect(links.map(link => link.querySelector('.nav-number')?.textContent)).toEqual(Array.from({ length: 23 }, (_, i) => String(i + 1).padStart(2, '0')))
+    expect(links.map(link => link.getAttribute('href'))).toEqual(['/my-tickets', '/', '/tickets', '/internal-tickets', '/changes', '/customers', '/circuits', '/distribution-devices', '/activations', '/capacity-changes', '/circuit-lifecycle', '/reports', '/activation-reports', '/capacity-reports', '/lifecycle-reports', '/responsibles', '/security-roles', '/security-sessions', '/catalogs', '/settings', '/mail-notifications', '/mail-templates', '/security-audit'])
     expect(document.querySelector('#main-navigation')).toHaveClass('md:w-56', 'xl:w-60')
     expect(document.querySelector('.header-brand')).toContainElement(screen.getByText('Ticketyn', { exact: true }).closest('.brand-capsule') as HTMLElement)
   })
@@ -94,6 +94,7 @@ it('separa configuración y plantillas de correo en Administración', async () =
 
 
 it.each([
+  ['/my-tickets', 'Mis tickets', 'blue'],
   ['/', 'Dashboard', 'cyan'],
   ['/tickets/new', 'Tickets', 'blue'],
   ['/tickets/42/edit', 'Tickets', 'blue'],

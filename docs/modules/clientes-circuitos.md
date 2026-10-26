@@ -4,7 +4,7 @@
 - **Qué gestiona:** El catálogo maestro de clientes corporativos y residenciales, el inventario técnico de circuitos de telecomunicaciones y los parámetros de configuración del equipamiento de usuario final (CPE).
 - **Funcionalidades existentes:**
   - Registro, edición y consulta de clientes (`Customer`) con datos administrativos de contacto.
-  - Gestión de circuitos (`Circuit`) asociados a clientes, identificados con un código único no nulo, sector, nodo, tipo de servicio y capacidad inicial contratada.
+  - Gestión de circuitos (`Circuit`) asociados a clientes con selector de cliente con búsqueda integrada (búsqueda parcial por código y nombre con normalización de acentos y mayúsculas/minúsculas), identificado con un código único no nulo, sector, nodo, tipo de servicio y capacidad inicial contratada.
   - Ficha técnica integral del circuito con consolidación de activación inicial, bitácora de intervenciones, historial de capacidad, bajas/reactivaciones y parámetros CPE.
   - Actualización de sector con sincronización automática de tickets recientes (regla de 168 horas).
   - Eliminación condicionada a la ausencia total de dependencias operativas o históricas.
@@ -138,3 +138,12 @@ Este documento debe actualizarse ante cualquier cambio en el modelo `Circuit`, v
 - La tabla de la ficha, los selectores normales/de edición/alta rápida y sus búsquedas respetan el orden recibido. El selector obtiene también inactivos para mantener la posición del histórico seleccionado, pero oculta los demás inactivos y conserva la referencia actual deshabilitada.
 - Vista previa y resultados de lotes ya siguen la secuencia numérica del rango; no se cambia el generador ni se añade otra ordenación en React.
 - Pruebas específicas: `tests/test_port_order.py`, tabla con 24 puertos en `frontend/src/pages/DistributionDeviceDetail.test.tsx`, selectores en `frontend/src/components/CircuitDistributionFields.test.tsx` y vista previa en `frontend/src/components/PortCreateDialog.test.tsx`.
+
+
+## Plantillas de equipos de distribución
+
+- Administración → Catálogos → Plantillas de equipos, `DeviceTemplateAdmin.tsx` y `/api/distribution-device-templates`; nombre/modelo, fabricante informativo opcional, descripción, estado y grupos que referencian exclusivamente nomenclaturas existentes.
+- Máximo 16 grupos y 256 puertos por plantilla; formatos y generación compartidos con los puertos existentes. Vista previa en backend, colisiones entre grupos rechazadas y referencias inactivas preservadas pero bloqueadas para nuevos equipos.
+- `DeviceTemplateChoice.tsx` integra creación manual o desde plantilla en el modal de equipos y el alta rápida desde Circuitos. POST `/api/distribution-devices` admite `template_id`/`template_token`: equipo, puertos y bitácora se confirman en una sola transacción. No sincroniza equipos anteriores ni altera FMS.
+- Permisos `catalogs.distribution_device_templates.{view,lookup,create,edit}`; Admin/Superadmin administran, los creadores de equipos pueden aplicar definiciones mediante lectura contextual sin administrar catálogos.
+- Migración aditiva `0039_device_templates` → `0038_port_classification`; ver [contratos, límites y pruebas](../distribution-device-templates.md). Backend en `api/device_templates.py`, modelos en `models/distribution.py`, esquemas en `schemas/device_template.py`.

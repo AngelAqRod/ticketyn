@@ -30,14 +30,14 @@ def snapshot_destination(session, values, item=None):
     if recipient and recipient.department_id != department_id:
         raise HTTPException(422, 'El destinatario no pertenece al departamento seleccionado')
     position = session.scalar(select(Position).where(Position.id == recipient.position_id).with_for_update(read=True, of=Position)) if recipient and recipient.position_id else None
-    return dict(legacy_destination=False, recipient_id=recipient_id, department_id=department_id,
+    return dict(legacy_destination=False, recipient_id=recipient_id, department_id=department_id, position_id=position.id if position else None,
         recipient_department_name=department.name, recipient_position_name=position.name if position else None, recipient_level=None)
 
 
 def audit(session, item, event, previous, model=EscalationAudit):
     def serial(value):
         return value.isoformat() if isinstance(value, datetime) else value
-    fields = ('started_at', 'finished_at', 'department_id', 'recipient_id', 'recipient_department_name', 'recipient_position_name', 'recipient_level', 'status')
+    fields = ('started_at', 'finished_at', 'department_id', 'recipient_id', 'position_id', 'recipient_department_name', 'recipient_position_name', 'recipient_level', 'status')
     changes = {key: {'before': serial(previous.get(key)), 'after': serial(getattr(item, key))}
                for key in fields if previous.get(key) != getattr(item, key)}
     session.add(model(escalation_id=item.id, event=event, actor=None, changes=changes))
@@ -86,7 +86,7 @@ def change_escalation(session, ticket_id, id, values, *, finish=False, TicketEsc
             raise HTTPException(404, 'Escalamiento no encontrado en este ticket')
         if finish and item.status == 'FINISHED':
             return item
-        fields = ('started_at', 'finished_at', 'department_id', 'recipient_id', 'recipient_department_name', 'recipient_position_name', 'recipient_level', 'status')
+        fields = ('started_at', 'finished_at', 'department_id', 'recipient_id', 'position_id', 'recipient_department_name', 'recipient_position_name', 'recipient_level', 'status')
         previous = {key: getattr(item, key) for key in fields}
         if any(key in values and values[key] != getattr(item, key) for key in ('recipient_id', 'department_id')):
             values = {**values, **snapshot_destination(session, values, item)}

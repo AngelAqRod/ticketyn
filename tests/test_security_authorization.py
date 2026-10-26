@@ -344,7 +344,7 @@ def test_custom_operator_copy_role_with_create_denies_edit_execute_link_and_foll
     # Preserve the historical 72-permission scope; v0.8 explicitly adds distribution
     # to the built-in Operator, without changing previously copied custom roles.
     operator_grants = DEFAULT_GRANTS['OPERATOR']
-    legacy_operator_grants = {code for code in operator_grants if not code.startswith(('distribution_devices.', 'distribution_ports.', 'catalogs.port_nomenclatures.'))}
+    legacy_operator_grants = {code for code in operator_grants if not code.startswith(('distribution_devices.', 'distribution_ports.', 'catalogs.port_nomenclatures.', 'catalogs.distribution_device_templates.'))}
     assert len(legacy_operator_grants) == 72
     assert 'changes.create' not in operator_grants
     assert 'changes.view' in operator_grants

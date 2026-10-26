@@ -16,6 +16,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [showPassword, setShowPassword] = useState(false)
   const previousPermissions = useRef('')
   const lastAllowedPath = useRef<string | null>(null)
+  const initialResolved = useRef(false)
   const [busy, setBusy] = useState(false)
   const [remaining, setRemaining] = useState(0)
   const [draftOwner, setDraftOwner] = useState<number | null>(null)
@@ -47,7 +48,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     finally { inFlight.current = false }
   }, [accept])
   useEffect(() => {
-    const expired = () => { setIdentity(null); setLoading(false); setError('Tu sesión venció o fue invalidada. Iniciá sesión nuevamente.') }
+    const expired = () => { initialResolved.current = false; setIdentity(null); setLoading(false); setError('Tu sesión venció o fue invalidada. Iniciá sesión nuevamente.') }
     window.addEventListener('ticketyn:unauthorized', expired)
     const focus = () => { void refresh() }
     window.addEventListener('focus', focus)
@@ -66,11 +67,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const permitted = routeAllowed(location.pathname, access)
     const lostAccess = !permitted && lastAllowedPath.current === location.pathname
     if (permitted) lastAllowedPath.current = location.pathname
+
+    if (!initialResolved.current) {
+      initialResolved.current = true
+      if (location.pathname === '/' && !location.state?.explicit && identity.preferred_home_page === 'MY_TICKETS' && routeAllowed('/my-tickets', access)) {
+        navigate('/my-tickets', { replace: true })
+        return
+      }
+    }
+
     if (location.pathname === '/login' || lostAccess || (!access.permissions.length && location.pathname !== '/profile')) {
       lastAllowedPath.current = null
-      navigate(firstAllowed(access), { replace: true })
+      navigate(firstAllowed(access, identity.preferred_home_page), { replace: true })
     }
-  }, [access, identity, location.pathname, navigate])
+  }, [access, identity, location.pathname, location.state, navigate])
   const continueSession = useCallback(async () => {
     const token = sessionToken()
     if (!token || inFlight.current) return
@@ -101,9 +111,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
       const result = await postJson<Identity & { token: string }>('/api/auth/login', { username: fields.get('username'), password: fields.get('password') })
       setSessionToken(result.token); accept(result); form.reset()
       setNotice('')
+      initialResolved.current = true
       const grants=new Set(result.permissions)
       const nextAccess={permissions:result.permissions,can:(...codes:string[])=>codes.every(code=>grants.has(code)),any:(...codes:string[])=>codes.some(code=>grants.has(code))}
-      if(!routeAllowed(location.pathname,nextAccess))navigate(firstAllowed(nextAccess),{replace:true})
+      const target = firstAllowed(nextAccess, result.preferred_home_page)
+      if (location.pathname === '/login' || location.pathname === '/' || !routeAllowed(location.pathname, nextAccess)) {
+        navigate(target, { replace: true })
+      }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo iniciar sesión') }
     finally { actionInFlight.current = false; setBusy(false) }
   }
@@ -113,7 +127,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setBusy(true); setError('')
     try {
       await postJson('/api/auth/logout', {})
-      setSessionToken(null); setIdentity(null); setDraftOwner(null); previousPermissions.current = ''; lastAllowedPath.current = null; setNotice('')
+      setSessionToken(null); setIdentity(null); setDraftOwner(null); previousPermissions.current = ''; lastAllowedPath.current = null; initialResolved.current = false; setNotice('')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo cerrar la sesión') }
     finally { actionInFlight.current = false; setBusy(false) }
   }
@@ -295,7 +309,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     )}
     {change && identity && <main className="panel mx-auto mt-6 max-w-lg p-6 rounded-3xl bg-[#0b1426] border border-slate-700/60 shadow-xl"><h1 className="text-xl font-bold font-display text-white tracking-tight">Cambiar contraseña temporal</h1><p className="mb-4 text-xs font-mono text-slate-400">{identity.name} · {identity.username}</p><PasswordChangeForm /><button className="button-secondary rounded-full mt-4 text-xs font-mono" disabled={busy} onClick={() => void logout()}>Cerrar sesión</button></main>}
     {identity && !identity.operational_access && !change && <main className="panel m-6 p-6">Tu cuenta no tiene permisos sobre los módulos disponibles. Podés acceder a Mi perfil y cerrar sesión.</main>}
-    {identity && !change && !routeAllowed(location.pathname, access) && <main className="panel m-6 p-6" role="alert"><h1 className="text-xl font-semibold">Acceso denegado</h1><p>No tienes permiso para acceder a este módulo.</p><button className="button-secondary mt-3" onClick={() => navigate(firstAllowed(access))}>Ir a un módulo autorizado</button></main>}
+    {identity && !change && !routeAllowed(location.pathname, access) && <main className="panel m-6 p-6" role="alert"><h1 className="text-xl font-semibold">Acceso denegado</h1><p>No tienes permiso para acceder a este módulo.</p><button className="button-secondary mt-3" onClick={() => navigate(firstAllowed(access, identity?.preferred_home_page))}>Ir a un módulo autorizado</button></main>}
     <OperationalDraft key={draftOwner ?? 'signed-out'} visible={!!identity && (identity.operational_access || location.pathname === '/profile') && !change && routeAllowed(location.pathname, access)}>{children}</OperationalDraft>
   </PermissionProvider></AuthContext.Provider>
 }

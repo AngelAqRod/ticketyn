@@ -57,3 +57,13 @@
 
 ## Mantenimiento
 Este documento debe actualizarse ante cualquier cambio en el catálogo de permisos en `src/ticketyn/security/permissions.py`, ajustes a las dimensiones de `Responsible`, adición de rutas administrativas o modificaciones en los parámetros de Argon2id o sesiones.
+
+
+## Mi perfil — LCD Operator Identity
+
+- `LcdOperatorAvatar.tsx`: iniciales normalizadas mediante SVG de 14 segmentos reales por carácter, variantes perfil y encabezado; independiente de los contadores de siete segmentos y sin peticiones para generar el avatar.
+- Perfil con cabecera Electric Blue, puesto diferenciado del rol, datos de solo lectura, contraseña y sesiones existentes. No existe edición personal de nombre/puesto/rol ni correo personal; no se agrega otra entidad de usuario.
+- `GET /api/auth/profile` añade preferencias propias. `PATCH /api/auth/profile/preferences` es autoservicio autenticado, cuerpo estricto `home_page` con valores admitidos `DASHBOARD` y `MY_TICKETS`. Al iniciar sesión o acceder a la ruta inicial, `AuthGate` dirige al usuario a su destino preferido respetando permisos, preservando el acceso explícito a Dashboard. Bloqueo de seguridad/fila, sin cambiar permisos, actividad ni credenciales.
+- Migración `0041_profile_preferences` → `0040_escalation_recommend_ack`: `responsibles.preferred_home_page`, predeterminado Dashboard. No aplicada automáticamente a bases persistentes.
+- «Mi actividad» integra 4 accesos funcionales directos a las vistas de «Mis tickets» (`assigned`, `participated`, `escalations`, `to_verify`), con contadores consolidados eficientemente mediante `GET /api/my-tickets/summary`. Encabezado integra LCD y disclosure móvil accesible en la zona existente del usuario.
+- Ver [contratos, límites y validación](../profile-operator-identity.md). Pruebas específicas `tests/test_profile_preferences.py`, `LcdOperatorAvatar.test.tsx` y `Profile.test.tsx`.

@@ -43,7 +43,7 @@ register('lifecycle', ('view', 'deactivate', 'reactivate', 'export'))
 register('cpe', ('view', 'edit'))
 CATALOGS = ('sectors', 'departments', 'incident_types', 'nodes', 'responsibles', 'positions',
             'escalation_reasons', 'service_types', 'deactivation_reasons', 'cpe_models',
-            'internal_incident_types', 'providers', 'change_completion_types', 'change_types', 'port_nomenclatures')
+            'internal_incident_types', 'providers', 'change_completion_types', 'change_types', 'port_nomenclatures', 'distribution_device_templates')
 for module in CATALOGS:
     register('catalogs.' + module, ('view', 'create', 'edit', 'lookup'))
 register('catalogs.port_nomenclatures', ('view', 'create', 'edit', 'lookup', 'delete'))
@@ -132,6 +132,10 @@ CONTEXT_READS = {
 
 def expanded_context(grants):
     effective = set(grants)
+    if any(code.startswith('distribution_devices.') for code in grants):
+        effective.add('catalogs.distribution_device_templates.lookup')
+    if any(code.startswith('catalogs.distribution_device_templates.') for code in grants):
+        effective.add('catalogs.port_nomenclatures.lookup')
     if any(code.startswith('distribution_ports.') for code in grants):
         effective.add('catalogs.port_nomenclatures.lookup')
     if any(code.startswith(('distribution_devices.', 'distribution_ports.')) for code in grants):

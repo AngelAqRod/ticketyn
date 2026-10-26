@@ -19,6 +19,10 @@ interface Props extends Pick<AriaAttributes, 'aria-describedby' | 'aria-invalid'
   noMatchMessage: string
 }
 
+function normalizeText(text: string): string {
+  return text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
 export function SearchableSelect({ id, value, options, onChange, onSearchChange, dropdownFooter, remote = false, disabled = false, required = false, label, placeholder, emptyMessage, noMatchMessage, 'aria-describedby': describedBy, 'aria-invalid': invalid }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -26,7 +30,8 @@ export function SearchableSelect({ id, value, options, onChange, onSearchChange,
   const root = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const selected = options.find((option) => option.value === value)
-  const matches = remote ? options : options.filter((option) => option.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  const normalizedQuery = normalizeText(query.trim())
+  const matches = remote ? options : options.filter((option) => normalizeText(option.label).includes(normalizedQuery))
   const enabled = matches.filter((option) => !option.disabled)
   const expanded = open && !disabled
   const activeIndex = matches.findIndex((option) => option.value === active && !option.disabled)

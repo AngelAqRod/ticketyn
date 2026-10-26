@@ -10,6 +10,7 @@ import { formatDate, formatDuration } from '../lib/format'
 import { RequestState } from './RequestState'
 import { FeedbackMessage } from './FeedbackMessage'
 import { EscalationModal } from './EscalationModal'
+import { TicketRecommendationNotice } from './TicketRecommendationNotice'
 
 function RelatedInterventions({ ticketId, escalationId, scope = 'tickets' }: { ticketId: number; escalationId: number; scope?: string }) {
   const [items, setItems] = useState<TicketUpdate[]>([]), [error, setError] = useState<string | null>(null), [loading, setLoading] = useState(true), [retry, setRetry] = useState(0)
@@ -23,7 +24,7 @@ function RelatedInterventions({ ticketId, escalationId, scope = 'tickets' }: { t
   </div>
 }
 
-export function TicketEscalations({ ticketId, internal = false }: { ticketId: number; internal?: boolean }) {
+export function TicketEscalations({ ticketId, internal = false, ticketStatus = 'OPEN', onTicketStatusChange }: { ticketId: number; internal?: boolean; ticketStatus?: string; onTicketStatusChange?: (status: string) => void }) {
   const access=usePermissions(), mayEscalate=access.can((internal?"internal_tickets":"tickets")+".escalate")
   const scope = internal ? 'internal-tickets' : 'tickets'
   const [items, setItems] = useState<Escalation[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState<string | null>(null), [retry, setRetry] = useState(0)
@@ -52,7 +53,7 @@ export function TicketEscalations({ ticketId, internal = false }: { ticketId: nu
       const selected = items.find((row) => row.id === id)!
       if (new Date(finishedAt) < new Date(selected.started_at)) throw new Error('La finalización no puede ser anterior al inicio.')
       const result = await finishEscalation(ticketId, id, controller.signal, finishedAt, scope)
-      if (!controller.signal.aborted) { setItems((rows) => rows.map((row) => row.id === id ? result : row)); setFinishing(null); setSuccess('Escalamiento finalizado. El ticket conserva su estado y responsable.') }
+      if (!controller.signal.aborted) { setItems((rows) => rows.map((row) => row.id === id ? result : row)); setFinishing(null); setSuccess('Escalamiento finalizado. El ticket conserva su estado y responsable.'); setRetry(value => value + 1) }
     } catch (failure) { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'No se pudo finalizar.') }
     finally { sending.current = false; if (!controller.signal.aborted) setBusy(null) }
   }
@@ -64,6 +65,7 @@ export function TicketEscalations({ ticketId, internal = false }: { ticketId: nu
       </div>
       {mayEscalate && <button type="button" className="button-primary rounded-full text-xs font-semibold" onClick={() => { setSuccess(null); setEditing(undefined); setModal(true) }}><Plus size={14} aria-hidden="true" />Nuevo escalamiento</button>}
     </div>
+    <TicketRecommendationNotice ticketId={ticketId} internal={internal} ticketStatus={ticketStatus} refreshKey={retry} onTicketStatusChange={onTicketStatusChange} onEscalate={() => { setSuccess(null); setEditing(undefined); setModal(true) }} />
     {success && <FeedbackMessage variant="success" className="mb-3">{success}</FeedbackMessage>}
     <RequestState compact loading={loading} error={error} empty={!loading && !error && !items.length} emptyTitle="Sin escalamientos" emptyDescription="Este ticket no tiene solicitudes de apoyo." onRetry={() => setRetry(retry + 1)} />
     <ol className="space-y-3" aria-label="Historial de escalamientos">{items.map((item) => <li key={item.id} className="min-w-0 p-3.5 rounded-xl bg-[#070d1a] border border-slate-800 space-y-2">
@@ -83,7 +85,7 @@ export function TicketEscalations({ ticketId, internal = false }: { ticketId: nu
       <section aria-label="Metadatos del escalamiento" className="mt-3 border-t border-slate-800/80 pt-2.5 text-[11px] font-mono text-slate-400"><h3 className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider mb-2">METADATOS</h3><dl className="flex flex-wrap gap-x-8 gap-y-1">{[["Fecha de creación", item.created_at], ["Última actualización", item.updated_at]].map(([label, value]) => <div key={label} className="flex flex-wrap items-baseline gap-2"><dt className="text-slate-500">{label}</dt><dd className="tabular-nums text-slate-300">{formatDate(value, ticketynTimezone)}</dd></div>)}</dl></section>
     </li>)}</ol>
     {finishing !== null && mayEscalate && <dialog ref={finishDialog} aria-labelledby="finish-escalation-heading" className="quick-dialog noc-modal fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto bg-[#0b1426] border border-sky-500/25 rounded-2xl p-5 text-slate-100 shadow-2xl backdrop:bg-slate-950/80" onCancel={(event) => { event.preventDefault(); if (!sending.current) setFinishing(null) }}><h2 id="finish-escalation-heading" className="text-sm font-bold font-mono text-white uppercase tracking-wider mb-3">Finalizar escalamiento</h2><form onSubmit={(event) => { event.preventDefault(); void finish(finishing) }}><label htmlFor="escalation-finish-time" className="text-xs font-mono text-slate-400">Finalización operativa</label><input autoFocus id="escalation-finish-time" type="datetime-local" className="form-input mt-1" required disabled={busy !== null} value={finishTime} onChange={(event) => setFinishTime(event.target.value)} />{error && <FeedbackMessage variant="error" className="mt-2">{error}</FeedbackMessage>}<div className="mt-4 flex gap-2"><button type="button" className="button-secondary rounded-full" disabled={busy !== null} onClick={() => setFinishing(null)}>Cancelar</button><button type="submit" className="button-primary rounded-full" disabled={busy !== null}>Confirmar finalización</button></div></form></dialog>}
-    {modal && mayEscalate && <EscalationModal item={editing} ticketId={ticketId} onCancel={() => setModal(false)} onCreated={() => { setModal(false); setSuccess(editing ? 'Escalamiento actualizado. La responsabilidad principal no cambia.' : 'Escalamiento registrado. La responsabilidad principal no cambia.'); setRetry(retry + 1) }} />}
+    {modal && mayEscalate && <EscalationModal item={editing} ticketId={ticketId} internal={internal} onCancel={() => setModal(false)} onCreated={() => { setModal(false); setSuccess(editing ? 'Escalamiento actualizado. La responsabilidad principal no cambia.' : 'Escalamiento registrado. La responsabilidad principal no cambia.'); setRetry(retry + 1) }} />}
   </section>
 }
 
