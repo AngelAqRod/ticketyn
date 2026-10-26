@@ -52,7 +52,7 @@ def test_complete_exports_related_counts_and_dates(api_client,ticket_payload,db_
     try:
         result=export(api_client,format,limit=1,offset=50,timezone='America/Guatemala')
     finally:event.remove(engine,'before_cursor_execute',capture)
-    assert len(statements)<8  # Joined catalogs and SQL count, not per-record queries.
+    assert len(statements)<(9 if format=='pdf' else 8)  # PDF adds one volume preflight, never per-record queries.
     if format=='pdf':
         text=' '.join(pdf_strings)
         assert 'INT-0000001' in text and 'INT-0000055' in text

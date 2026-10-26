@@ -1,7 +1,7 @@
 from tempfile import SpooledTemporaryFile
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import Engine
 from starlette.background import BackgroundTask
@@ -10,6 +10,7 @@ from ticketyn.api.crud import DBSession
 from ticketyn.api.report_data import report_summary
 from ticketyn.api.report_exports import export_pdf, export_xlsx
 from ticketyn.schemas.report import ReportFilters, ReportSummary, InternalReportFilters, InternalReportSummary
+from ticketyn.api.ticket_pdf_limits import ticket_pdf_export, validate_pdf_volume
 
 router = APIRouter(prefix='/api/reports', tags=['reports'])
 
@@ -28,12 +29,15 @@ def summary(session: DBSession, filters: Annotated[ReportFilters, Query()]):
 
 
 @router.get('/export/{format}')
-def export(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotated[ReportFilters, Query()]):
-    return export_response(session, format, filters)
+def export(session: DBSession, request: Request, format: Literal['pdf', 'xlsx'], filters: Annotated[ReportFilters, Query()]):
+    with ticket_pdf_export(request, format):
+        return export_response(session, format, filters)
 
 
 def export_response(session, format, filters, *, internal=False):
     read_snapshot(session)
+    if format == 'pdf':
+        validate_pdf_volume(session, filters, internal=internal)
     summary = report_summary(session, filters, internal=internal)
     output = SpooledTemporaryFile(max_size=2 * 1024 * 1024)
     try:
@@ -62,5 +66,6 @@ def internal_summary(session: DBSession, filters: Annotated[InternalReportFilter
 
 
 @router.get('/internal-tickets/export/{format}')
-def internal_export(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotated[InternalReportFilters, Query()]):
-    return export_response(session, format, filters, internal=True)
+def internal_export(session: DBSession, request: Request, format: Literal['pdf', 'xlsx'], filters: Annotated[InternalReportFilters, Query()]):
+    with ticket_pdf_export(request, format):
+        return export_response(session, format, filters, internal=True)

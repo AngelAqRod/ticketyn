@@ -122,12 +122,12 @@ it('no consulta sin permiso y conserva el acceso denegado al invocar la página 
 })
 
 it('integra Auditoría de seguridad en Administración sin conceder otras opciones', async () => {
-  vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(json(path === '/health' ? { status: 'ok' } : { version: '0.6.2' }))))
+  vi.stubGlobal('fetch', vi.fn((path: string) => Promise.resolve(json(path === '/health' ? { status: 'ok' } : { version: __TICKETYN_FRONTEND_VERSION__ }))))
   render(<MemoryRouter initialEntries={['/security-audit']}><PermissionProvider permissions={['audit.view']}><Layout /></PermissionProvider></MemoryRouter>)
   const nav = screen.getByRole('navigation')
   expect(within(nav).getByRole('link', { name: 'Auditoría de seguridad' })).toHaveAttribute('href', '/security-audit')
   expect(within(nav).queryByRole('link', { name: 'Responsables' })).not.toBeInTheDocument()
   expect(within(nav).queryByRole('link', { name: 'Roles y permisos' })).not.toBeInTheDocument()
   expect(within(nav).queryByRole('link', { name: 'Seguridad' })).not.toBeInTheDocument()
-  await screen.findByText('Ticketyn v0.6.2')
+  await screen.findByText(`Ticketyn v${__TICKETYN_FRONTEND_VERSION__}`)
 })

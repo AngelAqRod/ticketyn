@@ -73,9 +73,9 @@ def test_assign_reassign_unassign_and_history(api_client, ticket_payload):
     assert api_client.patch(f'/api/tickets/{created["id"]}', json={'responsible_id': None}).json()['responsible'] is None
     new_node = api_client.post('/api/nodes', json={'name': 'Nodo Dos'}).json()
     assert api_client.patch(f'/api/circuits/{ticket_payload["circuit_id"]}', json={'node_id': new_node['id']}).status_code == 200
-    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node']['id'] == node['id']
+    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node']['id'] == new_node['id']
     assert api_client.patch(f'/api/circuits/{ticket_payload["circuit_id"]}', json={'node_id': None}).status_code == 422
-    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node']['id'] == node['id']
+    assert api_client.get(f'/api/tickets/{created["id"]}').json()['node']['id'] == new_node['id']
 
 
 @pytest.mark.parametrize('filters', ['node', 'responsible', 'combined', 'all'])
@@ -105,6 +105,8 @@ def test_shared_filters_list_reports_exports(api_client, ticket_payload, filters
     summary = api_client.get('/api/reports/summary', params=period).json()
     assert summary['kpis']['started'] == len(rows)
     for format in ['pdf', 'xlsx']:
+        if format == 'pdf' and hasattr(api_client.app.state, 'ticket_pdf_limiter'):
+            api_client.app.state.ticket_pdf_limiter.next_allowed.clear()
         response = api_client.get(f'/api/reports/export/{format}', params=period)
         assert response.status_code == 200
         if format == 'pdf': assert response.content.startswith(b'%PDF')
@@ -225,6 +227,8 @@ def test_exports_complete_and_readable(api_client, ticket_payload):
     Path('/tmp/ticketyn-report-general-composition.pdf').write_bytes(general.content)
     for path, params in [('tickets', filters), ('reports', period)]:
         for format in ['pdf', 'xlsx']:
+            if format == 'pdf' and hasattr(api_client.app.state, 'ticket_pdf_limiter'):
+                api_client.app.state.ticket_pdf_limiter.next_allowed.clear()
             response = api_client.get(f'/api/{path}/export/{format}', params=params)
             assert response.status_code == 200
             if format == 'xlsx':

@@ -286,11 +286,32 @@ export function TicketForm({ ticket }: { ticket?: Ticket }) {
                   {customerId && !circuitLoading && !circuitError && !circuits.some((item) => item.active) && !circuitId && <p className="mt-2 text-xs text-amber-400">Este cliente no tiene circuitos activos.</p>}
                   {circuitError && <RequestState id="ticket-circuit-error" compact error={`Error al cargar circuitos: ${circuitError}`} errorTitle="" retryText="Reintentar circuitos" onRetry={() => setCircuitRetry(circuitRetry + 1)} className="mt-2" />}
                 </FormField>
-                <CircuitAssignmentField field="node" id="ticket-node" circuit={selectedCircuit} options={catalogs?.nodes ?? []} value={nodeId} onChange={setNodeId} disabled={!editable || catalogLoading || Boolean(catalogError) || submitting} describedBy={submitError ? "ticket-submit-error" : undefined} invalid={Boolean(submitError && !effectiveNodeId) || apiInvalidFields.includes("node_id")} />
+                <CircuitAssignmentField
+                  field="node"
+                  id="ticket-node"
+                  circuit={selectedCircuit}
+                  options={catalogs?.nodes ?? []}
+                  value={nodeId}
+                  onChange={setNodeId}
+                  persistedName={ticket && String(ticket.circuit_id) === circuitId ? (ticket.node?.name ?? catalogs?.nodes.find(item => item.id === ticket.node_id)?.name) : undefined}
+                  disabled={!editable || catalogLoading || Boolean(catalogError) || submitting}
+                  describedBy={submitError ? "ticket-submit-error" : undefined}
+                  invalid={Boolean(submitError && !effectiveNodeId) || apiInvalidFields.includes("node_id")}
+                />
                 <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={apiInvalidFields.includes("responsible_id")} id="responsible" label="Responsable">
                   <SearchableSelect id="responsible" label="Responsable" value={responsibleId} onChange={setResponsibleId} disabled={!editable || catalogLoading || Boolean(catalogError)} options={(catalogs?.responsibles ?? []).filter(p => operationalChoice(p, ticket?.responsible_id ? [ticket.responsible_id] : [])).map((item) => ({ value: String(item.id), label: item.name, disabled: !item.active }))} placeholder="Sin asignar" emptyMessage="No hay responsables activos." noMatchMessage="No se encontraron responsables." />
                 </FormField>
-                <CircuitSectorField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={Boolean(submitError && !effectiveSectorId) || apiInvalidFields.includes("sector_id")} id="sector" circuit={selectedCircuit} sectors={catalogs?.sectors ?? []} value={sectorId} onChange={setSectorId} disabled={!editable || catalogLoading || Boolean(catalogError) || submitting} />
+                <CircuitSectorField
+                  describedBy={submitError ? "ticket-submit-error" : undefined}
+                  invalid={Boolean(submitError && !effectiveSectorId) || apiInvalidFields.includes("sector_id")}
+                  id="sector"
+                  circuit={selectedCircuit}
+                  sectors={catalogs?.sectors ?? []}
+                  value={sectorId}
+                  onChange={setSectorId}
+                  persistedName={ticket && String(ticket.circuit_id) === circuitId ? (historical?.sector?.name ?? catalogs?.sectors.find(item => item.id === ticket.sector_id)?.name) : undefined}
+                  disabled={!editable || catalogLoading || Boolean(catalogError) || submitting}
+                />
                 <FormField describedBy={submitError ? "ticket-submit-error" : undefined} invalid={(submitError === "Completa los campos obligatorios antes de guardar." && !departmentId.trim()) || apiInvalidFields.includes("department_id")} id="department" label="Departamento" required>
                   <select id="department" className="form-input" required disabled={!editable || catalogLoading || Boolean(catalogError)} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
                     <option value="">Selecciona un departamento</option>

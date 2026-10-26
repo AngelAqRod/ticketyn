@@ -50,6 +50,8 @@
 - **Referencias:** Consultar `docs/SYSTEM_MAP.md` para la lista completa de archivos.
 
 ## Contratos y seguridad
+
+- Hotfix propuesto v0.9.1: Nginx registra método/ruta sin argumentos, estado, bytes y duración; omite query strings y Referer. Los errores de la ubicación exacta del callback se descartan para evitar URLs completas, conservando access log seguro. El proxy y el filtro Uvicorn existentes se mantienen. Proxies externos requieren aplicar la misma política; ver `../security-hotfix-v0.9.1.md`.
 - **Endpoints clave:** `GET/PUT /api/mail/transport`, `POST /api/mail/transport/test`, `GET/PUT /api/mail/templates`, `GET/POST /api/mail/oauth/authorize`, `GET/PUT /api/mail/processor/control`, `GET /api/mail/events`, `GET /api/mail-notifications/events/{event_key}/fields`, `GET/PATCH /api/mail-notifications/events/{event_key}/template`, `POST /api/mail-notifications/events/{event_key}/preview`.
 - **Permisos requeridos:** `mail.transport.view`, `mail.transport.edit`, `mail.transport.test`, `mail.oauth.view`, `mail.oauth.edit`, `mail.oauth.authorize`, `mail.events.view`, `mail.events.edit`, `mail.templates.view`, `mail.templates.edit`, `mail.templates.preview`, `mail.processor.view`, `mail.processor.control`.
 - **Regla de dependencia:** `mail.oauth.view` exige obligatoriamente `mail.transport.view`. Los roles Operador y Auditor no disponen de acceso a este módulo.

@@ -5,6 +5,7 @@ from ticketyn.security.mutations import ticket_mutation
 from sqlalchemy import select, func, or_
 from ticketyn.api.internal_ticket_exports import export_pdf, export_xlsx
 from ticketyn.api.ticket_exports import stream_ticket_export
+from ticketyn.api.ticket_pdf_limits import ticket_pdf_export
 from ticketyn.api.ticket_reports import TicketReportOptions, report_response
 from ticketyn.api.internal_ticket_reports import internal_ticket_pdf
 from ticketyn.api.crud import DBSession, get_or_404, save_item, update_item
@@ -59,9 +60,10 @@ def listing(session: DBSession, filters: Annotated[InternalFilters, Query()], re
     return [data.response(session, row, counts.get(row.id, 0)) for row in rows]
 
 @router.get('/api/internal-tickets/export/{format}')
-def export_list(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotated[InternalExportFilters, Query()]):
-    return stream_ticket_export(session, format, filters, 'ticketyn-tickets-internos',
-                                export_pdf if format == 'pdf' else export_xlsx)
+def export_list(session: DBSession, request: Request, format: Literal['pdf', 'xlsx'], filters: Annotated[InternalExportFilters, Query()]):
+    with ticket_pdf_export(request, format):
+        return stream_ticket_export(session, format, filters, 'ticketyn-tickets-internos',
+                                    export_pdf if format == 'pdf' else export_xlsx)
 
 @router.get('/api/internal-tickets/{id}', response_model=InternalTicketResponse | InternalLinkSummary)
 def detail(id: RootId, session: DBSession, request: Request):

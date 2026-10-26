@@ -73,6 +73,8 @@ def create_app(*, start_notifications=True, notification_engine=None, security_s
             if retention_engine is not None: retention_engine.dispose()
 
     app = FastAPI(title="Ticketyn", version=get_version(), lifespan=lifespan)
+    from ticketyn.api.ticket_pdf_limits import TicketPdfLimiter
+    app.state.ticket_pdf_limiter = TicketPdfLimiter()
     from ticketyn.security.http import install_security
     from ticketyn.api.auth import router as auth_router
     install_security(app, security_session_factory)

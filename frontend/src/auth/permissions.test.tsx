@@ -28,12 +28,12 @@ it('deniega capacidades ausentes y mantiene independientes consulta y exportaci�
  expect(screen.getByText('false')).toBeVisible()
 })
 it('muestra operaciones y reportería sin Administración para un operador',async()=>{
- vi.stubGlobal('fetch',vi.fn((_path:string)=>Promise.resolve(json({version:'0.6.2'}))))
+ vi.stubGlobal('fetch',vi.fn((_path:string)=>Promise.resolve(json({version:__TICKETYN_FRONTEND_VERSION__}))))
  show(<Layout/>,['dashboard.view','tickets.view','changes.view','reports.changes.view'])
  expect(screen.getByRole('link',{name:/Control de cambios/})).toBeInTheDocument()
  expect(screen.queryByRole('link',{name:/Catálogos/})).not.toBeInTheDocument()
  expect(screen.queryByRole('link',{name:/Configuración de correo/})).not.toBeInTheDocument()
- await screen.findByText('Ticketyn v0.6.2')
+ await screen.findByText(`Ticketyn v${__TICKETYN_FRONTEND_VERSION__}`)
 })
 it('solo lectura CAM conserva relaciones y oculta todas las mutaciones de vínculos',()=>{
  show(<ChangeTicketLinks items={[{id:4,reference:'INT-4',title:'Mantenimiento'}]} onChange={vi.fn()}/>,['changes.view'])

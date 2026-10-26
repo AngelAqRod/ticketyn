@@ -12,6 +12,7 @@ from ticketyn.models import Ticket
 from ticketyn.schemas.ticket import TicketCreate, TicketFilters, TicketListResponse, TicketResponse, TicketStats, TicketUpdate
 from ticketyn.schemas.ticket_close import CustomerTicketClose
 from ticketyn.api.ticket_close import close_ticket
+from ticketyn.api.ticket_pdf_limits import ticket_pdf_export
 
 router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 
@@ -29,9 +30,10 @@ def list_tickets(session: DBSession, filters: Annotated[TicketFilters, Query()])
 
 
 @router.get('/export/{format}')
-def export_tickets(session: DBSession, format: Literal['pdf', 'xlsx'], filters: Annotated[TicketExportFilters, Query()]):
-    return stream_ticket_export(session, format, filters, 'ticketyn-tickets',
-                                export_ticket_pdf if format == 'pdf' else export_ticket_xlsx)
+def export_tickets(session: DBSession, request: Request, format: Literal['pdf', 'xlsx'], filters: Annotated[TicketExportFilters, Query()]):
+    with ticket_pdf_export(request, format):
+        return stream_ticket_export(session, format, filters, 'ticketyn-tickets',
+                                    export_ticket_pdf if format == 'pdf' else export_ticket_xlsx)
 
 
 @router.get("/stats", response_model=TicketStats)

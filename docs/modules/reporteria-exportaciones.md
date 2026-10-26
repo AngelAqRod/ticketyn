@@ -21,6 +21,7 @@
 - **Alcance completo del filtrado tabular:**
   - Las exportaciones PDF y Excel de cualquier listado procesan el conjunto completo de registros que satisfacen los filtros aplicados (búsqueda, cliente, sector, nodo, estado, fechas), no limitándose a la página visible en la paginación de pantalla.
 - **Protección de memoria y límites ReportLab:**
+  - Hotfix propuesto v0.9.1: listados y estadísticas PDF de tickets de clientes/internos comparten preflight SQL de 2.000 tickets/2.000.000 caracteres, una generación simultánea y 30 s por usuario. Excesos 413; concurrencia/frecuencia 429 con `Retry-After`. No afecta consultas, XLSX ni PDF individuales. Ver `../security-hotfix-v0.9.1.md` y `src/ticketyn/api/ticket_pdf_limits.py`.
   - Los generadores ReportLab procesan el documento en memoria RAM antes de emitir la respuesta HTTP.
   - Para evitar agotamiento de memoria en el proceso Uvicorn (`--workers 1`), se aplican límites de volumen (ej. máximo **2.000 operaciones y 2.000.000 de caracteres** en FMS).
   - Ante volúmenes excesivos, el backend rechaza la solicitud indicando acotar el período; jamás se genera un documento truncado silenciosamente.

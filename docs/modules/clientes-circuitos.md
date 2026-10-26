@@ -18,10 +18,12 @@
 - **Cálculo dinámico de la capacidad actual:**
   - La capacidad actual de un circuito no reemplaza ni sobrescribe la `initial_bandwidth` registrada durante la activación.
   - Se deriva dinámicamente de la última operación de cambio de capacidad registrada en el módulo FMS. Si no existen cambios de capacidad posteriores, la capacidad actual es igual a la inicial.
-- **Regla de sincronización de sector (168 horas):**
-  - Al actualizar el sector de un circuito, se ejecuta una sincronización automática y transaccional sobre todos sus tickets creados en las últimas **168 horas** (7 días), incluyendo los cerrados, cuyo sector sea distinto al nuevo sector del circuito.
-  - La sincronización genera una entrada interna de bitácora en cada ticket afectado.
-  - Los tickets con más de 168 horas de antigüedad preservan intacto su sector histórico para no alterar reportes pasados.
+- **Regla de sincronización de sector y HUB/nodo (168 horas):**
+  - Al actualizar el sector o el HUB (nodo) de un circuito, se ejecuta una sincronización automática y transaccional sobre todos sus tickets asociados creados en las últimas **168 horas** (7 días), incluyendo los cerrados, cuyo valor asignado sea distinto al nuevo valor del circuito.
+  - La sincronización actualiza de forma atómica el identificador (`sector_id` o `node_id`) y registra una entrada interna en `ticket_updates` describiendo el cambio automático.
+  - Se preservan estrictamente la fecha de actualización (`updated_at`), responsables, fechas operativas, estados y resoluciones de los tickets modificados.
+  - Los tickets con más de 168 horas de antigüedad preservan intacto su HUB/sector histórico original para garantizar la inmutabilidad de reportes pasados.
+  - En la interfaz de usuario (`TicketForm` / `CircuitAssignmentField`), los tickets con antigüedad superior a 168 horas muestran su HUB persistido original en lugar del HUB actual del circuito, evitando discrepancias visuales o falsas apariencias de reversión al guardar.
   - Los tickets internos no participan en esta sincronización.
 - **Configuración CPE como texto plano técnico:**
   - El campo de configuración CPE es texto literal consultable y editable por el NOC.
@@ -31,7 +33,7 @@
   - No existe relación jerárquica estricta que subordine un nodo a un único sector; ambos se eligen de forma independiente en el circuito.
 
 ## Arquitectura y dependencias
-- **Componentes backend:** Endpoints en `src/ticketyn/api/` (`customers.py`, `circuits.py`, `circuit_sector.py`, `circuit_ticket_sectors.py`, `cpe_models.py`), modelos en `src/ticketyn/models/` (`customer.py`, `circuit.py`, `cpe_model.py`), esquemas en `src/ticketyn/schemas/` (`customer.py`, `circuit.py`, `cpe_model.py`).
+- **Componentes backend:** Endpoints en `src/ticketyn/api/` (`customers.py`, `circuits.py`, `circuit_sector.py`, `circuit_ticket_sectors.py`, `circuit_ticket_nodes.py`, `cpe_models.py`), modelos en `src/ticketyn/models/` (`customer.py`, `circuit.py`, `cpe_model.py`), esquemas en `src/ticketyn/schemas/` (`customer.py`, `circuit.py`, `cpe_model.py`).
 - **Componentes frontend:** Vistas en `frontend/src/pages/CircuitDetail.tsx`, componentes en `frontend/src/components/` (`CircuitActions.tsx`, `CpeConfiguration.tsx`).
 - **Dependencias:** Sectores, Nodos, Tipos de Servicio, Modelos CPE, Operaciones FMS y Tickets de Clientes.
 - **Referencias:** Consultar `docs/SYSTEM_MAP.md` para la lista completa de archivos.
@@ -46,14 +48,15 @@
 ## Validaciones
 - **Pruebas backend:**
   ```bash
-  .venv/bin/pytest tests/test_circuit_ticket_sector_sync.py tests/test_catalog_api.py -q
+  .venv/bin/pytest tests/test_circuit_ticket_sector_sync.py tests/test_circuit_ticket_node_sync.py tests/test_catalog_api.py -q
   ```
 - **Pruebas frontend:**
   ```bash
-  npm test -- frontend/src/components/CircuitSectorField.test.tsx frontend/src/components/CpeConfiguration.test.tsx
+  npm test -- frontend/src/components/CircuitSectorField.test.tsx frontend/src/components/CpeConfiguration.test.tsx frontend/src/pages/TicketDetail.test.tsx
   ```
 - **Consideraciones para evitar regresiones:**
-  - Asegurar que la actualización de sector no modifique tickets creados fuera de la ventana de 168 horas.
+  - Asegurar que la actualización de sector y HUB/nodo no modifique tickets creados fuera de la ventana de 168 horas.
+  - Verificar que el formulario de edición de ticket muestre el HUB persistido histórico para tickets con más de 7 días.
   - Verificar que el recálculo de capacidad actual consulte correctamente la última operación de FMS sin depender del modelo local de circuito.
 
 ## Mantenimiento

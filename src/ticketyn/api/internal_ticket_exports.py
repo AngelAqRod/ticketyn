@@ -10,6 +10,7 @@ from ticketyn.api.documents import (
     modern_table, modular_metric_strip, paragraph, report_identification,
 )
 from ticketyn.api.ticket_exports import write_export_xlsx
+from ticketyn.api.ticket_pdf_limits import validate_pdf_volume
 from ticketyn.models import InternalTicket, Ticket
 
 HEADERS = ['Correlativo', 'Incidencia', 'Estado', 'Sector', 'Nodo', 'Departamento',
@@ -53,6 +54,7 @@ def export_rows(session, filters, *, excel=False):
 
 
 def export_pdf(session, filters, output):
+    validate_pdf_volume(session, filters, internal=True)
     fonts()
     zone = ZoneInfo(filters.timezone)
     stmt = data.statement(filters.model_dump()).order_by(None).subquery()

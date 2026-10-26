@@ -12,6 +12,7 @@ from ticketyn.models.fms import Activation, CapacityChange, CircuitLifecycleOper
 from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate, CpeConfigurationInput, CpeConfigurationResponse
 
 from ticketyn.api.circuit_sector import locked_circuit, validate_sector, validate_node
+from ticketyn.api.circuit_ticket_nodes import synchronize_recent_ticket_nodes
 from ticketyn.api.circuit_ticket_sectors import synchronize_recent_ticket_sectors
 from ticketyn.api.distribution_data import distribution_write, record, snapshot, validate_circuit_distribution
 
@@ -84,8 +85,8 @@ def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, sessio
         node_id = values.get("node_id", item.node_id)
         if node_id is None:
             raise HTTPException(422, "Selecciona un Nodo para el circuito antes de guardar.")
-        if node_id != item.node_id:
-            validate_node(session, node_id)
+        node_changed = node_id != item.node_id
+        new_node = validate_node(session, node_id) if node_changed else None
         if values.get('service_type_id') is not None and values['service_type_id'] != item.service_type_id:
             validate_active(session, ServiceType, values['service_type_id'])
         if values.get('cpe_model_id') is not None and values['cpe_model_id'] != item.cpe_model_id:
@@ -93,6 +94,8 @@ def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, sessio
         validate_circuit_distribution(session, values, item)
         if sector_changed:
             synchronize_recent_ticket_sectors(session, item.id, new_sector)
+        if node_changed:
+            synchronize_recent_ticket_nodes(session, item.id, new_node)
         for key, value in values.items():
             setattr(item, key, value)
         session.flush(); session.refresh(item)

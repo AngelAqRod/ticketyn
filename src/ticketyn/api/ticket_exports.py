@@ -15,6 +15,7 @@ from ticketyn.api.documents import (
     modular_metric_strip, paragraph, report_identification, ticket_pdf_table,
 )
 from ticketyn.api.ticket_data import RELATED_MODELS, ticket_rows, ticket_statement
+from ticketyn.api.ticket_pdf_limits import validate_pdf_volume
 
 
 def friendly_filters(session, filters):
@@ -51,6 +52,7 @@ def friendly_filters(session, filters):
 
 
 def export_ticket_pdf(session, filters, output):
+    validate_pdf_volume(session, filters)
     fonts()
     zone = ZoneInfo(filters.timezone)
     values = filters.model_dump()
