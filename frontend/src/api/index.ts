@@ -1,7 +1,7 @@
 import type { DeviceCreateInput } from '../types/distribution'
 import type { NamedCatalog, DistributionDevice, DistributionPort } from '../types/catalog'
-import { getJson, postJson, patchJson, deleteResource, ApiError } from './client'
-import type { Ticket, TicketCreateInput, TicketStats, TicketQuery } from '../types/ticket'
+import { getJson, getJsonWithTotal, postJson, patchJson, deleteResource, ApiError } from './client'
+import type { Ticket, TicketCreateInput, TicketStats, TicketQuery, OpenOverview } from '../types/ticket'
 import type { ServiceType, Position, PositionInput, ResponsibleInput, EscalationReason, Node, Responsible, Circuit, Customer, Department, IncidentType, Sector, CustomerInput, CircuitInput, NamedCatalogInput } from '../types/catalog'
 
 async function catalogList<T>(path: string, signal?: AbortSignal, filters: Record<string, string> = {}, includeInactive = false): Promise<T[]> {
@@ -30,20 +30,30 @@ export async function getTicketStats(signal?: AbortSignal): Promise<TicketStats>
   return getJson<TicketStats>('/api/tickets/stats', signal)
 }
 
+export async function getOpenOverview(signal?: AbortSignal): Promise<OpenOverview> {
+  const overview = await getJson<OpenOverview>('/api/tickets/open-overview', signal)
+  if (!overview || typeof overview.buckets !== 'object' || !Array.isArray(overview.sectors)) throw new ApiError('La API no devolvió un resumen de tickets abiertos válido.')
+  return overview
+}
+
 export async function getHealth(signal?: AbortSignal): Promise<void> {
   const health = await getJson<{ status: string }>('/health', signal)
   if (health?.status !== 'ok') throw new ApiError('La API no confirmó su disponibilidad.')
 }
 
-export async function listTickets(
+export async function listTicketsPage(
   { limit = 50, offset = 0, ...filters }: TicketQuery = {},
   signal?: AbortSignal,
-): Promise<Ticket[]> {
+): Promise<{ tickets: Ticket[]; total: number | null }> {
   const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
   for (const [key, value] of Object.entries(filters)) if (value !== undefined && value !== '') query.set(key, String(value))
-  const tickets = await getJson<Ticket[]>(`/api/tickets?${query}`, signal)
+  const { data: tickets, total } = await getJsonWithTotal<Ticket[]>(`/api/tickets?${query}`, signal)
   if (!Array.isArray(tickets)) throw new ApiError('La API no devolvió una lista de tickets válida.')
-  return tickets
+  return { tickets, total }
+}
+
+export async function listTickets(query: TicketQuery = {}, signal?: AbortSignal): Promise<Ticket[]> {
+  return (await listTicketsPage(query, signal)).tickets
 }
 
 export const getTicket = (id: number, signal?: AbortSignal) => getJson<Ticket>(`/api/tickets/${id}`, signal)

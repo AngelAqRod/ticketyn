@@ -1,6 +1,8 @@
-const dateFormatter = new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' })
+import { ticketynTimezone } from './datetime'
 
-const tableDateFormatter = new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+const dateFormatter = new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short', timeZone: ticketynTimezone })
+
+const tableDateFormatter = new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: ticketynTimezone })
 
 export function formatTableDate(value: string | null): string {
   if (value === null) return '—'

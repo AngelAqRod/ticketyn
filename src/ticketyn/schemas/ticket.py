@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -124,6 +124,22 @@ class TicketStats(BaseModel):
     closed: int
 
 
+class OpenOverviewSector(BaseModel):
+    id: int
+    name: str
+    count: int
+
+
+class OpenOverview(BaseModel):
+    """Abiertos por antigüedad (excluyentes), sin responsable (transversal) y por sector."""
+    generated_at: AwareDatetime
+    open: int
+    buckets: dict[Literal["lt_1h", "1_to_4h", "4_to_24h", "gt_24h"], int]
+    future_start: int
+    unassigned: int
+    sectors: list[OpenOverviewSector]
+
+
 class TicketFilters(BaseModel):
     node_id: PositiveId | None = None
     responsible_id: PositiveId | None = None
@@ -134,6 +150,9 @@ class TicketFilters(BaseModel):
     department_id: PositiveId | None = None
     incident_type_id: PositiveId | None = None
     search: str | None = None
+    age_bucket: Literal["lt_1h", "1_to_4h", "4_to_24h", "gt_24h"] | None = Field(default=None, description="Tramo de antigüedad de tickets abiertos (misma clasificación que el Dashboard)")
+    unassigned: bool = Field(default=False, description="Solo tickets sin responsable")
+    order: Literal["start_at_asc", "start_at_desc"] | None = Field(default=None, description="Orden por start_at; por omisión, más recientes primero")
     from_at: AwareDatetime | None = Field(default=None, alias="from", description="Inicio inclusivo del rango sobre start_at; timestamp con timezone")
     to_at: AwareDatetime | None = Field(default=None, alias="to", description="Fin exclusivo del rango sobre start_at; timestamp con timezone")
 
@@ -141,6 +160,8 @@ class TicketFilters(BaseModel):
     def valid_range(self):
         if self.from_at is not None and self.to_at is not None and self.to_at <= self.from_at:
             raise ValueError("to debe ser posterior a from")
+        if self.unassigned and self.responsible_id is not None:
+            raise ValueError("unassigned y responsible_id son excluyentes")
         return self
 
     limit: Annotated[int, Field(ge=1, le=200)] = 50

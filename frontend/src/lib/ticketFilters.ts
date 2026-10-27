@@ -1,6 +1,8 @@
 import type { TicketQuery } from '../types/ticket'
+// Sin imports locales: una prueba carga este módulo directamente con Node.
+const ageBucketKeys = ['lt_1h', '1_to_4h', '4_to_24h', 'gt_24h']
 
-export const ticketFilterKeys = ['search', 'status', 'customer_id', 'circuit_id', 'sector_id', 'department_id', 'incident_type_id', 'node_id', 'responsible_id', 'from', 'to'] as const
+export const ticketFilterKeys = ['search', 'status', 'customer_id', 'circuit_id', 'sector_id', 'department_id', 'incident_type_id', 'node_id', 'responsible_id', 'age_bucket', 'unassigned', 'from', 'to'] as const
 export const circuitFilterKeys = ['search', 'customer_id', 'sector_id', 'node_id', 'active'] as const
 
 export function localDateBoundary(value: string, nextDay = false): string {
@@ -17,6 +19,12 @@ export function ticketQuery(params: URLSearchParams): { query: TicketQuery; erro
   const query: TicketQuery = {}
   for (const key of ['search', 'status'] as const) if (params.get(key)) query[key] = params.get(key)!
   for (const key of ['customer_id', 'circuit_id', 'sector_id', 'department_id', 'incident_type_id', 'node_id', 'responsible_id'] as const) if (params.get(key)) query[key] = Number(params.get(key))
+  if (params.get('unassigned') === 'true') query.unassigned = true
+  const bucket = params.get('age_bucket')
+  if (bucket) {
+    if (!ageBucketKeys.includes(bucket)) return { query, error: 'El tramo de antigüedad indicado no es válido.' }
+    query.age_bucket = bucket as TicketQuery['age_bucket']
+  }
   try {
     if (params.get('from')) query.from = localDateBoundary(params.get('from')!)
     if (params.get('to')) query.to = localDateBoundary(params.get('to')!, true)

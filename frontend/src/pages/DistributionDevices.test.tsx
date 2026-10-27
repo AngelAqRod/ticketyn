@@ -258,8 +258,7 @@ describe('DistributionDevices — Listado y gestión', () => {
       expect(screen.getByText('Switch-Core-01')).toBeInTheDocument()
     })
 
-    const statusSelect = screen.getByLabelText(/Estado administrativo/i)
-    fireEvent.change(statusSelect, { target: { value: 'false' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Inactivos' }))
 
     await waitFor(() => {
       expect(screen.getByText('OLT-Huawei-Norte')).toBeInTheDocument()
@@ -581,4 +580,26 @@ it.each([
   expect(cells[5]).toHaveTextContent('5')
   expect(cells[5]).toHaveClass('text-purple-300')
   if (count === undefined) expect(within(row).getByLabelText('Dato no disponible')).toBeInTheDocument()
+
+})
+describe('barra de filtros de equipos de distribución', () => {
+  it('usa la barra morada con chips que se quitan uno a uno y un único «Limpiar todo»', async () => {
+    setupFetchMock()
+    renderComponent()
+    await screen.findByText('Switch-Core-01')
+    const region = screen.getByRole('region', { name: 'Filtros de equipos de distribución' })
+    expect(region).toHaveClass('filter-bar--purple')
+    expect(within(region).queryByRole('button', { name: /Limpiar/ })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Buscar por nombre o descripción'), { target: { value: 'OLT' } })
+    fireEvent.click(within(region).getByRole('button', { name: 'Inactivos' }))
+    expect(await within(region).findByText('Búsqueda: OLT')).toBeInTheDocument()
+    expect(within(region).getByText('Estado: Inactivos')).toBeInTheDocument()
+    fireEvent.click(within(region).getByRole('button', { name: 'Quitar filtro Búsqueda: OLT' }))
+    expect(screen.getByLabelText('Buscar por nombre o descripción')).toHaveValue('')
+    expect(within(region).getByRole('button', { name: 'Inactivos', pressed: true })).toBeInTheDocument()
+    expect(within(region).getAllByRole('button', { name: /Limpiar/ })).toHaveLength(1)
+    fireEvent.click(within(region).getByRole('button', { name: 'Limpiar todo' }))
+    expect(within(region).getByRole('button', { name: 'Todos', pressed: true })).toBeInTheDocument()
+    expect(within(region).queryByRole('button', { name: /Limpiar/ })).not.toBeInTheDocument()
+  })
 })

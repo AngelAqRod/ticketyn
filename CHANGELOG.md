@@ -1,5 +1,16 @@
 # Changelog
 
+## Sin publicar — Dashboard operativo y listado de tickets
+
+- **Identidad:** Control de cambios pasa de ámbar a cian (compartido con el Dashboard). Se conservan en ámbar «Tiempo excedido», «Hoy» y el aviso de sesión; los estados de cambios no varían.
+- **Estados:** Abierto en ámbar y Cerrado en gris pizarra en todos los listados; responsable en texto normal y «Sin asignar» gris cursiva.
+- **Totales y paginación:** `GET /api/tickets` y `GET /api/internal-tickets` devuelven `X-Total-Count` (total filtrado, antes de LIMIT/OFFSET; el cuerpo no cambia). Textos «Mostrando 1–50 de 183» y «Página 1 de 4 · Registros 1–50 de 183».
+- **Zona horaria:** `formatDate` y `formatTableDate` usan `America/Guatemala` en lugar de la zona del navegador.
+- **Dashboard:** secciones «Abiertos por antigüedad» (cuatro tramos excluyentes + «Sin responsable» transversal), «Abiertos más antiguos» (cinco, ordenados en backend) y «Abiertos por sector». Nuevo `GET /api/tickets/open-overview` (permiso `tickets.view`, una consulta agregada + una por sector, un único `now`). Las tres tarjetas superiores no cambian.
+- **Filtros de `GET /api/tickets`:** `age_bucket` (`lt_1h`, `1_to_4h`, `4_to_24h`, `gt_24h`), `unassigned` y `order` (`start_at_asc`/`start_at_desc`, desempate por id). La antigüedad no es un SLA.
+- **Listado:** cápsulas Abiertos/Todos/Cerrados, Sin responsable y Más de 24 h (reflejadas en la URL), filtros activos removibles, filtros menos frecuentes plegables, encabezado fijo, columna Descripción y selector de columnas (Nodo, Tipo y Fin ocultos por omisión; preferencia en `localStorage`).
+- Sin migraciones Alembic ni cambios de autenticación, permisos o branding.
+
 ## v0.5.0 — En revisión
 
 ### Funcionalidades

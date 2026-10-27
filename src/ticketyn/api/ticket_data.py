@@ -5,6 +5,7 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, contains_eager
 
 from ticketyn.api.crud import save_item
+from ticketyn.api.ticket_age import age_condition
 from ticketyn.api.circuit_sector import locked_circuit, resolve_sector, validate_sector, resolve_node, validate_node
 from ticketyn.api.ticket_numbers import format_reference, locked_number_config
 from ticketyn.models import Circuit, Customer, Department, IncidentType, Sector, Ticket, Node, Responsible, TicketUpdate
@@ -167,11 +168,18 @@ def ticket_statement(filters: dict, *, time_field: str = "start_at"):
               for field in ("reference", "title", "description")),
             cast(Ticket.ticket_number, String).icontains(filters["search"], autoescape=True),
         ))
+    if filters.get("unassigned"):
+        statement = statement.where(Ticket.responsible_id.is_(None))
+    if filters.get("age_bucket"):
+        # `now` lo fija el endpoint una vez por solicitud para que listado y total coincidan.
+        statement = statement.where(Ticket.status == "OPEN", age_condition(filters["age_bucket"], filters.get("now") or datetime.now(timezone.utc)))
     if filters.get("from_at") is not None:
         statement = statement.where(timestamp >= filters["from_at"])
     if filters.get("to_at") is not None:
         statement = statement.where(timestamp < filters["to_at"])
-    return statement.order_by(Ticket.created_at.desc(), Ticket.id.desc())
+    # Listas blancas: nunca se interpola texto del cliente. Desempate por id, estable.
+    order = {"start_at_asc": (Ticket.start_at.asc(), Ticket.id.asc()), "start_at_desc": (Ticket.start_at.desc(), Ticket.id.desc())}
+    return statement.order_by(*order.get(filters.get("order"), (Ticket.created_at.desc(), Ticket.id.desc())))
 
 
 def joined_ticket_statement(filters: dict):
@@ -191,6 +199,11 @@ def joined_ticket_statement(filters: dict):
 def ticket_rows(session: Session, filters: dict):
     """Todos los resultados, sin paginación y sin lazy loading de catálogos."""
     return session.execute(joined_ticket_statement(filters).execution_options(yield_per=200))
+
+
+def count_tickets(session: Session, filters: dict) -> int:
+    """Total con los mismos filtros que el listado, antes de LIMIT/OFFSET (sin joins que dupliquen)."""
+    return session.scalar(select(func.count()).select_from(ticket_statement(filters).order_by(None).subquery())) or 0
 
 
 def list_tickets(session: Session, filters: dict) -> list[TicketListResponse]:

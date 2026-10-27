@@ -1,7 +1,6 @@
 import { Can, usePermissions } from '../auth/permissions'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronDown } from 'lucide-react'
 import {
   listSectors,
   listNodes,
@@ -12,8 +11,8 @@ import {
 } from '../api'
 import { getJson } from '../api/client'
 import { FormField } from './FormField'
-import { FilterHeading } from './FilterHeading'
-import { FilterChips, type FilterChipItem } from './FilterChips'
+import { FilterBar, FilterPanelGroup, FilterSegment } from './FilterBar'
+import type { FilterChipItem } from './FilterChips'
 import { RequestState } from './RequestState'
 import { InternalTicketSelect } from './InternalTicketSelect'
 import type { Change, ChangeCatalogs } from '../types/change'
@@ -118,324 +117,105 @@ export function ChangeFilters({
   const [search, setSearch] = useState(params.get('search') ?? '')
   useEffect(() => setSearch(params.get('search') ?? ''), [params])
 
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return sessionStorage.getItem('changes_filters_collapsed') === 'true'
-    } catch {
-      return false
-    }
-  })
-
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev
-      try {
-        sessionStorage.setItem('changes_filters_collapsed', String(next))
-      } catch {
-        // Ignorar excepciones de storage
-      }
-      return next
-    })
+  const fields = [
+    ['manager_id', 'Encargado', catalogs?.people],
+    ['support_id', 'Personal de apoyo', catalogs?.people],
+    ['involved_id', 'Personal involucrado', catalogs?.people],
+    ['department_id', 'Departamento', catalogs?.departments],
+    ['sector_id', 'Sector', catalogs?.sectors],
+    ['node_id', 'Nodo', catalogs?.nodes],
+    ['completion_type_id', 'Tipo de finalización', catalogs?.types],
+    ['change_type_id', 'Tipo de cambio', catalogs?.changeTypes],
+  ] as const
+  type FieldKey = (typeof fields)[number][0]
+  const select = (key: FieldKey) => {
+    const [, label, rows] = fields.find(([k]) => k === key)!
+    return (
+      <FormField key={key} id={'change-' + key} label={label}>
+        <select id={'change-' + key} className="form-input" value={params.get(key) ?? ''} onChange={(e) => change({ [key]: e.target.value })}>
+          <option value="">Todos</option>
+          {rows?.map((row) => (
+            <option key={row.id} value={row.id}>
+              {row.name}
+              {row.active ? '' : ' (Inactivo)'}
+            </option>
+          ))}
+        </select>
+      </FormField>
+    )
   }
+  // Un campo ocupa una sola ranura: rápidos en la barra, el resto en el panel.
+  const quickKeys: FieldKey[] = ['manager_id', 'change_type_id']
+  const panelGroups: [string, FieldKey[]][] = [
+    ['Clasificación', ['department_id', 'sector_id', 'node_id', 'completion_type_id']],
+    ['Personas', ['support_id', 'involved_id']],
+  ]
 
-  // Active chips calculation
+  // Cada chip quita solo su condición; el período exige ambos límites, así que se quita completo.
   const activeChips: FilterChipItem[] = []
-  if (params.get('search')) {
-    activeChips.push({
-      label: 'Búsqueda',
-      value: `"${params.get('search')}"`,
-    })
+  const status = params.get('status')
+  if (params.get('search')) activeChips.push({ label: 'Búsqueda', value: `"${params.get('search')}"`, onRemove: () => { setSearch(''); change({ search: '' }) } })
+  if (status) activeChips.push({ label: 'Estado', value: changeStatuses[status as keyof typeof changeStatuses] ?? status, onRemove: () => change({ status: '' }) })
+  if (params.get('from') || params.get('to')) activeChips.push({ label: 'Período', value: `${params.get('from') || '—'} a ${params.get('to') || '—'}`, onRemove: () => change({ from: '', to: '' }) })
+  for (const [key, label, rows] of fields) {
+    const value = params.get(key)
+    if (value) activeChips.push({ label, value: rows?.find((row) => String(row.id) === value)?.name ?? value, onRemove: () => change({ [key]: '' }) })
   }
-  if (params.get('status')) {
-    const s = params.get('status') as keyof typeof changeStatuses
-    activeChips.push({
-      label: 'Estado',
-      value: changeStatuses[s] ?? s,
-    })
-  }
-  if (params.get('from') || params.get('to')) {
-    activeChips.push({
-      label: 'Período',
-      value: `${params.get('from') || '—'} a ${params.get('to') || '—'}`,
-    })
-  }
-  if (params.get('manager_id')) {
-    const match = catalogs?.people?.find(
-      (p) => String(p.id) === params.get('manager_id')
-    )?.name
-    activeChips.push({
-      label: 'Encargado',
-      value: match ?? params.get('manager_id')!,
-    })
-  }
-  if (params.get('support_id')) {
-    const match = catalogs?.people?.find(
-      (p) => String(p.id) === params.get('support_id')
-    )?.name
-    activeChips.push({
-      label: 'Personal de apoyo',
-      value: match ?? params.get('support_id')!,
-    })
-  }
-  if (params.get('involved_id')) {
-    const match = catalogs?.people?.find(
-      (p) => String(p.id) === params.get('involved_id')
-    )?.name
-    activeChips.push({
-      label: 'Personal involucrado',
-      value: match ?? params.get('involved_id')!,
-    })
-  }
-  if (params.get('department_id')) {
-    const match = catalogs?.departments?.find(
-      (d) => String(d.id) === params.get('department_id')
-    )?.name
-    activeChips.push({
-      label: 'Departamento',
-      value: match ?? params.get('department_id')!,
-    })
-  }
-  if (params.get('sector_id')) {
-    const match = catalogs?.sectors?.find(
-      (s) => String(s.id) === params.get('sector_id')
-    )?.name
-    activeChips.push({
-      label: 'Sector',
-      value: match ?? params.get('sector_id')!,
-    })
-  }
-  if (params.get('node_id')) {
-    const match = catalogs?.nodes?.find(
-      (n) => String(n.id) === params.get('node_id')
-    )?.name
-    activeChips.push({
-      label: 'Nodo',
-      value: match ?? params.get('node_id')!,
-    })
-  }
-  if (params.get('completion_type_id')) {
-    const match = catalogs?.types?.find(
-      (t) => String(t.id) === params.get('completion_type_id')
-    )?.name
-    activeChips.push({
-      label: 'Tipo de finalización',
-      value: match ?? params.get('completion_type_id')!,
-    })
-  }
-  if (params.get('change_type_id')) {
-    const match = catalogs?.changeTypes?.find(
-      (t) => String(t.id) === params.get('change_type_id')
-    )?.name
-    activeChips.push({
-      label: 'Tipo de cambio',
-      value: match ?? params.get('change_type_id')!,
-    })
-  }
-
-  const activeCount = activeChips.length
+  const advancedKeys = [...panelGroups.flatMap(([, keys]) => keys), 'from', 'to']
+  const advancedCount = advancedKeys.filter((key) => params.get(key)).length
 
   return (
-    <section
-      className="filter-toolbar filter-toolbar--amber mb-5"
-      aria-label="Filtros de cambios"
-    >
-      <div
-        className={`filter-toolbar-header ${
-          collapsed ? 'filter-toolbar-header--collapsed' : ''
-        } ${activeCount > 0 ? 'filter-toolbar-header--has-chips' : ''}`}
-      >
-        <div className="flex flex-wrap items-center gap-2.5">
-          <FilterHeading title="Filtros de cambios" theme="amber" />
-          <span
-            className={`filter-count-badge filter-count-badge--amber ${
-              activeCount > 0 ? 'filter-count-badge--active' : ''
-            }`}
-            aria-label={`${activeCount} ${
-              activeCount === 1 ? 'filtro activo' : 'filtros activos'
-            }`}
-          >
-            <span className="filter-count-dot" aria-hidden="true" />
-            <span>
-              {activeCount}{' '}
-              {activeCount === 1 ? 'filtro activo' : 'filtros activos'}
-            </span>
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {activeCount > 0 && (
-            <button
-              type="button"
-              className="button-ghost text-xs text-amber-400 hover:text-amber-300 font-mono py-1 px-2.5 rounded-full"
-              onClick={clear}
-            >
-              Limpiar todo
-            </button>
-          )}
-          <button
-            type="button"
-            className="filter-toggle-button button-secondary rounded-full"
-            onClick={toggleCollapsed}
-            aria-expanded={!collapsed}
-            aria-controls="change-filters-body"
-            aria-label={
-              !collapsed
-                ? 'Contraer filtros de cambios'
-                : 'Expandir filtros de cambios'
-            }
-            title={!collapsed ? 'Contraer filtros' : 'Expandir filtros'}
-          >
-            <span>{!collapsed ? 'Contraer' : 'Expandir'}</span>
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-200 ${
-                !collapsed ? 'rotate-180' : ''
-              }`}
-              aria-hidden="true"
-            />
-          </button>
-        </div>
-      </div>
-
-      <FilterChips items={activeChips} theme="amber" />
-
-      <div
-        id="change-filters-body"
-        className={`mt-4 space-y-4 ${collapsed ? 'hidden' : 'block'}`}
-      >
-        <form
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            change({ search })
-          }}
-        >
-          <div className="flex-1 min-w-[240px]">
+    <FilterBar
+      label="Filtros de cambios"
+      theme="cyan"
+      chips={activeChips}
+      panelCount={advancedCount}
+      onClear={clear}
+      search={
+        <form className="flex items-end gap-2.5" onSubmit={(e) => { e.preventDefault(); change({ search }) }}>
+          <div className="flex-1 min-w-0">
             <FormField id="change-search" label="Buscar">
-              <input
-                id="change-search"
-                className="form-input"
-                placeholder="Correlativo o título"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <input id="change-search" className="form-input" placeholder="Correlativo o título" value={search} onChange={(e) => setSearch(e.target.value)} />
             </FormField>
           </div>
-          <button className="button-secondary rounded-full">Buscar</button>
+          <button type="submit" className="button-secondary rounded-full shrink-0">Buscar</button>
         </form>
-
-        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-          <FormField id="change-status" label="Estado">
-            <select
-              id="change-status"
-              className="form-input"
-              value={params.get('status') ?? ''}
-              onChange={(e) => change({ status: e.target.value })}
-            >
-              <option value="">Todos</option>
-              {Object.entries(changeStatuses).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          {(['from', 'to'] as const).map((key) => (
-            <FormField
-              key={key}
-              id={'change-' + key}
-              label={
-                key === 'from'
-                  ? 'Inicio propuesto desde'
-                  : 'Inicio propuesto hasta'
-              }
-            >
-              <input
-                id={'change-' + key}
-                type="date"
-                className="form-input"
-                value={params.get(key) ?? ''}
-                onChange={(e) => change({ [key]: e.target.value })}
-              />
-            </FormField>
-          ))}
-
-          {(
-            [
-              ['manager_id', 'Encargado', catalogs?.people],
-              ['support_id', 'Personal de apoyo', catalogs?.people],
-              ['involved_id', 'Personal involucrado', catalogs?.people],
-              ['department_id', 'Departamento', catalogs?.departments],
-              ['sector_id', 'Sector', catalogs?.sectors],
-              ['node_id', 'Nodo', catalogs?.nodes],
-              ['completion_type_id', 'Tipo de finalización', catalogs?.types],
-              ['change_type_id', 'Tipo de cambio', catalogs?.changeTypes],
-            ] as const
-          ).map(([key, label, rows]) => (
-            <FormField key={key} id={'change-' + key} label={label}>
-              <select
-                id={'change-' + key}
-                className="form-input"
-                value={params.get(key) ?? ''}
-                onChange={(e) => change({ [key]: e.target.value })}
-              >
-                <option value="">Todos</option>
-                {rows?.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name}
-                    {row.active ? '' : ' (Inactivo)'}
-                  </option>
-                ))}
+      }
+      quick={quickKeys.map((key) => <div key={key} className="filter-bar-quick">{select(key)}</div>)}
+      primary={
+        <FilterSegment
+          label="Estado"
+          options={[['', 'Todos'], ...Object.entries(changeStatuses)]}
+          value={params.get('status') ?? ''}
+          onChange={(value) => change({ status: value })}
+        />
+      }
+      panel={
+        <>
+          {panelGroups.map(([title, keys]) => <FilterPanelGroup key={title} title={title}>{keys.map(select)}</FilterPanelGroup>)}
+          <FilterPanelGroup title="Inicio propuesto">
+            {(['from', 'to'] as const).map((key) => (
+              <FormField key={key} id={'change-' + key} label={key === 'from' ? 'Desde' : 'Hasta'}>
+                <input id={'change-' + key} type="date" className="form-input" value={params.get(key) ?? ''} onChange={(e) => change({ [key]: e.target.value })} />
+              </FormField>
+            ))}
+          </FilterPanelGroup>
+          <FilterPanelGroup title="Orden">
+            <FormField id="change-sort" label="Ordenar por">
+              <select id="change-sort" className="form-input" value={params.get('sort') ?? 'proposed_start'} onChange={(e) => change({ sort: e.target.value })}>
+                {[['proposed_start', 'Inicio propuesto'], ['reference', 'Correlativo'], ['created_at', 'Creación'], ['status', 'Estado'], ['title', 'Título']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </FormField>
-          ))}
-
-          <FormField id="change-sort" label="Ordenar por">
-            <select
-              id="change-sort"
-              className="form-input"
-              value={params.get('sort') ?? 'proposed_start'}
-              onChange={(e) => change({ sort: e.target.value })}
-            >
-              {[
-                ['proposed_start', 'Inicio propuesto'],
-                ['reference', 'Correlativo'],
-                ['created_at', 'Creación'],
-                ['status', 'Estado'],
-                ['title', 'Título'],
-              ].map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField id="change-direction" label="Dirección">
-            <select
-              id="change-direction"
-              className="form-input"
-              value={params.get('direction') ?? 'desc'}
-              onChange={(e) => change({ direction: e.target.value })}
-            >
-              <option value="desc">Descendente</option>
-              <option value="asc">Ascendente</option>
-            </select>
-          </FormField>
-        </div>
-
-        <div className="pt-1">
-          <button
-            type="button"
-            className="button-secondary rounded-full"
-            onClick={clear}
-          >
-            Limpiar filtros
-          </button>
-        </div>
-      </div>
-    </section>
+            <FormField id="change-direction" label="Dirección">
+              <select id="change-direction" className="form-input" value={params.get('direction') ?? 'desc'} onChange={(e) => change({ direction: e.target.value })}>
+                <option value="desc">Descendente</option>
+                <option value="asc">Ascendente</option>
+              </select>
+            </FormField>
+          </FilterPanelGroup>
+        </>
+      }
+    />
   )
 }
 
@@ -459,7 +239,7 @@ export function ChangeEfficiency({ item }: { item: Change }) {
 
 export function ChangeTable({ rows }: { rows: Change[] }) {
   return (
-    <div className="table-surface table-surface--amber overflow-x-auto rounded-2xl">
+    <div className="table-surface table-surface--cyan overflow-x-auto rounded-2xl">
       <table className="operation-table" aria-label="Control de cambios">
         <thead>
           <tr>
@@ -487,13 +267,13 @@ export function ChangeTable({ rows }: { rows: Change[] }) {
                 <Can
                   permission="changes.view"
                   fallback={
-                    <span className="font-mono text-amber-400 font-semibold">
+                    <span className="font-mono text-cyan-400 font-semibold">
                       {row.reference}
                     </span>
                   }
                 >
                   <Link
-                    className="text-amber-400 hover:text-amber-300 font-mono font-semibold"
+                    className="text-cyan-400 hover:text-cyan-300 font-mono font-semibold"
                     to={`/changes/${row.id}`}
                   >
                     {row.reference}

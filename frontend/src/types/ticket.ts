@@ -25,6 +25,18 @@ export interface TicketCreateInput {
   status: TicketStatus
 }
 
+export type AgeBucket = 'lt_1h' | '1_to_4h' | '4_to_24h' | 'gt_24h'
+
+/** GET /api/tickets/open-overview: abiertos por antigüedad (excluyentes), sin responsable (transversal) y por sector. */
+export interface OpenOverview {
+  generated_at: string
+  open: number
+  buckets: Record<AgeBucket, number>
+  future_start: number
+  unassigned: number
+  sectors: { id: number; name: string; count: number }[]
+}
+
 export interface TicketQuery {
   node_id?: number
   responsible_id?: number
@@ -35,6 +47,9 @@ export interface TicketQuery {
   sector_id?: number
   department_id?: number
   incident_type_id?: number
+  age_bucket?: AgeBucket
+  unassigned?: boolean
+  order?: 'start_at_asc' | 'start_at_desc'
   from?: string
   to?: string
   limit?: number

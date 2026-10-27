@@ -1,15 +1,17 @@
+from datetime import datetime, timezone
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Path, Query, Request
+from fastapi import APIRouter, Path, Query, Request, Response
 from sqlalchemy import select
 from ticketyn.security.mutations import ticket_mutation
 from ticketyn.api.ticket_exports import export_ticket_pdf, export_ticket_xlsx, stream_ticket_export
 from ticketyn.schemas.ticket_export import TicketExportFilters
 
 from ticketyn.api import ticket_data
+from ticketyn.api.ticket_age import open_overview
 from ticketyn.api.crud import DBSession, get_or_404
 from ticketyn.models import Ticket
-from ticketyn.schemas.ticket import TicketCreate, TicketFilters, TicketListResponse, TicketResponse, TicketStats, TicketUpdate
+from ticketyn.schemas.ticket import OpenOverview, TicketCreate, TicketFilters, TicketListResponse, TicketResponse, TicketStats, TicketUpdate
 from ticketyn.schemas.ticket_close import CustomerTicketClose
 from ticketyn.api.ticket_close import close_ticket
 from ticketyn.api.ticket_pdf_limits import ticket_pdf_export
@@ -25,8 +27,10 @@ def create_ticket(payload: TicketCreate, session: DBSession, request: Request):
 
 
 @router.get("", response_model=list[TicketListResponse])
-def list_tickets(session: DBSession, filters: Annotated[TicketFilters, Query()]):
-    return ticket_data.list_tickets(session, filters.model_dump())
+def list_tickets(session: DBSession, filters: Annotated[TicketFilters, Query()], response: Response):
+    values = {**filters.model_dump(), "now": datetime.now(timezone.utc)}
+    response.headers["X-Total-Count"] = str(ticket_data.count_tickets(session, values))
+    return ticket_data.list_tickets(session, values)
 
 
 @router.get('/export/{format}')
@@ -39,6 +43,11 @@ def export_tickets(session: DBSession, request: Request, format: Literal['pdf', 
 @router.get("/stats", response_model=TicketStats)
 def get_ticket_stats(session: DBSession):
     return ticket_data.ticket_stats(session)
+
+
+@router.get("/open-overview", response_model=OpenOverview)
+def get_open_overview(session: DBSession):
+    return open_overview(session, datetime.now(timezone.utc))
 
 
 @router.get("/{id}", response_model=TicketListResponse)

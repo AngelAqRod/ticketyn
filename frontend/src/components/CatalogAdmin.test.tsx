@@ -169,7 +169,7 @@ describe('administración de catálogos', () => {
     expect(screen.getByRole('combobox', { name: 'Filtrar por cliente' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Filtrar por sector' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Filtrar por nodo' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Estado de circuitos')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Estado de circuitos' })).toBeInTheDocument()
 
     const toolbar = screen.getByLabelText('Filtros de circuitos')
     const labels = Array.from(toolbar.querySelectorAll('label')).map(l => l.textContent?.trim())
@@ -178,16 +178,15 @@ describe('administración de catálogos', () => {
       'Filtrar por cliente',
       'Filtrar por sector',
       'Filtrar por nodo',
-      'Estado de circuitos',
     ])
 
     fireEvent.focus(screen.getByRole('combobox', { name: 'Filtrar por sector' }))
     fireEvent.click(screen.getByRole('option', { name: 'Nombre inicial' }))
-    expect(await screen.findByText('1 filtro activo')).toBeInTheDocument()
+    expect(await screen.findByText('Sector: Nombre inicial')).toBeInTheDocument()
     expect(screen.getByText('LINK-A')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
-    expect(screen.queryByText('1 filtro activo')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar todo' }))
+    expect(screen.queryByText('Sector: Nombre inicial')).not.toBeInTheDocument()
   })
   it('rechazar confirmación no envía PATCH ni cambia el registro', async () => {
     const mock = mockApi(); vi.mocked(window.confirm).mockReturnValue(false)
@@ -502,5 +501,48 @@ describe('Selector de clientes con búsqueda en Circuitos', () => {
     // Solo el botón "Limpiar Cliente" desasocia la selección
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar Cliente' }))
     expect(combo).toHaveValue('')
+  })
+})
+
+describe('barra de filtros de clientes y circuitos', () => {
+  it('Circuitos: tema celeste, chips quitables y un único «Limpiar todo»', async () => {
+    mockApi(); open('/circuits?search=LINK&active=true'); await screen.findByRole('table')
+    const region = screen.getByRole('region', { name: 'Filtros de circuitos' })
+    expect(region).toHaveClass('filter-bar--blue')
+    expect(within(region).queryByRole('button', { name: /^Filtros/ })).not.toBeInTheDocument()
+    expect(within(region).getAllByRole('button', { name: /^Limpiar todo/ })).toHaveLength(1)
+    fireEvent.click(within(region).getByRole('button', { name: 'Quitar filtro Estado: Activos' }))
+    expect(within(region).queryByText('Estado: Activos')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Buscar circuitos')).toHaveValue('LINK')
+    fireEvent.click(within(region).getByRole('button', { name: 'Limpiar todo' }))
+    expect(screen.getByLabelText('Buscar circuitos')).toHaveValue('')
+    expect(within(region).queryByRole('button', { name: 'Limpiar todo' })).not.toBeInTheDocument()
+  })
+  it('Clientes: la búsqueda local aparece como chip y se quita con la × o con «Limpiar todo»', async () => {
+    mockApi(); open('/customers'); await screen.findByRole('table')
+    const region = screen.getByRole('region', { name: 'Filtros de clientes' })
+    expect(region).toHaveClass('filter-bar--blue')
+    fireEvent.change(screen.getByLabelText('Buscar clientes'), { target: { value: 'CUS' } })
+    expect(within(region).getByText('Búsqueda: CUS')).toBeInTheDocument()
+    fireEvent.click(within(region).getByRole('button', { name: 'Quitar filtro Búsqueda: CUS' }))
+    expect(screen.getByLabelText('Buscar clientes')).toHaveValue('')
+    fireEvent.change(screen.getByLabelText('Buscar clientes'), { target: { value: 'CUS' } })
+    fireEvent.click(within(region).getByRole('button', { name: 'Limpiar todo' }))
+    expect(screen.getByLabelText('Buscar clientes')).toHaveValue('')
+  })
+  it('Nodos y Responsables (pizarra): chip de búsqueda quitable y «Limpiar todo» único', async () => {
+    mockApi(); open('/catalogs')
+    fireEvent.click(await screen.findByRole('button', { name: 'Nodos' }))
+    await screen.findByRole('table', { name: 'Nodos' })
+    const region = screen.getByRole('region', { name: /^Filtros de/ })
+    expect(region).toHaveClass('filter-bar--slate')
+    fireEvent.change(screen.getByLabelText(/^Buscar/), { target: { value: 'abc' } })
+    expect(within(region).getByText('Búsqueda: abc')).toBeInTheDocument()
+    fireEvent.click(within(region).getByRole('button', { name: 'Quitar filtro Búsqueda: abc' }))
+    expect(screen.getByLabelText(/^Buscar/)).toHaveValue('')
+    fireEvent.change(screen.getByLabelText(/^Buscar/), { target: { value: 'abc' } })
+    expect(within(region).getAllByRole('button', { name: /^Limpiar/ })).toHaveLength(1)
+    fireEvent.click(within(region).getByRole('button', { name: 'Limpiar todo' }))
+    expect(screen.getByLabelText(/^Buscar/)).toHaveValue('')
   })
 })

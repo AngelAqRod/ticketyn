@@ -9,7 +9,6 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
   Check,
-  ChevronDown,
   ChevronUp,
   Clock,
   FileSpreadsheet,
@@ -22,7 +21,8 @@ import {
   Tag,
   Users,
 } from 'lucide-react'
-import { getJson, patchJson, postJson } from '../api/client'
+import { getJson, getJsonWithTotal, patchJson, postJson } from '../api/client'
+import { pageInfo, pageText, rangeText, PAGE_SIZE } from '../lib/pagination'
 import {
   listSectors,
   listNodes,
@@ -36,11 +36,10 @@ import type { InternalTicket } from '../types/internalTicket'
 import type { Ticket } from '../types/ticket'
 import { PaginationBar } from '../components/PaginationBar'
 import { PageHeading } from '../components/PageHeading'
-import { FilterHeading } from '../components/FilterHeading'
-import { FilterChips } from '../components/FilterChips'
+import { FilterBar, FilterPanelGroup, FilterSegment } from '../components/FilterBar'
 import { FormField } from '../components/FormField'
 import { SearchableSelect } from '../components/SearchableSelect'
-import { PeriodShortcuts } from '../components/PeriodShortcuts'
+import { PeriodShortcuts, periodLabel } from '../components/PeriodShortcuts'
 import { RequestState } from '../components/RequestState'
 import { FeedbackMessage } from '../components/FeedbackMessage'
 import { StatusBadge } from '../components/StatusBadge'
@@ -145,34 +144,16 @@ export function InternalTickets() {
   const { params, change, clear } = useUrlFilters(keys)
   const catalogs = useCatalogs()
   const [rows, setRows] = useState<InternalTicket[]>([])
+  const [apiTotal, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [search, setSearch] = useState(params.get('search') ?? '')
 
-  // Colapso persistente del panel de filtros
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return sessionStorage.getItem('internal_tickets_filters_collapsed') === 'true'
-    } catch {
-      return false
-    }
-  })
-
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev
-      try {
-        sessionStorage.setItem('internal_tickets_filters_collapsed', String(next))
-      } catch {
-        // Ignorar fallas de sessionStorage
-      }
-      return next
-    })
-  }
-
   useEffect(() => setSearch(params.get('search') ?? ''), [params])
   const offset = Math.max(0, Number(params.get('offset')) || 0)
+  const total = apiTotal ?? offset + rows.length
+  const info = pageInfo(offset, rows.length, total)
   let query = new URLSearchParams({ limit: '50', offset: String(offset) })
   let filterError: string | null = null
 
@@ -228,10 +209,11 @@ export function InternalTickets() {
       setError(filterError)
       return
     }
-    getJson<InternalTicket[]>(`${root}?${queryKey}`, c.signal)
-      .then((x) => {
+    getJsonWithTotal<InternalTicket[]>(`${root}?${queryKey}`, c.signal)
+      .then(({ data: x, total: count }) => {
         if (!c.signal.aborted) {
           setRows(x)
+          setTotal(count)
           setLoading(false)
         }
       })
@@ -243,6 +225,11 @@ export function InternalTickets() {
       })
     return () => c.abort()
   }, [queryKey, refresh, filterError])
+
+  // Página fuera de rango: saltar a la última existente.
+  useEffect(() => {
+    if (!loading && !error && apiTotal !== null && rows.length === 0 && offset > 0) change({ offset: apiTotal ? String(pageInfo(offset, 0, apiTotal).lastOffset || '') : '' }, false)
+  }, [loading, error, apiTotal, rows.length, offset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cálculo de filtros activos para los chips del panel colapsado
   const activeChips: { label: string; value: string; onRemove: () => void }[] = []
@@ -274,7 +261,7 @@ export function InternalTickets() {
     }
     activeChips.push({
       label: 'Período',
-      value: pNames[p!] || p!,
+      value: pNames[p!] || periodLabel(p!),
       onRemove: () => change({ period: 'all', from: '', to: '' }),
     })
   }
@@ -290,7 +277,17 @@ export function InternalTickets() {
     }
   }
 
-  const activeCount = activeChips.length
+  // Rápidos: los dos catálogos obligatorios más usados; el resto vive en el panel. Un campo solo ocupa una ranura.
+  const quickFields = relationFields.filter(([key]) => key === 'sector_id' || key === 'department_id')
+  const panelFields = relationFields.filter(([key]) => key !== 'sector_id' && key !== 'department_id')
+  const advancedCount = panelFields.filter(([key]) => params.get(key)).length
+  const relationSelect = (key: typeof relationFields[number][0]) => (
+    <select id={`filter-${key}`} className="form-input" value={params.get(key) ?? ''} onChange={(e) => change({ [key]: e.target.value })}>
+      <option value="">Todos</option>
+      {key === 'provider_id' && <option value="none">Ninguno</option>}
+      {catalogs.data?.[key]?.map((row) => <option key={row.id} value={row.id}>{row.name}{row.active ? '' : ' (Inactivo)'}</option>)}
+    </select>
+  )
 
   return (
     <div className="space-y-5">
@@ -302,7 +299,7 @@ export function InternalTickets() {
           !loading && !error && (
             <span className="heading-telemetry">
               <span>Total:</span>
-              <strong className="telemetry-value--purple">{rows.length}</strong>
+              <strong className="telemetry-value--purple">{total}</strong>
             </span>
           )
         }
@@ -366,172 +363,43 @@ export function InternalTickets() {
         </FeedbackMessage>
       )}
 
-      {/* PANEL DE FILTROS EXPANDIBLE / CONTRAÍBLE (HOMOGENEIZADO) */}
-      <section
-        className="filter-toolbar filter-toolbar--purple"
-        aria-label="Filtros de tickets internos"
-      >
-        {/* ENCABEZADO DEL PANEL DE FILTROS */}
-        <div
-          className={`filter-toolbar-header ${
-            collapsed ? 'filter-toolbar-header--collapsed' : ''
-          } ${activeCount > 0 ? 'filter-toolbar-header--has-chips' : ''}`}
-        >
-          <div className="flex flex-wrap items-center gap-2.5">
-            <FilterHeading title="Filtros de tickets internos" theme="purple" />
-            <span
-              className={`filter-count-badge filter-count-badge--purple ${
-                activeCount > 0 ? 'filter-count-badge--active' : ''
-              }`}
-              aria-label={`${activeCount} ${
-                activeCount === 1 ? 'filtro activo' : 'filtros activos'
-              }`}
-            >
-              <span className="filter-count-dot" aria-hidden="true" />
-              <span>
-                {activeCount}{' '}
-                {activeCount === 1 ? 'filtro activo' : 'filtros activos'}
-              </span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {activeCount > 0 && (
-              <button
-                type="button"
-                className="button-ghost text-xs text-purple-400 hover:text-purple-300 font-mono py-1 px-2.5 rounded-full"
-                onClick={clear}
-              >
-                Limpiar todo
-              </button>
-            )}
-            <button
-              type="button"
-              className="filter-toggle-button button-secondary rounded-full"
-              onClick={toggleCollapsed}
-              aria-expanded={!collapsed}
-              aria-controls="internal-tickets-filter-body"
-              aria-label={
-                !collapsed
-                  ? 'Contraer filtros de tickets internos'
-                  : 'Expandir filtros de tickets internos'
-              }
-              title={!collapsed ? 'Contraer filtros' : 'Expandir filtros'}
-            >
-              <span>{!collapsed ? 'Contraer' : 'Expandir'}</span>
-              <ChevronDown
-                size={14}
-                className={`transition-transform duration-200 ${
-                  !collapsed ? 'rotate-180' : ''
-                }`}
-                aria-hidden="true"
-              />
-            </button>
-          </div>
-        </div>
-
-        {/* CHIPS ACTIVOS (SIEMPRE VISIBLES CUANDO HAY FILTROS APLICADOS) */}
-        <FilterChips items={activeChips} theme="purple" />
-
-        {/* CUERPO DEL PANEL DE FILTROS */}
-        <div
-          id="internal-tickets-filter-body"
-          className={`p-4 space-y-4 ${collapsed ? 'hidden' : 'block'}`}
-        >
-          {/* BUSCADOR */}
-          <form
-            className="flex flex-wrap items-end gap-2.5"
-            onSubmit={(e) => {
-              e.preventDefault()
-              change({ search })
-            }}
-          >
-            <div className="flex-1 min-w-[240px]">
+      <FilterBar
+        label="Filtros de tickets internos"
+        theme="purple"
+        chips={activeChips}
+        panelCount={advancedCount}
+        onClear={clear}
+        search={
+          <form className="flex items-end gap-2.5" onSubmit={(e) => { e.preventDefault(); change({ search }) }}>
+            <div className="flex-1 min-w-0">
               <FormField id="internal-search" label="Buscar">
-                <input
-                  id="internal-search"
-                  className="form-input"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Correlativo, título o descripción"
-                />
+                <input id="internal-search" className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Correlativo, título o descripción" />
               </FormField>
             </div>
-            <button type="submit" className="button-secondary rounded-full shrink-0">
-              Buscar
-            </button>
+            <button type="submit" className="button-secondary rounded-full shrink-0">Buscar</button>
           </form>
-
-          {/* PERÍODOS RÁPIDOS */}
-          <PeriodShortcuts
-            includeAll
-            label="Período"
-            value={params.get('period') ?? 'all'}
-            onChange={(period) => change({ period, from: '', to: '' })}
-          />
-
-          {/* SELECTORES DE FILTRADO */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <FormField id="internal-status" label="Estado">
-              <select
-                id="internal-status"
-                className="form-input"
-                value={params.get('status') ?? ''}
-                onChange={(e) => change({ status: e.target.value })}
-              >
-                <option value="">Todos</option>
-                <option value="OPEN">Abierto</option>
-                <option value="CLOSED">Cerrado</option>
-              </select>
-            </FormField>
-
-            {relationFields.map(([key, label]) => (
-              <FormField key={key} id={`filter-${key}`} label={label}>
-                <select
-                  id={`filter-${key}`}
-                  className="form-input"
-                  value={params.get(key) ?? ''}
-                  onChange={(e) => change({ [key]: e.target.value })}
-                >
-                  <option value="">Todos</option>
-                  {key === 'provider_id' && <option value="none">Ninguno</option>}
-                  {catalogs.data?.[key]?.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.name}
-                      {row.active ? '' : ' (Inactivo)'}
-                    </option>
-                  ))}
-                </select>
+        }
+        quick={quickFields.map(([key, label]) => (
+          <div key={key} className="filter-bar-quick"><FormField id={`filter-${key}`} label={label}>{relationSelect(key)}</FormField></div>
+        ))}
+        primary={<>
+          <FilterSegment label="Estado" options={[['', 'Todos'], ['OPEN', 'Abierto'], ['CLOSED', 'Cerrado']]} value={params.get('status') ?? ''} onChange={(status) => change({ status })} />
+          <PeriodShortcuts includeAll label="Período" value={params.get('period') ?? 'all'} onChange={(period) => change({ period, from: '', to: '' })} />
+        </>}
+        panel={<>
+          <FilterPanelGroup title="Clasificación">
+            {panelFields.map(([key, label]) => <FormField key={key} id={`filter-${key}`} label={label}>{relationSelect(key)}</FormField>)}
+          </FilterPanelGroup>
+          {params.get('period') === 'custom' && <FilterPanelGroup title="Fechas">
+            {(['from', 'to'] as const).map((key) => (
+              <FormField key={key} id={`internal-${key}`} label={key === 'from' ? 'Desde' : 'Hasta'}>
+                <input id={`internal-${key}`} type="date" className="form-input" value={params.get(key) ?? ''} onChange={(e) => change({ [key]: e.target.value })} />
               </FormField>
             ))}
-
-            {params.get('period') === 'custom' &&
-              (['from', 'to'] as const).map((key) => (
-                <FormField
-                  key={key}
-                  id={`internal-${key}`}
-                  label={key === 'from' ? 'Desde' : 'Hasta'}
-                >
-                  <input
-                    id={`internal-${key}`}
-                    type="date"
-                    className="form-input"
-                    value={params.get(key) ?? ''}
-                    onChange={(e) => change({ [key]: e.target.value })}
-                  />
-                </FormField>
-              ))}
-          </div>
-
-          <RequestState compact error={catalogs.error} onRetry={catalogs.retry} />
-
-          <div className="flex justify-end pt-1">
-            <button type="button" className="button-secondary rounded-full text-xs" onClick={clear}>
-              Limpiar filtros
-            </button>
-          </div>
-        </div>
-      </section>
+          </FilterPanelGroup>}
+        </>}
+      />
+      <RequestState compact error={catalogs.error} onRetry={catalogs.retry} className="-mt-2 mb-4" />
 
       {/* BARRA SECUNDARIA DE ESTADO Y ZONA HORARIA */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-xs workspace-caption">
@@ -541,8 +409,9 @@ export function InternalTickets() {
             : params.get('status') === 'CLOSED'
             ? 'Cerrados'
             : 'Todos los estados'}
+          {!loading && !error && ` · ${rangeText(info)}`}
         </span>
-        <span>Fechas en tu zona horaria local</span>
+        <span>Fechas en America/Guatemala</span>
       </div>
 
       {/* TABLA O ESTADO DE CARGA */}
@@ -560,10 +429,10 @@ export function InternalTickets() {
 
       {/* PAGINACIÓN */}
       <PaginationBar
-        page={Math.floor(offset / 50) + 1}
-        info={<span className="text-xs">Página {Math.floor(offset / 50) + 1}</span>}
+        page={info.page}
+        info={<span className="text-xs">{!loading && !error ? pageText(info) : `Página ${info.page}`}</span>}
         previousDisabled={loading || !offset}
-        nextDisabled={loading || Boolean(error) || rows.length < 50}
+        nextDisabled={loading || Boolean(error) || (apiTotal === null ? rows.length < PAGE_SIZE : offset + rows.length >= apiTotal)}
         onPrevious={() => change({ offset: String(Math.max(0, offset - 50)) }, false)}
         onNext={() => change({ offset: String(offset + 50) }, false)}
       />

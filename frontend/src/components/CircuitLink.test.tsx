@@ -41,7 +41,7 @@ describe('Circuitos en TicketTable compartida', () => {
     const historical = { ...ticket, circuit_id: 37, circuit: { id: 37, circuit_code: '200.01', description: 'Servicio histórico', active: false } }
     setup(<TicketTable tickets={[historical]} />)
     const table = screen.getByRole('table', { name: 'Listado de tickets' })
-    expect(within(table).getAllByRole('columnheader')).toHaveLength(12)
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(13)
     expect(within(table).getByRole('link', { name: ticket.reference })).toHaveAttribute('href', '/tickets/1')
     const circuit = within(table).getByRole('link', { name: '200.01' })
     expect(circuit).toHaveAttribute('href', '/circuits/37')

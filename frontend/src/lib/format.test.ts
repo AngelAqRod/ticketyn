@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { formatDate, formatDuration } from './format'
+import { afterEach, describe, expect, it } from 'vitest'
+import { formatDate, formatDuration, formatTableDate } from './format'
 
 describe('formatDuration', () => {
   it.each([
@@ -27,4 +27,22 @@ it('formatea fechas sin modificar el timestamp original', () => {
   expect(input).toBe('2026-01-01T12:00:00+00:00')
   expect(formatDate(null)).toBe('—')
   expect(formatDate('invalid')).toBe('Fecha no válida')
+})
+
+describe('zona horaria operativa (America/Guatemala)', () => {
+  const original = process.env.TZ
+  afterEach(() => { if (original === undefined) delete process.env.TZ; else process.env.TZ = original })
+  // Instantes junto al cambio de día de Guatemala (UTC-6, sin horario de verano).
+  it.each(['UTC', 'Etc/GMT+6', 'Asia/Tokyo'])('formatDate y formatTableDate no dependen de la zona del entorno (%s)', (zone) => {
+    process.env.TZ = zone
+    const before = '2026-03-01T05:59:00Z'
+    const after = '2026-03-01T06:00:00Z'
+    expect(formatDate(before)).toMatch(/28 feb 2026.*23:59/)
+    expect(formatDate(after)).toMatch(/1 mar 2026.*\b0?0:00/)
+    expect(formatTableDate(before)).toMatch(/^28 feb 26,? 23:59/)
+    expect(formatTableDate(after)).toMatch(/^01 mar 26,? 0?0:00/)
+  })
+  it('respeta una zona explícita distinta', () => {
+    expect(formatDate('2026-03-01T06:00:00Z', 'Asia/Tokyo')).toMatch(/1 mar 2026.*15:00/)
+  })
 })

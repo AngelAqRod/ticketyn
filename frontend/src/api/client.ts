@@ -33,7 +33,7 @@ function detailMessage(detail: unknown): string | null {
   return messages.length ? messages.join('. ') : null
 }
 
-async function requestJson<T>(path: string, options: RequestInit): Promise<T> {
+async function requestJson<T>(path: string, options: RequestInit, onResponse?: (response: Response) => void): Promise<T> {
   let response: Response
   const headers = authHeaders(options.headers)
   const sentToken = headers.get('Authorization')?.replace(/^Bearer /, '') ?? null
@@ -61,6 +61,7 @@ async function requestJson<T>(path: string, options: RequestInit): Promise<T> {
     throw new ApiError(message ?? `La API devolvió un error HTTP ${response.status}.`, response.status, fields)
   }
   if (response.status === 204 && options.method === 'DELETE') return undefined as T
+  onResponse?.(response)
   try {
     return await response.json() as T
   } catch (error) {
@@ -71,6 +72,16 @@ async function requestJson<T>(path: string, options: RequestInit): Promise<T> {
 
 export function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return requestJson<T>(path, { signal, headers: { Accept: 'application/json' } })
+}
+
+/** Como getJson, pero también devuelve X-Total-Count (total filtrado antes de paginar), o null si falta. */
+export async function getJsonWithTotal<T>(path: string, signal?: AbortSignal): Promise<{ data: T; total: number | null }> {
+  let total: number | null = null
+  const data = await requestJson<T>(path, { signal, headers: { Accept: 'application/json' } }, (response) => {
+    const header = response.headers?.get('X-Total-Count')
+    total = header !== null && header !== undefined && /^\d+$/.test(header) ? Number(header) : null
+  })
+  return { data, total }
 }
 
 export function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {

@@ -6,7 +6,7 @@ export function FilterHeading({
   className = '',
 }: {
   title: string
-  theme?: 'blue' | 'purple' | 'amber' | 'emerald' | 'slate'
+  theme?: 'blue' | 'purple' | 'amber' | 'emerald' | 'slate' | 'cyan'
   className?: string
 }) {
   return (

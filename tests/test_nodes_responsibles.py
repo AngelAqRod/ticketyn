@@ -161,7 +161,7 @@ def test_list_query_count_no_n_plus_one(api_client, ticket_payload, db_session):
     selects = [sql for sql in statements if sql.lstrip().upper().startswith('SELECT')]
     authentication = [sql for sql in selects if 'security_roles' in sql or 'security_config' in sql]
     assert len(authentication) == 2
-    assert len(selects) - len(authentication) == 1
+    assert len(selects) - len(authentication) == 2  # listado + COUNT del total filtrado (X-Total-Count)
 
 
 def test_new_migration_roundtrip(postgres_engine):

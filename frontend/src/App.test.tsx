@@ -72,7 +72,7 @@ describe('aplicación', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
     const summary = screen.getByRole('region', { name: 'Estadísticas globales de tickets' })
     expect(await within(summary).findAllByText('0')).toHaveLength(3)
-    expect(await screen.findByText('No hay tickets')).toBeInTheDocument()
+    expect((await screen.findAllByText('Sin tickets abiertos')).length).toBeGreaterThan(0)
   })
   it('permite recuperar estadísticas sin bloquear los recientes', async () => {
     let failStats = true

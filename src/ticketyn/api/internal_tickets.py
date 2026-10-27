@@ -1,6 +1,6 @@
 """Internal-ticket operations with explicit authorization and bounded context reads."""
 from typing import Annotated, Literal
-from fastapi import APIRouter, Path, Query, Request, HTTPException
+from fastapi import APIRouter, Path, Query, Request, Response, HTTPException
 from ticketyn.security.mutations import ticket_mutation
 from sqlalchemy import select, func, or_
 from ticketyn.api.internal_ticket_exports import export_pdf, export_xlsx
@@ -51,8 +51,9 @@ def create(payload: InternalTicketCreate, session: DBSession, request: Request):
     return data.response(session, data.persist(session, payload.model_dump()))
 
 @router.get('/api/internal-tickets', response_model=list[InternalTicketResponse | InternalLinkSummary])
-def listing(session: DBSession, filters: Annotated[InternalFilters, Query()], request: Request):
+def listing(session: DBSession, filters: Annotated[InternalFilters, Query()], request: Request, response: Response):
     values = filters.model_dump()
+    response.headers['X-Total-Count'] = str(session.scalar(select(func.count()).select_from(data.statement(values).order_by(None).subquery())) or 0)
     rows = list(session.scalars(data.statement(values).limit(filters.limit).offset(filters.offset)))
     if not {'internal_tickets.view', 'reports.internal_tickets.view'} & request.state.principal.permissions:
         return [{'id': row.id, 'reference': row.reference, 'title': row.title} for row in rows]

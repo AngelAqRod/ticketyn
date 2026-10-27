@@ -63,7 +63,9 @@ def test_summaries_historical_and_single_sql_query(api_client, ticket_payload, d
     selects = [sql for sql in statements if sql.lstrip().upper().startswith('SELECT')]
     authentication = [sql for sql in selects if 'security_roles' in sql or 'security_config' in sql]
     assert len(authentication) == 2
-    assert len(selects) - len(authentication) == 1
+    # Listado + COUNT del total filtrado (X-Total-Count); sin consultas por fila.
+    assert len(selects) - len(authentication) == 2
+    assert response.headers['X-Total-Count'] == '3'
     assert len(response.json()) == 3
     row = response.json()[0]
     assert row['customer'] == {key: expected['customer_id'][key] for key in ('id', 'customer_code', 'name')}

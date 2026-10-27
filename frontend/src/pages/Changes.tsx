@@ -194,7 +194,7 @@ export function Changes() {
           !loading && !error && data && (
             <span className="heading-telemetry">
               <span>Total:</span>
-              <strong className="telemetry-value--amber">{data.total}</strong>
+              <strong className="telemetry-value--cyan">{data.total}</strong>
             </span>
           )
         }
@@ -203,7 +203,7 @@ export function Changes() {
             <ChangeExportButtons query={query} disabled={Boolean(invalid)} />
             <Can permission="changes.create">
               <Link
-                className="button-primary button-primary--amber rounded-full shadow-sm"
+                className="button-primary button-primary--cyan rounded-full shadow-sm"
                 to="/changes/new"
               >
                 <Plus size={15} aria-hidden="true" />
@@ -215,7 +215,7 @@ export function Changes() {
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="segmented-control segmented-control--soft segmented-control--amber">
+        <div className="segmented-control segmented-control--soft segmented-control--cyan">
           <button
             className="segment-button"
             aria-pressed={view === 'list'}
@@ -501,7 +501,7 @@ function ChangeCalendar({
   }
 
   return (
-    <section className="p-5 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl space-y-4">
+    <section className="p-5 rounded-2xl bg-[#0b1426] border border-cyan-500/20 shadow-xl space-y-4">
       {/* 1. Cabecera principal: Industrial Split Cut 2.0 */}
       <div className="industrial-split-cut-header" aria-label="Cabecera del calendario">
         <div className="isc-top-accent" aria-hidden="true" />
@@ -576,7 +576,7 @@ function ChangeCalendar({
             </div>
           </div>
 
-          <div className="segmented-control segmented-control--soft segmented-control--amber">
+          <div className="segmented-control segmented-control--soft segmented-control--cyan">
             {[
               ['month', 'Mes'],
               ['week', 'Semana'],
@@ -596,7 +596,7 @@ function ChangeCalendar({
       </div>
 
       <p className="text-xs text-slate-400 font-mono flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
         <span>Ubicación por Inicio propuesto · {ticketynTimezone}. La ventana propuesta se conserva aunque cambie la ejecución real.</span>
       </p>
       <RequestState loading={loading} error={error} />
@@ -964,13 +964,13 @@ export function ChangeForm() {
         description="Fechas y estados manuales. Los cambios históricos pueden registrarse directamente como Finalizados."
       />
       <form
-        className="p-6 space-y-6 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl"
+        className="p-6 space-y-6 rounded-2xl bg-[#0b1426] border border-cyan-500/20 shadow-xl"
         onSubmit={(e) => void submit(e)}
       >
         <fieldset disabled={saving} className="space-y-6">
           <section>
-            <div className="flex items-center gap-2 border-b border-amber-500/15 pb-2.5 mb-4">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs" aria-hidden="true">
+            <div className="flex items-center gap-2 border-b border-cyan-500/15 pb-2.5 mb-4">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs" aria-hidden="true">
                 <Tag size={13} />
               </span>
               <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">Información general</h2>
@@ -1140,8 +1140,8 @@ export function ChangeForm() {
           </section>
 
           <section>
-            <div className="flex items-center gap-2 border-b border-amber-500/15 pb-2.5 mb-4">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs" aria-hidden="true">
+            <div className="flex items-center gap-2 border-b border-cyan-500/15 pb-2.5 mb-4">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs" aria-hidden="true">
                 <Clock size={13} />
               </span>
               <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">Planificación y ejecución real</h2>
@@ -1208,8 +1208,8 @@ export function ChangeForm() {
           </FormField>
 
           <section>
-            <div className="flex items-center gap-2 border-b border-amber-500/15 pb-2.5 mb-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs" aria-hidden="true">
+            <div className="flex items-center gap-2 border-b border-cyan-500/15 pb-2.5 mb-3">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs" aria-hidden="true">
                 <Layers size={13} />
               </span>
               <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">Tickets internos relacionados</h2>
@@ -1232,7 +1232,7 @@ export function ChangeForm() {
             Cancelar
           </Link>
           <button
-            className="button-primary button-primary--amber rounded-full shadow-sm"
+            className="button-primary button-primary--cyan rounded-full shadow-sm"
             disabled={saving}
           >
             {saving ? 'Guardando...' : 'Guardar cambio'}
@@ -1360,7 +1360,7 @@ export function ChangeDetail() {
             </Link>
             <Can anyOf={['changes.edit', 'changes.execute', 'changes.link']}>
               <Link
-                className="button-primary button-primary--amber rounded-full shadow-sm"
+                className="button-primary button-primary--cyan rounded-full shadow-sm"
                 to={`/changes/${id}/edit`}
               >
                 Editar cambio
@@ -1376,12 +1376,12 @@ export function ChangeDetail() {
         {/* Columna 1: Información general */}
         <section
           aria-labelledby="change-info-heading"
-          className="p-5 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl space-y-4"
+          className="p-5 rounded-2xl bg-[#0b1426] border border-cyan-500/20 shadow-xl space-y-4"
         >
-          <div className="flex items-center justify-between border-b border-amber-500/15 pb-2.5">
+          <div className="flex items-center justify-between border-b border-cyan-500/15 pb-2.5">
             <div className="flex items-center gap-2">
               <span
-                className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs"
+                className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs"
                 aria-hidden="true"
               >
                 <Tag size={13} />
@@ -1457,7 +1457,7 @@ export function ChangeDetail() {
           {/* Bloque Descripción */}
           <div className="p-3.5 rounded-xl bg-[#070d1a] border border-slate-800">
             <div className="flex items-center gap-1.5 mb-1.5">
-              <FileText size={12} className="text-amber-400/80" aria-hidden="true" />
+              <FileText size={12} className="text-cyan-400/80" aria-hidden="true" />
               <h3 className="text-[11px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
                 Descripción
               </h3>
@@ -1485,12 +1485,12 @@ export function ChangeDetail() {
         {/* Columna 2: Planificación y ejecución */}
         <section
           aria-labelledby="change-planning-heading"
-          className="p-5 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl space-y-4"
+          className="p-5 rounded-2xl bg-[#0b1426] border border-cyan-500/20 shadow-xl space-y-4"
         >
-          <div className="flex items-center justify-between border-b border-amber-500/15 pb-2.5">
+          <div className="flex items-center justify-between border-b border-cyan-500/15 pb-2.5">
             <div className="flex items-center gap-2">
               <span
-                className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs"
+                className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs"
                 aria-hidden="true"
               >
                 <Clock size={13} />
@@ -1545,7 +1545,7 @@ export function ChangeDetail() {
               <dt className="font-mono text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Duración planificada
               </dt>
-              <dd className="mt-1 font-mono text-lg font-bold text-amber-300 tracking-tight">
+              <dd className="mt-1 font-mono text-lg font-bold text-cyan-300 tracking-tight">
                 {formatDuration(row.planned_seconds)}
               </dd>
             </div>
@@ -1588,9 +1588,9 @@ export function ChangeDetail() {
         </section>
       </div>
 
-      <section className="p-5 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl mt-5 space-y-3">
-        <div className="flex items-center gap-2 border-b border-amber-500/15 pb-2.5">
-          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs" aria-hidden="true">
+      <section className="p-5 rounded-2xl bg-[#0b1426] border border-cyan-500/20 shadow-xl mt-5 space-y-3">
+        <div className="flex items-center gap-2 border-b border-cyan-500/15 pb-2.5">
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs" aria-hidden="true">
             <Layers size={13} />
           </span>
           <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">
@@ -1610,10 +1610,10 @@ export function ChangeDetail() {
         />
       </section>
 
-      <section className="p-5 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl mt-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/15 pb-2.5">
+      <section className="p-5 rounded-2xl bg-[#0b1426] border border-cyan-500/20 shadow-xl mt-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/15 pb-2.5">
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs" aria-hidden="true">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs" aria-hidden="true">
               <MessageSquare size={13} />
             </span>
             <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">
@@ -1622,7 +1622,7 @@ export function ChangeDetail() {
           </div>
           <Can permission="changes.followup">
             <button
-              className="button-primary button-primary--amber rounded-full shadow-sm text-xs"
+              className="button-primary button-primary--cyan rounded-full shadow-sm text-xs"
               onClick={() => setOpen(!open)}
             >
               Nueva intervención
@@ -1633,7 +1633,7 @@ export function ChangeDetail() {
         {open && (
           <Can permission="changes.followup">
             <form
-              className="p-4 rounded-xl bg-[#070d1a] border border-amber-500/20 space-y-4"
+              className="p-4 rounded-xl bg-[#070d1a] border border-cyan-500/20 space-y-4"
               onSubmit={(e) => {
                 e.preventDefault()
                 void execute(async () => {
@@ -1699,7 +1699,7 @@ export function ChangeDetail() {
               </FormField>
               <div className="flex gap-2">
                 <button
-                  className="button-primary button-primary--amber rounded-full shadow-sm"
+                  className="button-primary button-primary--cyan rounded-full shadow-sm"
                   disabled={busy}
                 >
                   Guardar intervención
@@ -1729,7 +1729,7 @@ export function ChangeDetail() {
             {updates?.items.map((entry) => (
               <li
                 key={entry.id}
-                className="border-l-2 border-amber-500/60 pl-3.5 py-1"
+                className="border-l-2 border-cyan-500/60 pl-3.5 py-1"
               >
                 <p className="text-xs font-mono text-slate-400">
                   {formatDate(entry.occurred_at)} ·{' '}
@@ -1759,10 +1759,10 @@ export function ChangeDetail() {
         />
       </section>
 
-      <section className="p-5 rounded-2xl bg-[#0b1426] border border-amber-500/20 shadow-xl mt-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/15 pb-2.5">
+      <section className="p-5 rounded-2xl bg-[#0b1426] border border-cyan-500/20 shadow-xl mt-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/15 pb-2.5">
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs" aria-hidden="true">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs" aria-hidden="true">
               <History size={13} />
             </span>
             <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">

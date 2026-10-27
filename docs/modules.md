@@ -7,7 +7,7 @@ La [arquitectura](architecture.md) explica las relaciones estructurales y el
 
 ## Dashboard
 
-Presenta indicadores globales de tickets, distribuciones y tickets recientes.
+Presenta indicadores globales de tickets, abiertos por antigüedad (no es un SLA), los cinco abiertos más antiguos y abiertos por sector; cada cuadro abre `/tickets` con el mismo filtro.
 No es una consola de monitoreo de equipos ni genera incidencias desde dispositivos.
 
 ## Tickets de clientes

@@ -34,7 +34,7 @@ describe('gráficos de Control de cambios',()=>{
  })
  it('conserva las tres categorías y sus colores al cambiar filtros',async()=>{
   const mock=setup();await screen.findByRole('img',{name:'Cambios por Estado'})
-  fireEvent.change(screen.getByRole('combobox',{name:'Estado'}),{target:{value:'FINISHED'}})
+  fireEvent.click(screen.getByRole('button',{name:'Finalizado'}))
   await waitFor(()=>expect(mock.mock.calls.some(([url])=>url.includes('status=FINISHED'))).toBe(true))
   await waitFor(()=>expect(stateRows().map((row:{count:number})=>row.count)).toEqual([0,1,0]))
   expect(stateRows().map((row:{label:string})=>row.label)).toEqual(['Agendado','Finalizado','En ejecución'])
@@ -63,7 +63,7 @@ describe('gráficos de Control de cambios',()=>{
   expect(JSON.parse(managers.getAttribute('data-rows')!)).toEqual([{id:1,label:'Persona A',count:2,color:'#176BDF'},{id:3,label:'Persona C',count:1,color:'#9673D6'}])
   expect(JSON.parse(support.getAttribute('data-rows')!)).toEqual([{id:1,label:'Persona A',count:1,color:'#176BDF'},{id:2,label:'Persona B',count:2,color:'#9673D6'}])
   expect(screen.queryByRole('img',{name:'Participación del personal'})).not.toBeInTheDocument()
-  fireEvent.change(screen.getByRole('combobox',{name:'Estado'}),{target:{value:'FINISHED'}})
+  fireEvent.click(screen.getByRole('button',{name:'Finalizado'}))
   await waitFor(()=>expect(mock.mock.calls.some(([url])=>url.includes('status=FINISHED'))).toBe(true))
   await waitFor(()=>expect(JSON.parse(screen.getByRole('img',{name:'Cambios por personal de apoyo'}).getAttribute('data-rows')!)).toEqual([]))
   expect(JSON.parse(screen.getByRole('img',{name:'Cambios por encargado de ejecución'}).getAttribute('data-rows')!)).toEqual([{id:1,label:'Persona A',count:1,color:'#176BDF'}])

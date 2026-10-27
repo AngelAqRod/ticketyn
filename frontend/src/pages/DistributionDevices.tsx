@@ -2,13 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import {
   ArrowRightLeft,
-  Filter,
   Network,
   Pencil,
   Plus,
   Power,
-  RotateCcw,
-  Search,
   Server,
   Trash2,
 } from 'lucide-react'
@@ -27,6 +24,9 @@ import {
   StatusConfirmationModal,
 } from '../components/DistributionModals'
 import { FeedbackMessage } from '../components/FeedbackMessage'
+import { FilterBar, FilterSegment } from '../components/FilterBar'
+import type { FilterChipItem } from '../components/FilterChips'
+import { FormField } from '../components/FormField'
 import { PageHeading } from '../components/PageHeading'
 import { PaginationBar } from '../components/PaginationBar'
 import { RequestState } from '../components/RequestState'
@@ -118,6 +118,13 @@ export function DistributionDevices() {
     clear()
   }
 
+  // Cada chip quita solo su condición.
+  const filterChips: FilterChipItem[] = [
+    ...(search ? [{ label: 'Búsqueda', value: search, onRemove: () => change({ search: '' }) }] : []),
+    ...(nodeId ? [{ label: 'Nodo', value: nodes.find((n) => String(n.id) === nodeId)?.name ?? `#${nodeId}`, onRemove: () => change({ node_id: '' }) }] : []),
+    ...(activeParam ? [{ label: 'Estado', value: activeParam === 'true' ? 'Activos' : 'Inactivos', onRemove: () => change({ active: '' }) }] : []),
+  ]
+
   const nodesMap = new Map(nodes.map((n) => [n.id, n.name]))
 
   // Active / total counts for telemetry
@@ -165,56 +172,26 @@ export function DistributionDevices() {
       )}
 
       {/* Filters section */}
-      <section
-        aria-label="Filtros de equipos de distribución"
-        className="panel filter-toolbar--purple p-4 rounded-2xl bg-[#0b1426] border border-purple-500/20 shadow-lg space-y-3"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-purple-500/15 pb-2.5">
-          <div className="flex items-center gap-2">
-            <Filter size={14} className="text-purple-400" aria-hidden="true" />
-            <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">
-              Filtros de búsqueda
-            </h2>
-          </div>
-          {(search || nodeId || activeParam) && (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="button-ghost text-xs text-purple-400 hover:text-purple-300 font-mono inline-flex items-center gap-1"
-            >
-              <RotateCcw size={12} aria-hidden="true" />
-              Limpiar filtros
-            </button>
-          )}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label htmlFor="device-search" className="form-label text-xs">
-              Buscar por nombre o descripción
-            </label>
-            <div className="relative mt-1">
-              <input
-                id="device-search"
-                type="text"
-                className="form-input pl-8"
-                placeholder="Ej. Switch-Core, Huawei, OLT..."
-                value={search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-              />
-              <Search
-                size={14}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                aria-hidden="true"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label id="device-node-label" className="form-label text-xs">
-              Filtrar por nodo
-            </label>
-            <div className="mt-1">
+      <FilterBar
+        label="Filtros de equipos de distribución"
+        theme="purple"
+        chips={filterChips}
+        onClear={handleClearFilters}
+        search={
+          <FormField id="device-search" label="Buscar por nombre o descripción">
+            <input
+              id="device-search"
+              type="search"
+              className="form-input"
+              placeholder="Ej. Switch-Core, Huawei, OLT..."
+              value={search}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+            />
+          </FormField>
+        }
+        quick={
+          <div className="filter-bar-quick">
+            <FormField id="device-node" label="Filtrar por nodo">
               <SearchableSelect
                 id="device-node"
                 label="Filtrar por nodo"
@@ -228,26 +205,18 @@ export function DistributionDevices() {
                 emptyMessage="No hay nodos disponibles."
                 noMatchMessage="Sin coincidencias."
               />
-            </div>
+            </FormField>
           </div>
-
-          <div>
-            <label htmlFor="device-status" className="form-label text-xs">
-              Estado administrativo
-            </label>
-            <select
-              id="device-status"
-              className="form-input mt-1"
-              value={activeParam}
-              onChange={(e) => handleFilterChange('active', e.target.value)}
-            >
-              <option value="">Todos los estados</option>
-              <option value="true">Solo activos</option>
-              <option value="false">Solo inactivos</option>
-            </select>
-          </div>
-        </div>
-      </section>
+        }
+        primary={
+          <FilterSegment
+            label="Estado administrativo"
+            options={[['', 'Todos'], ['true', 'Activos'], ['false', 'Inactivos']]}
+            value={activeParam}
+            onChange={(val) => handleFilterChange('active', val)}
+          />
+        }
+      />
 
       {/* Devices table */}
       <section aria-label="Listado de equipos de distribución">

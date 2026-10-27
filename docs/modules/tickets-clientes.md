@@ -44,6 +44,12 @@
   - Un ticket de cliente puede vincularse, reasignarse o desvincularse de un único ticket interno.
   - No se exige coincidencia geográfica previa (sector o nodo) entre ambos.
   - Los estados operativos de ambos tickets son completamente independientes: cerrar uno no afecta al otro.
+- **Listado, totales y antigüedad:**
+  - `GET /api/tickets` devuelve en `X-Total-Count` el total filtrado (misma consulta de filtros, antes de LIMIT/OFFSET); el cuerpo sigue siendo una lista. Con proxy mismo origen no requiere CORS.
+  - Filtros `age_bucket`, `unassigned` (excluyente con `responsible_id`) y `order` (lista blanca). La clasificación vive solo en `src/ticketyn/api/ticket_age.py`: <1 h, 1 h ≤ x < 4 h, 4 h ≤ x ≤ 24 h, > 24 h, solo abiertos, con un único `now` UTC por solicitud. Un inicio futuro no entra en ningún tramo y se informa como `future_start`. `start_at` es NOT NULL.
+  - `GET /api/tickets/open-overview` (`tickets.view`) agrega abiertos por tramo, sin responsable y por sector (sector registrado en el ticket; `sector_id` es obligatorio, no existe «Sin sector»).
+  - La antigüedad nunca se presenta como SLA ni se calcula para tickets cerrados.
+  - Las fechas de la interfaz se formatean en `America/Guatemala`.
 - **Numeración concurrente sin huecos:**
   - La generación de nuevos identificadores se ejecuta bajo bloqueo exclusivo de fila en PostgreSQL (`SELECT ... FOR UPDATE` sobre `ticket_number_configs`).
   - La vista previa de numeración en formularios es una proyección inocua que no reserva ni avanza la secuencia real.
@@ -105,3 +111,9 @@ Este documento debe actualizarse ante cualquier cambio en el modelo `Ticket`, en
 - «Mis tickets» no dibuja actualmente el dato del circuito; no se añade allí información o columnas únicamente para esta mejora, ni se amplía su contrato API. Formularios, filtros, cierre rápido, permisos y PDF permanecen intactos.
 - La disponibilidad refleja los datos recibidos: una revocación posterior se vuelve a comprobar en la ruta y backend de destino; no se añaden sondeos por fila para anticiparla.
 - Pruebas: `CircuitLink.test.tsx` (rutas, regreso, clic sin propagación, permisos, datos no resueltos e inactivos, ausencia de peticiones/columnas adicionales) y regresiones de detalle, edición, Tickets, Dashboard, Reportería, Mis tickets y cierre rápido.
+
+## Barra de filtros (`FilterBar`)
+
+- `components/FilterBar.tsx` es presentacional: búsqueda + hasta dos filtros rápidos, fila de estado/atajos/período, botón «Filtros (n)» con panel avanzado plegable (siempre montado), chips y una única acción «Limpiar todo». Los valores, la URL (`useUrlFilters`) y las consultas siguen en `TicketFilters`; el tema (`blue` = celeste) solo tiñe borde superior, foco, control abierto y contador.
+- `n` = filtros avanzados activos (sector, departamento, tipo, nodo, responsable, desde, hasta). Todo filtro activo tiene chip con × (`Quitar filtro Etiqueta: valor`); quitar Estado también apaga Sin responsable y Más de 24 h.
+- Piloto en Tickets de clientes (`blue`); extendida a Tickets internos (`purple`), Control de cambios y su reportería (`cyan`, vía `ChangeFilters`), Operaciones/FMS (`emerald`, sin panel) y Equipos de distribución (`purple`, sin panel). Cada módulo conserva sus campos, URL, períodos y consultas; `FilterSegment` ofrece el segmentado con el color del módulo.

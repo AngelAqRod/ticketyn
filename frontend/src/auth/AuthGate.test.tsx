@@ -17,7 +17,7 @@ describe('autenticación y sesiones', () => {
   it('muestra login sin consultar módulos ni enviar actividad automática', () => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
     show()
-    expect(screen.getByRole('heading', { name: 'Iniciar sesión en Ticketyn' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
     expect(screen.queryByText('Módulo operativo')).not.toBeInTheDocument()
     expect(fetcher).not.toHaveBeenCalled()
   })
@@ -72,7 +72,7 @@ describe('autenticación y sesiones', () => {
     expect(screen.getByText('Módulo operativo')).not.toBeVisible()
     vi.stubGlobal('fetch', vi.fn((_path: string, _options?: RequestInit) => Promise.resolve(response({ detail: 'Sesión vencida' }, 401))))
     fireEvent(window, new Event('focus'))
-    expect(await screen.findByRole('heading', { name: 'Iniciar sesión en Ticketyn' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
     expect(sessionToken()).toBe(null)
   })
   it('adjunta Authorization a consultas y descargas y limpia la sesión ante 401', async () => {
@@ -130,7 +130,7 @@ it('la aplicación completa inicia protegida sin consultas operativas anónimas'
   const { default: App } = await import('../App')
   const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
   render(<MemoryRouter initialEntries={['/tickets']}><App /></MemoryRouter>)
-  expect(screen.getByRole('heading', { name: 'Iniciar sesión en Ticketyn' })).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
   expect(fetcher).not.toHaveBeenCalled()
 })
 
@@ -164,4 +164,56 @@ it('permite acceso explícito a Dashboard cuando Mis tickets es el inicio prefer
   }))
   render(<MemoryRouter initialEntries={[{ pathname: '/', state: { explicit: true } }]}><App /></MemoryRouter>)
   expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
+})
+
+describe('pantalla de login (Login C)', () => {
+  it('muestra la composición, los recursos oficiales y las cápsulas decorativas', () => {
+    vi.stubGlobal('fetch', vi.fn())
+    const { container } = show()
+    expect(screen.getByText('Ingresa tus credenciales para continuar')).toBeInTheDocument()
+    expect(screen.getByText('¿Sin acceso? Contacta a un administrador de Ticketyn.')).toBeInTheDocument()
+    expect(screen.getAllByText('Centro de Operaciones de Red')).toHaveLength(1)
+    expect(screen.getByText('La sesión se cierra tras 30 minutos de inactividad.')).toBeInTheDocument()
+    expect(screen.getByText('Lo que ves al entrar depende de los permisos de tu rol.')).toBeInTheDocument()
+    expect(screen.getByAltText('Ticketyn')).toHaveAttribute('src', '/branding/logotipo_oscuro.svg')
+    expect(container.querySelector('img[src="/branding/isotipo_oscuro.svg"]')).toBeInTheDocument()
+    expect(container.querySelector('.radar-pulse')).toBeInTheDocument()
+    expect(container.querySelector('.btn-gradient-electric')).toBeInTheDocument()
+    const capsules = [...container.querySelectorAll('.login-capsule')]
+    expect(capsules.map((item) => item.textContent)).toEqual(['Tickets', 'Tickets internos', 'Control de cambios', 'FMS'])
+    expect(capsules.map((item) => item.className.match(/--(\w+)$/)?.[1])).toEqual(['blue', 'purple', 'cyan', 'emerald'])
+    // Decorativas: no son enlaces, botones ni reciben foco, y se ocultan a tecnologías asistivas.
+    const group = capsules[0].parentElement!
+    expect(group).toHaveAttribute('aria-hidden', 'true')
+    expect(group.querySelectorAll('a, button, [tabindex], [onclick]')).toHaveLength(0)
+  })
+  it('conserva los atributos del formulario y no usa puntos como placeholder', () => {
+    vi.stubGlobal('fetch', vi.fn())
+    show()
+    const user = screen.getByLabelText('Usuario'), pass = screen.getByLabelText('Contraseña')
+    expect(user).toHaveAttribute('name', 'username'); expect(user).toHaveAttribute('autocomplete', 'username')
+    expect(user).toBeRequired(); expect(user).toHaveAttribute('maxlength', '100'); expect(user).toHaveAttribute('placeholder', 'Ej. operador.noc')
+    expect(pass).toHaveAttribute('name', 'password'); expect(pass).toHaveAttribute('type', 'password'); expect(pass).toHaveAttribute('autocomplete', 'current-password')
+    expect(pass).toBeRequired(); expect(pass).not.toHaveAttribute('placeholder')
+    fireEvent.click(screen.getByRole('button', { name: 'Ver contraseña' }))
+    expect(pass).toHaveAttribute('type', 'text')
+    expect(screen.getByRole('button', { name: 'Ocultar contraseña' })).toBeInTheDocument()
+  })
+  it('distingue sesión vencida (aviso informativo) de un fallo de credenciales (error)', async () => {
+    setSessionToken('token')
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(response(identity))))
+    show()
+    expect(await screen.findByText('Módulo operativo')).toBeVisible()
+    act(() => { window.dispatchEvent(new Event('ticketyn:unauthorized')) })   // evento que emite expiredSession() ante un 401
+    const info = (await screen.findByText('Tu sesión venció o fue invalidada. Inicia sesión nuevamente.')).closest('[role="status"]')
+    expect(info).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(response({ detail: 'Credenciales inválidas' }, 401))))
+    fireEvent.change(screen.getByLabelText('Usuario'), { target: { value: 'noc' } })
+    fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'mala' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Credenciales inválidas')
+    expect(screen.queryByText(/Tu sesión venció/)).not.toBeInTheDocument()   // nunca ambos a la vez
+  })
 })

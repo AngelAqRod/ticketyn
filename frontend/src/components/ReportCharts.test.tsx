@@ -40,11 +40,11 @@ describe('Capsule NOC charts', () => {
     expect((captured.charts.at(-1)!.data as { count: number }[]).map(row => row.count)).toEqual([0, 13])
     expect(captured.lines.at(-1)).toMatchObject({ type: 'linear', stroke: chartPalette[0], dataKey: 'count' })
   })
-  it('preserves activity values and the existing neutral closed-series association', () => {
+  it('preserves activity values and the green closed-series association', () => {
     const rows = [{ start_at: '2026-10-15T06:00:00Z', started: 13, closed: 7 }]
     render(<ActivityChart rows={rows} />)
     expect(captured.charts.at(-1)!.data).toEqual([expect.objectContaining(rows[0])])
-    expect(captured.lines.at(-1)).toMatchObject({ dataKey: 'closed', stroke: '#64748b' })
+    expect(captured.lines.at(-1)).toMatchObject({ dataKey: 'closed', stroke: '#34d399' })
     render(<ActivityChart rows={rows} secondColor={chartPalette[1]} />)
     expect(captured.lines.at(-1)!.stroke).toBe(chartPalette[1])
   })

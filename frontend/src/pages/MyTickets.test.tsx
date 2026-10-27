@@ -221,6 +221,13 @@ describe('Módulo «Mis tickets»', () => {
     expect(screen.getByText('Recom. activa')).toBeInTheDocument()
   })
 
+  it('marca con la franja de antigüedad solo los tickets abiertos (más de 24 h en este caso)', async () => {
+    renderComponent()
+    await flush()
+    const row = screen.getByText('TK-2026-00101').closest('tr')!
+    expect(row).toHaveClass('ticket-state-open')
+    expect(row).toHaveAttribute('data-age', 'gt_24h')
+  })
   it('permite cambiar entre vistas de pestañas y carga la información correspondiente', async () => {
     vi.mocked(api.getMyTickets).mockImplementation(async (params) => {
       if (params?.view === 'escalations') return mockEscalationsList
@@ -370,5 +377,64 @@ describe('Módulo «Mis tickets»', () => {
       expect.any(Object)
     )
     r4.unmount()
+  })
+
+  describe('resumen del encabezado (variante B)', () => {
+    const region = () => screen.getByRole('region', { name: 'Resumen de mis tickets' })
+
+    it('distingue valor cero de dato no disponible', async () => {
+      vi.mocked(api.getMyTicketsSummary).mockResolvedValue({
+        assigned_count: 0, participated_count: 0, escalations_count: 0, to_verify_count: 0,
+      })
+      renderComponent()
+      await flush()
+      expect(within(region()).getAllByText('0')).toHaveLength(4)
+      expect(within(region()).queryByText('No disponible')).not.toBeInTheDocument()
+    })
+
+    it('muestra «Cargando» mientras llega el resumen y nunca un cero', async () => {
+      vi.mocked(api.getMyTicketsSummary).mockReturnValue(new Promise(() => {}))
+      renderComponent()
+      await flush()
+      expect(within(region()).getAllByText('Cargando')).toHaveLength(4)
+      expect(within(region()).queryByText('0')).not.toBeInTheDocument()
+    })
+
+    it('muestra «No disponible» si el resumen falla y la lista sigue funcionando', async () => {
+      vi.mocked(api.getMyTicketsSummary).mockRejectedValue(new Error('boom'))
+      renderComponent()
+      await flush()
+      expect(within(region()).getAllByText('No disponible')).toHaveLength(4)
+      expect(screen.getByText('TK-2026-00101')).toBeInTheDocument()
+    })
+
+    it('Actualizar recarga el resumen y no conserva cifras obsoletas si falla', async () => {
+      renderComponent()
+      await flush()
+      expect(within(region()).getByText('12')).toBeInTheDocument()
+
+      vi.mocked(api.getMyTicketsSummary).mockResolvedValueOnce({
+        assigned_count: 7, participated_count: 8, escalations_count: 9, to_verify_count: 0,
+      })
+      fireEvent.click(screen.getByRole('button', { name: /Actualizar/ }))
+      await flush()
+      expect(within(region()).getByText('7')).toBeInTheDocument()
+      expect(within(region()).queryByText('12')).not.toBeInTheDocument()
+
+      vi.mocked(api.getMyTicketsSummary).mockRejectedValueOnce(new Error('boom'))
+      fireEvent.click(screen.getByRole('button', { name: /Actualizar/ }))
+      await flush()
+      expect(within(region()).queryByText('7')).not.toBeInTheDocument()
+      expect(within(region()).getAllByText('No disponible')).toHaveLength(4)
+    })
+
+    it('mantiene el contador de registros junto al título y la identidad azul', async () => {
+      renderComponent()
+      await flush()
+      const heading = screen.getByRole('heading', { level: 1 }).closest('.page-heading')!
+      expect(heading).toHaveClass('page-heading--blue')
+      expect(within(heading as HTMLElement).getByText('Registros:')).toBeInTheDocument()
+      expect(heading).toContainElement(region())
+    })
   })
 })

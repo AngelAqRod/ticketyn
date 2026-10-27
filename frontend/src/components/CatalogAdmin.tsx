@@ -26,7 +26,8 @@ import type { CatalogKind, Circuit, Customer, NamedCatalog, Position, PositionIn
 import { formatDate, formatTableDate } from '../lib/format'
 import { FormField } from './FormField'
 import { PageHeading } from './PageHeading'
-import { FilterChips } from './FilterChips'
+import { FilterBar, FilterSegment } from './FilterBar'
+import { FilterChips, type FilterChipItem } from './FilterChips'
 
 const labels = {
   'change-types': { title: 'Tipos de cambio', singular: 'tipo de cambio', empty: 'tipos de cambio', description: 'Clasificación de trabajos operativos y ventanas de mantenimiento.' },
@@ -649,184 +650,67 @@ export function CatalogAdmin({ kind, embedded = false, administrativeAccess = fa
     )}
     {!circuitEditor && <>
     {kind === 'circuits' && (() => {
-      const activeCount = (search.trim() ? 1 : 0) + (params.get('customer_id') ? 1 : 0) + (params.get('sector_id') ? 1 : 0) + (params.get('node_id') ? 1 : 0) + (params.get('active') ? 1 : 0)
+      // Cada chip quita solo su condición.
+      const chips: FilterChipItem[] = [
+        ...(params.get('search') ? [{ label: 'Búsqueda', value: params.get('search')!, onRemove: () => change({ search: '' }) }] : []),
+        ...(params.get('customer_id') ? [{ label: 'Cliente', value: customerLabel(Number(params.get('customer_id'))), onRemove: () => change({ customer_id: '' }) }] : []),
+        ...(params.get('sector_id') ? [{ label: 'Sector', value: sectors.find((item) => String(item.id) === params.get('sector_id'))?.name ?? `#${params.get('sector_id')}`, onRemove: () => change({ sector_id: '' }) }] : []),
+        ...(params.get('node_id') ? [{ label: 'Nodo', value: nodes.find((item) => String(item.id) === params.get('node_id'))?.name ?? `#${params.get('node_id')}`, onRemove: () => change({ node_id: '' }) }] : []),
+        ...(params.get('active') ? [{ label: 'Estado', value: params.get('active') === 'true' ? 'Activos' : params.get('active') === 'false' ? 'Inactivos' : params.get('active')!, onRemove: () => change({ active: '' }) }] : []),
+      ]
       return (
-        <section aria-label="Filtros de circuitos" className="filter-toolbar filter-toolbar--blue mb-5">
-          <div className="filter-toolbar-header">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <FilterHeading title="Filtros de circuitos" theme="blue" />
-              {activeCount > 0 && (
-                <span className="filter-count-badge filter-count-badge--blue">
-                  {activeCount} {activeCount === 1 ? 'filtro activo' : 'filtros activos'}
-                </span>
-              )}
-            </div>
-            <button type="button" className="button-secondary rounded-full text-xs" onClick={clear}>
-              Limpiar filtros
-            </button>
-          </div>
-          <div className="filter-toolbar-body pt-3 border-t border-slate-800/80 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <FormField id="circuit-search" label="Buscar circuitos"><input id="circuit-search" className="form-input rounded-xl text-xs" type="search" placeholder="Código o descripción..." value={search} onChange={(event) => setSearch(event.target.value)} /></FormField>
-            <FormField id="circuit-customer-filter" label="Filtrar por cliente"><SearchableSelect id="circuit-customer-filter" label="Cliente" value={params.get('customer_id') ?? ''} options={customers.map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}` }))} onChange={(value) => change({ customer_id: value })} disabled={loading && !customers.length} placeholder="Todos los clientes" emptyMessage="No hay clientes." noMatchMessage="No se encontraron clientes." /></FormField>
-            <FormField id="circuit-sector-filter" label="Filtrar por sector"><SearchableSelect id="circuit-sector-filter" label="Sector" value={params.get('sector_id') ?? ''} options={sectors.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ sector_id: value })} placeholder="Todos los sectores" emptyMessage="No hay sectores." noMatchMessage="No se encontraron sectores." /></FormField>
-            <FormField id="circuit-node-filter" label="Filtrar por nodo"><SearchableSelect id="circuit-node-filter" label="Nodo" value={params.get('node_id') ?? ''} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ node_id: value })} placeholder="Todos los nodos" emptyMessage="No hay nodos." noMatchMessage="No se encontraron nodos." /></FormField>
-            <FormField id="circuit-active-filter" label="Estado de circuitos"><select id="circuit-active-filter" className="form-input rounded-xl text-xs" value={params.get('active') ?? ''} onChange={(event) => change({ active: event.target.value })}><option value="">Todos</option><option value="true">Activos</option><option value="false">Inactivos</option></select></FormField>
-          </div>
-          {activeCount > 0 && (
-            <div className="mt-3">
-              <FilterChips items={[
-                ...(params.get('search') ? [{ label: 'Búsqueda', value: params.get('search')! }] : []),
-                ...(params.get('customer_id') ? [{ label: 'Cliente', value: customerLabel(Number(params.get('customer_id'))) }] : []),
-                ...(params.get('sector_id') ? [{ label: 'Sector', value: sectors.find((item) => String(item.id) === params.get('sector_id'))?.name ?? `#${params.get('sector_id')}` }] : []),
-                ...(params.get('node_id') ? [{ label: 'Nodo', value: nodes.find((item) => String(item.id) === params.get('node_id'))?.name ?? `#${params.get('node_id')}` }] : []),
-                ...(params.get('active') ? [{ label: 'Estado', value: params.get('active') === 'true' ? 'Activos' : params.get('active') === 'false' ? 'Inactivos' : params.get('active')! }] : []),
-              ]} />
-            </div>
-          )}
-        </section>
+        <FilterBar
+          label="Filtros de circuitos"
+          theme="blue"
+          chips={chips}
+          onClear={clear}
+          search={<FormField id="circuit-search" label="Buscar circuitos"><input id="circuit-search" className="form-input" type="search" placeholder="Código o descripción..." value={search} onChange={(event) => setSearch(event.target.value)} /></FormField>}
+          quick={<>
+            <div className="filter-bar-quick"><FormField id="circuit-customer-filter" label="Filtrar por cliente"><SearchableSelect id="circuit-customer-filter" label="Cliente" value={params.get('customer_id') ?? ''} options={customers.map((item) => ({ value: String(item.id), label: `${item.customer_code} — ${item.name}` }))} onChange={(value) => change({ customer_id: value })} disabled={loading && !customers.length} placeholder="Todos los clientes" emptyMessage="No hay clientes." noMatchMessage="No se encontraron clientes." /></FormField></div>
+            <div className="filter-bar-quick"><FormField id="circuit-sector-filter" label="Filtrar por sector"><SearchableSelect id="circuit-sector-filter" label="Sector" value={params.get('sector_id') ?? ''} options={sectors.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ sector_id: value })} placeholder="Todos los sectores" emptyMessage="No hay sectores." noMatchMessage="No se encontraron sectores." /></FormField></div>
+            <div className="filter-bar-quick"><FormField id="circuit-node-filter" label="Filtrar por nodo"><SearchableSelect id="circuit-node-filter" label="Nodo" value={params.get('node_id') ?? ''} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(value) => change({ node_id: value })} placeholder="Todos los nodos" emptyMessage="No hay nodos." noMatchMessage="No se encontraron nodos." /></FormField></div>
+          </>}
+          primary={<FilterSegment label="Estado de circuitos" options={[['', 'Todos'], ['true', 'Activos'], ['false', 'Inactivos']]} value={params.get('active') ?? ''} onChange={(value) => change({ active: value })} />}
+        />
       )
     })()}
     {kind === 'customers' && (
-      <section aria-label="Filtros de clientes" className="filter-toolbar filter-toolbar--blue mb-5">
-        <div className="filter-toolbar-header">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <FilterHeading title="Filtros de clientes" theme="blue" />
-            {search.trim() && (
-              <span className="filter-count-badge filter-count-badge--blue">
-                1 filtro activo
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="filter-toolbar-body pt-3 border-t border-slate-800/80">
-          <div className="max-w-md">
-            <FormField id="admin-search" label="Buscar clientes">
-              <input
-                id="admin-search"
-                type="search"
-                placeholder="Buscar por código o nombre..."
-                className="form-input rounded-full text-xs"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </FormField>
-          </div>
-          {search.trim() && (
-            <div className="mt-3">
-              <FilterChips items={[{ label: 'Búsqueda', value: search.trim() }]} />
-            </div>
-          )}
-        </div>
-      </section>
+      <FilterBar
+        label="Filtros de clientes"
+        theme="blue"
+        chips={search.trim() ? [{ label: 'Búsqueda', value: search.trim(), onRemove: () => setSearch('') }] : []}
+        onClear={() => setSearch('')}
+        search={<FormField id="admin-search" label="Buscar clientes"><input id="admin-search" type="search" placeholder="Buscar por código o nombre..." className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></FormField>}
+      />
     )}
     {kind === 'responsibles' && (
-      <section aria-label="Filtros de responsables" className="filter-toolbar filter-toolbar--slate mb-5">
-        <div className="filter-toolbar-header">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <FilterHeading title="Filtros de responsables" theme="slate" />
-            {search.trim() && (
-              <span className="filter-count-badge filter-count-badge--slate filter-count-badge--active">
-                <span className="filter-count-dot" />
-                1 filtro activo
-              </span>
-            )}
-          </div>
-          {search.trim() && (
-            <button type="button" className="button-secondary rounded-full text-xs" onClick={() => setSearch('')}>
-              Limpiar filtro
-            </button>
-          )}
-        </div>
-        <div className="filter-toolbar-body pt-3 border-t border-slate-800/80">
-          <div className="max-w-md">
-            <FormField id="admin-search" label="Buscar responsables">
-              <input
-                id="admin-search"
-                type="search"
-                placeholder="Buscar por nombre..."
-                className="form-input rounded-full text-xs"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+      <FilterBar
+        label="Filtros de responsables"
+        theme="slate"
+        chips={search.trim() ? [{ label: 'Búsqueda', value: search.trim(), onRemove: () => setSearch('') }] : []}
+        onClear={() => setSearch('')}
+        search={<FormField id="admin-search" label="Buscar responsables"><input id="admin-search" type="search" placeholder="Buscar por nombre..." className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} /></FormField>}
+      />
+    )}
+    {(kind === 'nodes' || kind === 'positions') && (
+      <FilterBar
+        label={`Filtros de ${info.empty}`}
+        theme="slate"
+        chips={[
+          ...(departmentFilter && kind === 'positions' ? [{ label: 'Departamento', value: departments.find(d => String(d.id) === departmentFilter)?.name ?? `#${departmentFilter}`, onRemove: () => setDepartmentFilter('') }] : []),
+          ...(search.trim() ? [{ label: 'Búsqueda', value: search.trim(), onRemove: () => setSearch('') }] : []),
+        ]}
+        onClear={() => { setSearch(''); if (kind === 'positions') setDepartmentFilter('') }}
+        search={<FormField id="admin-search" label={`Buscar ${info.empty}`}><input id="admin-search" type="search" className="form-input" placeholder="Buscar por nombre..." value={search} onChange={(e) => setSearch(e.target.value)} /></FormField>}
+        quick={kind === 'positions' && (
+          <div className="filter-bar-quick">
+            <FormField id="position-department-filter" label="Filtrar por departamento">
+              <SearchableSelect id="position-department-filter" label="Filtrar por departamento" value={departmentFilter} onChange={setDepartmentFilter} options={departments.map((item) => ({ value: String(item.id), label: item.name }))} placeholder="Todos los departamentos" emptyMessage="No hay departamentos." noMatchMessage="Sin coincidencias." />
             </FormField>
           </div>
-          {search.trim() && (
-            <div className="mt-3">
-              <FilterChips theme="slate" items={[{ label: 'Búsqueda', value: search.trim() }]} />
-            </div>
-          )}
-        </div>
-      </section>
+        )}
+      />
     )}
-    {(kind === 'nodes' || kind === 'positions') && (() => {
-      const activeCount = (search.trim() ? 1 : 0) + (kind === 'positions' && departmentFilter ? 1 : 0)
-      return (
-        <section aria-label={`Filtros de ${info.empty}`} className="filter-toolbar filter-toolbar--slate mb-5">
-          <div className="filter-toolbar-header">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <FilterHeading title={`Filtros de ${info.empty}`} theme="slate" />
-              {activeCount > 0 && (
-                <span className="filter-count-badge filter-count-badge--slate filter-count-badge--active">
-                  <span className="filter-count-dot" />
-                  {activeCount} {activeCount === 1 ? 'filtro activo' : 'filtros activos'}
-                </span>
-              )}
-            </div>
-            {activeCount > 0 && (
-              <button
-                type="button"
-                className="button-secondary rounded-full text-xs"
-                onClick={() => {
-                  setSearch('')
-                  if (kind === 'positions') setDepartmentFilter('')
-                }}
-              >
-                Limpiar {activeCount === 1 ? 'filtro' : 'filtros'}
-              </button>
-            )}
-          </div>
-          <div className="filter-toolbar-body pt-3 border-t border-slate-800/80 grid gap-3 sm:grid-cols-2">
-            {kind === 'positions' && (
-              <FormField id="position-department-filter" label="Filtrar por departamento">
-                <SearchableSelect
-                  id="position-department-filter"
-                  label="Filtrar por departamento"
-                  value={departmentFilter}
-                  onChange={setDepartmentFilter}
-                  options={departments.map((item) => ({ value: String(item.id), label: item.name }))}
-                  placeholder="Todos los departamentos"
-                  emptyMessage="No hay departamentos."
-                  noMatchMessage="Sin coincidencias."
-                />
-              </FormField>
-            )}
-            <div className={kind === 'positions' ? '' : 'sm:col-span-2 max-w-md'}>
-              <FormField id="admin-search" label={`Buscar ${info.empty}`}>
-                <input
-                  id="admin-search"
-                  type="search"
-                  className="form-input rounded-full text-xs"
-                  placeholder={`Buscar por nombre...`}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </FormField>
-            </div>
-          </div>
-          {activeCount > 0 && (
-            <div className="mt-3">
-              <FilterChips
-                theme="slate"
-                items={[
-                  ...(departmentFilter ? [{ label: 'Departamento', value: departments.find(d => String(d.id) === departmentFilter)?.name ?? `#${departmentFilter}` }] : []),
-                  ...(search.trim() ? [{ label: 'Búsqueda', value: search.trim() }] : []),
-                ]}
-              />
-            </div>
-          )}
-        </section>
-      )
-    })()}
     {loading || loadError || !ordered.length ? <RequestState loading={loading} loadingText={`Cargando ${info.empty}...`} error={loadError ? `Error al cargar ${info.empty}: ${loadError}` : null} errorTitle="" onRetry={() => setRetry(retry + 1)} empty={!ordered.length} emptyTitle={items.length || (kind === 'circuits' && circuitFilterKeys.some((key) => params.has(key))) ? 'No hay coincidencias con la búsqueda.' : `No hay ${info.empty} registrados.`} emptyDescription="" compact={!refreshedModule && loading} /> : <div className={`panel table-surface overflow-x-auto rounded-2xl bg-[#0b1426] border ${kind === 'customers' || kind === 'circuits' ? 'border-sky-500/20' : 'table-surface--slate'} shadow-xl`}><table className="operation-table min-w-[650px]"><caption className="table-title">{info.title}</caption>
       <thead><tr>{[...(kind === 'customers' || kind === 'circuits' ? ['Código'] : []), ...(kind === 'circuits' ? ['Cliente', 'Nodo', 'Sector'] : []), kind === 'circuits' ? 'Descripción' : 'Nombre', ...(kind === 'change-types' ? ['Descripción'] : kind === 'change-completion-types' ? ['Descripción', 'Aplica para eficiencia'] : []), ...(kind === 'positions' || kind === 'responsibles' ? ['Departamento'] : []), ...(kind === 'positions' ? ['Escala a'] : []), ...(kind === 'responsibles' ? ['Puesto', 'Seleccionable en operaciones', ...(manageAccess ? ['Acceso a Ticketyn'] : [])] : []), 'Estado', 'Fecha de creación', 'Acciones'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
       <tbody>{ordered.map((item) => <tr key={item.id}>

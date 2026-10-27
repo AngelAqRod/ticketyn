@@ -1,16 +1,14 @@
+import { ageBucket } from '../lib/ticketAge'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import {
   AlertTriangle,
   Clock,
   ExternalLink,
-  History,
   Inbox,
   RefreshCw,
   Search,
   ShieldAlert,
-  TrendingUp,
-  UserCheck,
 } from 'lucide-react'
 import { getMyTickets, getMyTicketsSummary } from '../api/myTickets'
 import type {
@@ -19,7 +17,7 @@ import type {
   MyTicketView,
   MyTicketScope,
 } from '../types/myTickets'
-import { PageHeading } from '../components/PageHeading'
+import { PageHeading, type HeadingStat } from '../components/PageHeading'
 import { PaginationBar } from '../components/PaginationBar'
 import { RequestState } from '../components/RequestState'
 import { StatusBadge } from '../components/StatusBadge'
@@ -49,6 +47,7 @@ export function MyTickets() {
 
   // Summary state
   const [summary, setSummary] = useState<MyTicketsSummaryResponse | null>(null)
+  const [summaryFailed, setSummaryFailed] = useState(false)
 
   // Tickets list state
   const [items, setItems] = useState<MyTicketItem[]>([])
@@ -94,9 +93,12 @@ export function MyTickets() {
     try {
       const data = await getMyTicketsSummary(signal)
       setSummary(data)
-    } catch (e: unknown) {
+      setSummaryFailed(false)
+    } catch {
       if (signal?.aborted) return
-      // Silent error on summary failure to not block view
+      // No bloquea la vista; el resumen pasa a «No disponible» en lugar de conservar cifras obsoletas.
+      setSummary(null)
+      setSummaryFailed(true)
     }
   }, [])
 
@@ -225,6 +227,17 @@ export function MyTickets() {
   const currentPage = Math.floor(currentOffset / LIMIT) + 1
   const totalPages = Math.ceil(total / LIMIT) || 1
 
+  const summaryValue = (value: number | undefined) => ({
+    value: summary ? (value ?? null) : null,
+    loading: !summary && !summaryFailed,
+  })
+  const summaryStats: HeadingStat[] = [
+    { label: 'Asignados a mí', tone: 'open', ...summaryValue(summary?.assigned_count) },
+    { label: 'He participado', tone: 'muted', ...summaryValue(summary?.participated_count) },
+    { label: 'Mis escalamientos', tone: 'accent', ...summaryValue(summary?.escalations_count) },
+    { label: 'Por verificar', tone: summary && summary.to_verify_count > 0 ? 'open' : 'muted', ...summaryValue(summary?.to_verify_count) },
+  ]
+
   return (
     <div className="my-tickets-container">
       <PageHeading
@@ -240,6 +253,8 @@ export function MyTickets() {
             </span>
           ) : undefined
         }
+        statsLabel="Resumen de mis tickets"
+        stats={summaryStats}
         action={
           <div className="flex flex-wrap gap-2">
             <button
@@ -257,80 +272,6 @@ export function MyTickets() {
           </div>
         }
       />
-
-      {/* Summary Indicators */}
-      <section className="my-tickets-summary-grid" aria-label="Resumen de mis tickets">
-        <button
-          type="button"
-          className="my-tickets-card"
-          data-active={currentView === 'assigned'}
-          onClick={() => changeView('assigned')}
-        >
-          <div className="my-tickets-card-header">
-            <span>Asignados a mí</span>
-            <UserCheck size={16} className="text-sky-400" aria-hidden="true" />
-          </div>
-          <div className="my-tickets-card-value">
-            {summary ? summary.assigned_count : '—'}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="my-tickets-card"
-          data-active={currentView === 'participated'}
-          onClick={() => changeView('participated')}
-        >
-          <div className="my-tickets-card-header">
-            <span>He participado</span>
-            <History size={16} className="text-purple-400" aria-hidden="true" />
-          </div>
-          <div className="my-tickets-card-value">
-            {summary ? summary.participated_count : '—'}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="my-tickets-card"
-          data-active={currentView === 'escalations'}
-          onClick={() => changeView('escalations')}
-        >
-          <div className="my-tickets-card-header">
-            <span>Mis escalamientos</span>
-            <TrendingUp size={16} className="text-amber-400" aria-hidden="true" />
-          </div>
-          <div className="my-tickets-card-value">
-            {summary ? summary.escalations_count : '—'}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="my-tickets-card my-tickets-card--warning"
-          data-active={currentView === 'to_verify'}
-          data-has-items={Boolean(summary && summary.to_verify_count > 0)}
-          onClick={() => changeView('to_verify')}
-        >
-          <div className="my-tickets-card-header">
-            <span className={summary && summary.to_verify_count > 0 ? 'text-amber-400 font-bold' : ''}>
-              Por verificar
-            </span>
-            {summary && summary.to_verify_count > 0 ? (
-              <ShieldAlert size={16} className="text-amber-400 animate-pulse" aria-hidden="true" />
-            ) : (
-              <AlertTriangle size={16} className="text-slate-400" aria-hidden="true" />
-            )}
-          </div>
-          <div
-            className={`my-tickets-card-value ${
-              summary && summary.to_verify_count > 0 ? 'text-amber-300' : ''
-            }`}
-          >
-            {summary ? summary.to_verify_count : '—'}
-          </div>
-        </button>
-      </section>
 
       {/* Tabs & Controls */}
       <div className="my-tickets-controls-bar">
@@ -654,6 +595,7 @@ export function MyTickets() {
                     <tr
                       key={`${ticket.ticket_type}-${ticket.id}-${ticket.escalation_id ?? ''}`}
                       className={isOpen ? 'ticket-state-open' : 'ticket-state-closed'}
+                      data-age={isOpen ? ageBucket(ticket.start_at) ?? undefined : undefined}
                     >
                       {/* Referencia / Título */}
                       <th scope="row" className="max-w-64 text-primary whitespace-nowrap">
@@ -737,7 +679,7 @@ export function MyTickets() {
                             <StatusBadge status={ticket.status} />
                           </td>
                           <td className="max-w-36 text-xs">
-                            <span className="font-mono font-medium text-amber-300/90 block truncate">
+                            <span className={`font-mono font-medium block truncate ${ticket.responsible_name ? 'text-slate-200' : 'italic text-slate-400'}`}>
                               {ticket.responsible_name || 'Sin asignar'}
                             </span>
                             <span className="text-[10px] text-slate-500 block">

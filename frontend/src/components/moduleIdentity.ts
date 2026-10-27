@@ -12,7 +12,7 @@ export const moduleIdentity: Omit<ModuleDefinition, 'number'>[] = [
   { path: '/', title: 'Dashboard', group: 'Operación', theme: 'cyan', badge: 'RESUMEN NOC' },
   { path: '/tickets', title: 'Tickets', group: 'Operación', theme: 'blue', badge: 'CLIENTES' },
   { path: '/internal-tickets', title: 'Tickets internos', group: 'Operación', theme: 'purple', badge: 'INFRAESTRUCTURA NOC' },
-  { path: '/changes', title: 'Control de cambios', group: 'Operación', theme: 'amber', badge: 'MANTENIMIENTOS' },
+  { path: '/changes', title: 'Control de cambios', group: 'Operación', theme: 'cyan', badge: 'MANTENIMIENTOS' },
   { path: '/customers', title: 'Clientes', group: 'Operación', theme: 'blue', badge: 'CATÁLOGO' },
   { path: '/circuits', title: 'Circuitos', group: 'Operación', theme: 'blue', badge: 'RED Y ENLACES' },
   { path: '/distribution-devices', title: 'Equipos de distribución', group: 'Operación', theme: 'purple', badge: 'RED Y DISTRIBUCIÓN' },

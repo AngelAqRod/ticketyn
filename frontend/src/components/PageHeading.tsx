@@ -3,6 +3,17 @@ import { useLocation } from 'react-router'
 import { SevenSegmentNumber } from './SevenSegmentNumber'
 import { identityFor } from './moduleIdentity'
 
+export type HeadingStatTone = 'accent' | 'open' | 'unassigned' | 'age' | 'muted'
+
+/** `value: null` = sin dato (carga o error); nunca se sustituye por 0. */
+export interface HeadingStat {
+  label: string
+  value: number | null
+  tone?: HeadingStatTone
+  /** Con `value: null`: true = cargando, false = no disponible. */
+  loading?: boolean
+}
+
 export interface PageHeadingProps {
   title: string
   description: string
@@ -10,6 +21,9 @@ export interface PageHeadingProps {
   badge?: ReactNode
   theme?: 'blue' | 'purple' | 'amber' | 'emerald' | 'slate' | 'cyan'
   telemetry?: ReactNode
+  /** Variante B: indicadores informativos con datos reales; sin `stats` es la variante A. */
+  stats?: HeadingStat[]
+  statsLabel?: string
 }
 
 export function PageHeading({
@@ -19,6 +33,8 @@ export function PageHeading({
   badge,
   theme,
   telemetry,
+  stats,
+  statsLabel = 'Resumen',
 }: PageHeadingProps) {
   const location = useLocation()
   const identity = identityFor(location.pathname)
@@ -64,6 +80,28 @@ export function PageHeading({
         </div>
       </div>
       <div className="heading-actions">{action}</div>
+      {stats && stats.length > 0 && (
+        <section className="heading-stats-region" aria-label={statsLabel}>
+          <ul className="heading-stats">
+            {stats.map(stat => (
+              <li
+                key={stat.label}
+                className={`heading-stat heading-stat--${stat.tone ?? 'accent'}${stat.value === null ? ' heading-stat--unknown' : ''}`}
+              >
+                <span className="heading-stat-label">{stat.label}</span>
+                <strong className="heading-stat-value">
+                  {stat.value === null ? (
+                    <>
+                      <span aria-hidden="true">{stat.loading ? '…' : '—'}</span>
+                      <span className="sr-only">{stat.loading ? 'Cargando' : 'No disponible'}</span>
+                    </>
+                  ) : stat.value}
+                </strong>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   )
 }

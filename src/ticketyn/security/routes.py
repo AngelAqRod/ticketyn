@@ -53,6 +53,7 @@ for resource, module in [('tickets', 'tickets'), ('internal-tickets', 'internal_
 RULES[('GET', '/api/internal-tickets')] = Rule(any_of=('internal_tickets.view', 'reports.internal_tickets.view', 'tickets.link', 'changes.link'))
 route('GET', '/api/tickets/{id}/reports/customer/pdf', 'tickets.export')
 route('GET', '/api/tickets/stats', 'tickets.view')
+route('GET', '/api/tickets/open-overview', 'tickets.view')
 route('GET', '/api/internal-tickets/{id}/related', 'internal_tickets.view')
 route('GET', '/api/escalations/summary', 'reports.escalations.view')
 route('GET', '/api/escalations/tickets', 'reports.escalations.view')

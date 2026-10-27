@@ -98,7 +98,17 @@ Azul eléctrico para botones primarios, navegación activa, foco y controles sel
 
 ### Secondary
 
-Cian para Dashboard; azul claro para clientes/circuitos/tickets; morado para internos; ámbar para Control de cambios; esmeralda para FMS. Administración utiliza pizarra. Son identidades de dominio; no equivalen por sí mismas a severidad, permiso o estado.
+Cian para Dashboard y Control de cambios; celeste para clientes/circuitos/tickets/reportes; morado para internos y equipos de distribución; esmeralda para FMS. Administración utiliza pizarra. Son identidades de dominio; no equivalen por sí mismas a severidad, permiso o estado. Rosa e índigo no identifican ningún módulo.
+
+Los acentos de módulo, el estado Abierto/Cerrado y la escala de antigüedad viven como variables en `:root` de `frontend/src/styles.css` (`--module-*`, `--state-*`, `--age-*`); los componentes las referencian en vez de repetir hexadecimales.
+
+### Semántica de estados
+
+Ámbar, verde y rojo no son identidad de módulo. Ticket **Abierto** = ámbar (`status-ticket-open`, franja de fila `#f59e0b`) en todos los módulos; **Cerrado** = verde (franja de fila `#34d399`, etiqueta `status-ticket-closed` y tarjeta «Tickets cerrados» del Dashboard, la misma señal en los tres), siempre con texto. Verde en Cerrado significa «flujo terminado, ya no cuenta», **no** «resuelto con éxito»: el motivo (falso reporte, error del cliente, cancelación, etc.) lo define el tipo de incidencia, y la cancelación de servicio tiene su propio apartado. El gris pizarra queda reservado para estados deshabilitado o pendiente de respuesta, y no debe usarse para Cerrado; confirmación exitosa = verde; error o acción destructiva = rojo. En Control de cambios se conservan en ámbar solo «Tiempo excedido», «Hoy» y el aviso de sesión; los estados `change-status-*` no cambian. En listados de tickets, el responsable usa texto normal y «Sin asignar» gris cursiva.
+
+### Escala de antigüedad de tickets abiertos
+
+Solo tiempo transcurrido desde `start_at`; **no es un SLA** (sin objetivos, pausas ni cumplimiento). Tramos excluyentes: menos de 1 h gris `#cbd5e1`; 1 h ≤ x < 4 h ámbar `#f59e0b`; 4 h ≤ x ≤ 24 h naranja `#fb923c` (el naranja solo existe en esta escala); más de 24 h rojo `#f87171`. «Sin responsable» es un conteo transversal, no un tramo. Los abiertos llevan franja izquierda de 4 px y duración en texto («45 min», «2 h 15 min», «1 d 4 h»); los cerrados no tienen franja ni antigüedad. Definición única en `src/ticketyn/api/ticket_age.py` (espejo de presentación en `frontend/src/lib/ticketAge.ts`).
 
 ### Neutral
 
@@ -134,7 +144,7 @@ Acción principal sólida azul y secundaria oscura con borde; cápsulas, icono b
 
 ### Chips
 
-Píldoras compactas para identidad, filtros y estados. Diferenciar el acento del módulo de la semántica del registro. Abierto/cerrado o fallido/aceptado conservan sus textos y significado; no sustituirlos por un LED sin etiqueta.
+Píldoras compactas para identidad, filtros y estados. Diferenciar el acento del módulo de la semántica del registro. Abierto (ámbar)/cerrado (verde) o fallido/aceptado conservan sus textos y significado; no sustituirlos por un LED sin etiqueta.
 
 ### Cards / Containers
 
@@ -151,6 +161,16 @@ Enlaces con icono y texto, selección en cápsula, grupos y controles responsive
 ### PageHeading
 
 Emblema, etiqueta de módulo, título, contexto/telemetría disponible y acciones. Su color sigue al dominio. La telemetría que muestra una página no se convierte mediante diseño en estadísticas globales nuevas.
+
+Un único componente (`PageHeading`) con dos variantes. **Estructura:** borde superior de 3 px (`--heading-accent`, derivado de `--module-*`), emblema de 44 px, ruta `Grupo / Módulo` en gris con el módulo actual en el color del dominio, título, contador (`telemetry`) junto al título como dato secundario, descripción breve y acciones a la derecha. Radio 12 px (16 px en móvil); no usa hexadecimales propios para el acento.
+
+- **Variante A (por defecto):** sin `stats`. Úsala cuando el módulo no tiene indicadores relevantes con fuente real (Administración, catálogos, reportes, detalle). No se muestran tarjetas vacías.
+- **Variante B:** pasa `stats` (`{ label, value, tone, loading }`). Úsala solo si hay cifras ya cargadas por la pantalla, correctas para el alcance del usuario. Hoy: **Mis tickets** (`GET /api/my-tickets/summary`: Asignados a mí, He participado, Mis escalamientos, Por verificar).
+- **Tonos de indicador:** `open` ámbar (`--state-open`), `unassigned` pizarra con borde punteado, `age` rojo (`--age-gt-24h`, indicador de tiempo, no SLA), `accent` color del módulo, `muted` gris. Los indicadores conservan su color semántico, nunca el del módulo salvo `accent`. Cada uno lleva etiqueta de texto; el color nunca es el único canal.
+- **Valores:** `null` no es cero. Carga = «…» con texto «Cargando» para lectores de pantalla; error/ausencia = «—» con «No disponible». Si una actualización falla se descartan las cifras anteriores. No se calculan totales a partir de una página parcial.
+- **Informativos:** los indicadores no son filtros. No inventar indicadores para llenar el diseño.
+- **Responsive:** el encabezado envuelve; los indicadores se distribuyen en una rejilla `auto-fit` de mínimo 11 rem (1–4 columnas). Acciones con áreas táctiles ≥ 36–44 px.
+- **Con FilterBar:** comparten acento por módulo, borde superior de 3 px, radio y tipografía; siguen siendo componentes separados (encabezado: contexto, acciones y resumen; FilterBar: búsqueda y filtros).
 
 ## Do's and Don'ts
 

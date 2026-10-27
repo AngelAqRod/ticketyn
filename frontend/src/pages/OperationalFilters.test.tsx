@@ -35,7 +35,7 @@ describe('filtros operativos en URL', () => {
   it('restaura URL, pagina con filtros y permite atrás/adelante/limpiar', async () => {
     const mock = setup('/tickets?status=OPEN&customer_id=1&from=2026-10-02&to=2026-10-02&offset=50', 50)
     await screen.findByText('REF-0')
-    expect(screen.getByLabelText('Estado')).toHaveValue('OPEN')
+    expect(screen.getByRole('button', { name: 'Abiertos' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByLabelText('Desde')).toHaveValue('2026-10-02')
     expect(within(screen.getByRole('table')).getAllByText('Cliente uno')).toHaveLength(50)
     expect(within(screen.getByRole('table')).getAllByText('C-001.001')).toHaveLength(50)
@@ -46,13 +46,13 @@ describe('filtros operativos en URL', () => {
     expect(request.searchParams.get('customer_id')).toBe('1')
     expect(request.searchParams.get('from')).toBe(new Date(2026, 9, 2).toISOString())
     expect(request.searchParams.get('to')).toBe(new Date(2026, 9, 3).toISOString())
-    fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'CLOSED' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrados' }))
     expect(params().has('offset')).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Atrás' }))
     await waitFor(() => expect(params().get('status')).toBe('OPEN'))
     fireEvent.click(screen.getByRole('button', { name: 'Adelante' }))
     await waitFor(() => expect(params().get('status')).toBe('CLOSED'))
-    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar todo' }))
     expect(screen.getByTestId('url').textContent).toBe('')
   })
   it('circuito global deriva cliente y cambiar cliente limpia circuito incompatible', async () => {
@@ -86,15 +86,15 @@ describe('filtros operativos en URL', () => {
   it('Circuitos filtra desde URL, permite cambiar/limpiar y enlaza tickets', async () => {
     const mock = setup('/circuits?customer_id=2&active=false&search=line')
     await screen.findByText('LINE-2')
-    expect(screen.getByLabelText('Estado de circuitos')).toHaveValue('false')
+    expect(within(screen.getByRole('group', { name: 'Estado de circuitos' })).getByRole('button', { name: 'Inactivos' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByLabelText('Buscar circuitos')).toHaveValue('line')
     expect(screen.getByRole('link', { name: 'Ver tickets de LINE-2' })).toHaveAttribute('href', '/tickets?circuit_id=2')
     await choose('Filtrar por cliente', 'C-1 — Cliente 1')
-    fireEvent.change(screen.getByLabelText('Estado de circuitos'), { target: { value: 'true' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Activos' }))
     fireEvent.change(screen.getByLabelText('Buscar circuitos'), { target: { value: 'Enlace 1' } })
     await screen.findByText('LINE-1')
     expect(mock.mock.calls.some(([path]) => path.includes('active=true') && path.includes('customer_id=1'))).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar todo' }))
     await screen.findByText('LINE-2'); expect(screen.getByTestId('url').textContent).toBe('')
   })
 })
@@ -104,6 +104,7 @@ describe('filtros Nodo, Sector y Responsable', () => {
   it('restaura ambos filtros, pagina, reinicia offset y limpia URL', async () => {
     const mock = setup('/tickets?node_id=1&responsible_id=1&status=OPEN&offset=50', 50)
     await screen.findByText('REF-0')
+    fireEvent.click(screen.getByRole('button', { name: /^Filtros/ }))
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Nodo' })).toHaveValue('Nodo 1'))
     expect(screen.getByRole('combobox', { name: 'Responsable' })).toHaveValue('Clasificación')
     fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
@@ -113,7 +114,7 @@ describe('filtros Nodo, Sector y Responsable', () => {
     expect(params().get('node_id')).toBe('1'); expect(params().has('offset')).toBe(false)
     await choose('Responsable', 'Clasificación')
     expect(params().get('responsible_id')).toBe('1')
-    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar todo' }))
     expect(params().has('node_id')).toBe(false); expect(params().has('responsible_id')).toBe(false)
   })
   it('Circuitos conserva Nodo junto a cliente/estado y limpia filtros', async () => {
@@ -125,7 +126,7 @@ describe('filtros Nodo, Sector y Responsable', () => {
     expect(params().has('node_id')).toBe(false); expect(params().get('customer_id')).toBe('1')
     await choose('Filtrar por nodo', 'Nodo 1')
     expect(params().get('node_id')).toBe('1')
-    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar todo' }))
     expect(screen.getByTestId('url').textContent).toBe('')
   })
   it('Circuitos filtra únicamente por sector y permite seleccionar/limpiar', async () => {
@@ -147,7 +148,7 @@ describe('filtros Nodo, Sector y Responsable', () => {
     expect(screen.queryByText('LINE-1')).not.toBeInTheDocument()
 
     // Limpiar todos los filtros
-    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar todo' }))
     expect(screen.getByTestId('url').textContent).toBe('')
     await screen.findByText('LINE-1')
     await screen.findByText('LINE-2')
@@ -158,8 +159,8 @@ describe('filtros Nodo, Sector y Responsable', () => {
     expect(screen.getByRole('combobox', { name: 'Filtrar por cliente' })).toHaveValue('C-1 — Cliente 1')
     expect(screen.getByRole('combobox', { name: 'Filtrar por sector' })).toHaveValue('Sector 1')
     expect(screen.getByRole('combobox', { name: 'Filtrar por nodo' })).toHaveValue('Nodo 1')
-    expect(screen.getByLabelText('Estado de circuitos')).toHaveValue('true')
-    expect(screen.getByText('4 filtros activos')).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Estado de circuitos' })).getByRole('button', { name: 'Activos' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(screen.getByLabelText('Filtros activos')).getAllByRole('button', { name: /^Quitar filtro/ })).toHaveLength(4)
     expect(mock.mock.calls.some(([path]) =>
       path.startsWith('/api/circuits?') &&
       path.includes('customer_id=1') &&

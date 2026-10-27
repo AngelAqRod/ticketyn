@@ -1,18 +1,23 @@
-TICKETYN — IDENTIDAD VISUAL / PROPUESTA REFINADA
+TICKETYN - IDENTIDAD VISUAL / REINTERPRETACION
 
-PNG con canal alfa (fondo transparente):
-- isotipo_claro / isotipo_oscuro: icono circular con T
-- logotipo_claro / logotipo_oscuro: solo texto
-- logo_horizontal_claro / logo_horizontal_oscuro: icono + texto
-- favicon_16 a favicon_512: tamaños para web y aplicaciones
-- favicon.ico: icono multiresolución para navegadores
+Convencion de nombres (sin cambios):
+- *_oscuro: version para fondos oscuros (texto claro).
+- *_claro:  version para fondos claros (texto oscuro).
 
-SVG: versiones editables del isotipo, logotipo y logo horizontal.
+Archivos (PNG con canal alfa, fondo transparente; SVG editables):
+- isotipo_claro / isotipo_oscuro: ticket con T recortada, anillo orbital abierto y nodo cian.
+- logotipo_claro / logotipo_oscuro: solo texto. TICKET (Oxanium 300) + YN (Oxanium 800), mayusculas.
+- logo_horizontal_claro / logo_horizontal_oscuro: isotipo + texto.
+- favicon_16 a favicon_512 y favicon.ico: 16, 32 y 48 px usan el ticket simplificado
+  (sin anillo ni nodo) para mantener legibilidad; 64 px en adelante usan el isotipo con anillo.
 
-Nota: Son recreaciones vectoriales del concepto visual aprobado, no una extracción
-exacta de la imagen generada. Revisar geometría y tipografía antes de uso final.
-No se ha modificado el código de Ticketyn.
-
-CORRECCION: se ajusto la separacion entre Ticket y yn en las cuatro versiones
-de logotipo y logo horizontal, manteniendo el nombre Ticketyn unido.
-Los nombres de archivos y los fondos transparentes se conservaron.
+Notas tecnicas:
+- Los SVG de logotipo y logo horizontal llevan el texto convertido a trazos: no dependen de
+  tener Oxanium instalada. Las proporciones del lienzo coinciden con las del set anterior
+  (1024x1024, 1024x316, 1024x319) para no alterar maquetacion.
+- isotipo_*.svg incluye una regla @media: cuando se renderiza a menos de 64 px (sidebar a 24 px,
+  favicon SVG) cambia solo al ticket simplificado; a 64 px o mas muestra el anillo completo.
+  Si un visor no soporta @media dentro de SVG, muestra siempre la version con anillo.
+- Paleta: #1e60d8 (azul primario), #38bdf8 (cian claro), #22d3ee / #06b6d4 (nodo), #f8fafc y #0b1426 (texto).
+- Tipografia: Oxanium (OFL), ya incluida en frontend/src/assets/fonts/oxanium.
+- Son recreaciones vectoriales de la propuesta aprobada; revisar geometria y kerning antes de uso final.
