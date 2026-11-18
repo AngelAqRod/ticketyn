@@ -17,7 +17,8 @@ ACTION_LABELS = {'view': 'Consultar', 'create': 'Crear', 'edit': 'Editar', 'dele
                  'lookup': 'Consultar selector', 'manage': 'Administrar', 'test': 'Enviar prueba SMTP',
                  'authorize': 'Autorizar o desconectar OAuth2', 'preview': 'Vista previa', 'control': 'Pausar o reanudar',
                  'configure': 'Configurar seguridad', 'clean': 'Limpiar auditoría',
-                 'move': 'Trasladar', 'set_active': 'Activar o desactivar'}
+                 'move': 'Trasladar', 'set_active': 'Activar o desactivar',
+                 'review': 'Revisar', 'process': 'Procesar', 'discard': 'Descartar'}
 
 def register(module, actions, *, exclusive=(), lookup=False):
     for action in actions:
@@ -28,6 +29,14 @@ def register(module, actions, *, exclusive=(), lookup=False):
             requires = ()
         PERMISSIONS[code] = Permission(code, ACTION_LABELS.get(action, action), module, requires, action in exclusive)
 
+register('installation_orders', ('view', 'create', 'edit', 'link'))
+register('installation_requests', ('review', 'process', 'discard'))
+PERMISSIONS['installation_requests.review'] = Permission('installation_requests.review', 'Revisar solicitudes', 'installation_requests')
+for action in ('process', 'discard'):
+    code = 'installation_requests.' + action
+    PERMISSIONS[code] = Permission(code, {'process': 'Procesar', 'discard': 'Descartar'}[action], 'installation_requests', ('installation_requests.review',))
+register('incoming_mail', ('manage',))
+register('admin_requests', ('view', 'create', 'edit', 'link'))
 register('dashboard', ('view',))
 for module in ('tickets', 'internal_tickets'):
     register(module, ('view', 'create', 'edit', 'close', 'escalate', 'followup', 'export', 'link'))
@@ -47,9 +56,11 @@ CATALOGS = ('sectors', 'departments', 'incident_types', 'nodes', 'responsibles',
 for module in CATALOGS:
     register('catalogs.' + module, ('view', 'create', 'edit', 'lookup'))
 register('catalogs.port_nomenclatures', ('view', 'create', 'edit', 'lookup', 'delete'))
+# Outside CATALOGS so the built-in Operator keeps its historical grants.
+register('catalogs.admin_request_types', ('view', 'create', 'edit', 'lookup'))
 for module in ('tickets', 'internal_tickets', 'changes', 'activations', 'capacity_changes', 'lifecycle', 'escalations'):
     register('reports.' + module, ('view', 'export') if module != 'escalations' else ('view',))
-for module in ('ticket_number', 'internal_ticket_number', 'activation_number', 'change_number'):
+for module in ('ticket_number', 'internal_ticket_number', 'activation_number', 'change_number', 'admin_request_number'):
     register('settings.' + module, ('view', 'edit'))
 for module, actions in (('transport', ('view', 'edit', 'test')), ('oauth', ('view', 'edit', 'authorize')),
                         ('events', ('view', 'edit')), ('templates', ('view', 'edit', 'preview')),
@@ -74,6 +85,7 @@ EXCLUSIVE = frozenset(code for code, item in PERMISSIONS.items() if item.exclusi
 OPERATOR = frozenset({
     *(f'{module}.{action}' for module in ('distribution_devices', 'distribution_ports') for action in ('view', 'lookup', 'create', 'edit')),
     'dashboard.view',
+    *(f'admin_requests.{action}' for action in ('view', 'create', 'edit', 'link')),
     *(f'{module}.{action}' for module in ('tickets', 'internal_tickets') for action in ('view', 'create', 'edit', 'close', 'escalate', 'followup', 'export', 'link')),
     *(f'{module}.{action}' for module in ('customers', 'circuits') for action in ('view', 'create', 'edit', 'delete', 'lookup')),
     *(f'activations.{action}' for action in ('view', 'create', 'followup', 'notify', 'export')),
@@ -96,13 +108,14 @@ AUDITOR = frozenset({
     'reports.escalations.view',
 })
 ADMIN_MODULES = frozenset({
+    'installation_orders', 'installation_requests', 'incoming_mail', 'admin_requests',
     'distribution_devices', 'distribution_ports',
     'dashboard', 'tickets', 'internal_tickets', 'customers', 'circuits', 'activations', 'capacity_changes',
     'lifecycle', 'changes', 'cpe', 'accounts', 'sessions', 'audit',
-    *('catalogs.' + key for key in CATALOGS),
+    *('catalogs.' + key for key in (*CATALOGS, 'admin_request_types')),
     *('context.' + key for key in ('customers', 'circuits', 'nodes')),
     *('reports.' + key for key in ('tickets', 'internal_tickets', 'changes', 'activations', 'capacity_changes', 'lifecycle', 'escalations')),
-    *('settings.' + key for key in ('ticket_number', 'internal_ticket_number', 'activation_number', 'change_number')),
+    *('settings.' + key for key in ('ticket_number', 'internal_ticket_number', 'activation_number', 'change_number', 'admin_request_number')),
     *('mail.' + key for key in ('transport', 'oauth', 'events', 'templates', 'processor')),
 })
 DEFAULT_GRANTS = {
@@ -114,12 +127,12 @@ DEFAULT_GRANTS = {
 
 # Read-only selectors required by existing forms/filters. These do not grant a catalog page or CRUD.
 CONTEXT_READS = {
-    'customers': {'tickets', 'activations', 'capacity_changes', 'lifecycle', 'circuits', 'reports.tickets', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
-    'circuits': {'tickets', 'activations', 'capacity_changes', 'lifecycle', 'reports.tickets', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
+    'customers': {'admin_requests', 'tickets', 'activations', 'capacity_changes', 'lifecycle', 'circuits', 'reports.tickets', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
+    'circuits': {'admin_requests', 'tickets', 'activations', 'capacity_changes', 'lifecycle', 'reports.tickets', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
     'nodes': {'tickets', 'internal_tickets', 'changes', 'circuits', 'activations', 'capacity_changes', 'lifecycle', 'reports.tickets', 'reports.internal_tickets', 'reports.changes', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
     'sectors': {'tickets', 'internal_tickets', 'changes', 'circuits', 'activations', 'capacity_changes', 'lifecycle', 'reports.tickets', 'reports.internal_tickets', 'reports.changes', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
     'departments': {'catalogs.responsibles', 'catalogs.positions', 'tickets', 'internal_tickets', 'changes', 'reports.tickets', 'reports.internal_tickets', 'reports.changes', 'reports.escalations'},
-    'responsibles': {'tickets', 'internal_tickets', 'changes', 'activations', 'capacity_changes', 'lifecycle', 'reports.tickets', 'reports.internal_tickets', 'reports.changes', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
+    'responsibles': {'admin_requests', 'tickets', 'internal_tickets', 'changes', 'activations', 'capacity_changes', 'lifecycle', 'reports.tickets', 'reports.internal_tickets', 'reports.changes', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle', 'reports.escalations'},
     'positions': {'tickets', 'internal_tickets', 'changes', 'catalogs.responsibles'},
     'incident_types': {'tickets', 'reports.tickets'}, 'internal_incident_types': {'internal_tickets', 'reports.internal_tickets'},
     'providers': {'internal_tickets', 'reports.internal_tickets'},
@@ -127,11 +140,15 @@ CONTEXT_READS = {
     'service_types': {'circuits', 'activations', 'capacity_changes', 'lifecycle', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle'},
     'cpe_models': {'circuits', 'cpe', 'activations', 'capacity_changes', 'lifecycle', 'reports.activations', 'reports.capacity_changes', 'reports.lifecycle'},
     'deactivation_reasons': {'lifecycle', 'reports.lifecycle'},
-    'change_types': {'changes', 'reports.changes'}, 'change_completion_types': {'changes', 'reports.changes'},
+    'change_types': {'changes', 'reports.changes'}, 'admin_request_types': {'admin_requests'}, 'change_completion_types': {'changes', 'reports.changes'},
 }
 
 def expanded_context(grants):
     effective = set(grants)
+    if any(code.startswith(('installation_orders.', 'installation_requests.')) for code in grants):
+        effective.add('customers.lookup')
+    if 'installation_orders.link' in grants:
+        effective.add('circuits.lookup')
     if any(code.startswith('distribution_devices.') for code in grants):
         effective.add('catalogs.distribution_device_templates.lookup')
     if any(code.startswith('catalogs.distribution_device_templates.') for code in grants):

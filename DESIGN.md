@@ -72,6 +72,19 @@ components:
 
 # Design System: Ticketyn
 
+## Órdenes de instalación
+
+Extensión operativa de Capsule NOC / Electric Blue, con acento esmeralda como
+FMS: por su funcionalidad documental se parece más a Activaciones que a Tickets. La página reúne bandeja de solicitudes y órdenes en
+pestañas; el detalle de orden es una página completa. La captura mantiene el
+original y el formulario en paralelo en escritorio, alternándolos en móvil sin
+perder los campos. Los estados tienen texto, no dependen solo del color.
+Los documentos se obtienen con autorización; no se incrustan URLs con tokens.
+Orden, circuito y activación son referencias independientes, no etapas de un
+proceso de ejecución. No se añaden umbrales contractuales, fuentes ni identidad
+visual alternativa. Las verificaciones visuales se registran en el handoff;
+esta descripción no certifica por sí sola contraste o accesibilidad.
+
 ## Overview
 
 **Creative North Star: "Industrial NOC Rounded"**
@@ -98,7 +111,7 @@ Azul eléctrico para botones primarios, navegación activa, foco y controles sel
 
 ### Secondary
 
-Cian para Dashboard y Control de cambios; celeste para clientes/circuitos/tickets/reportes; morado para internos y equipos de distribución; esmeralda para FMS. Administración utiliza pizarra. Son identidades de dominio; no equivalen por sí mismas a severidad, permiso o estado. Rosa e índigo no identifican ningún módulo.
+Cian para Dashboard y Control de cambios; celeste para clientes/circuitos/tickets/reportes; morado para internos y equipos de distribución; esmeralda para FMS y Órdenes de instalación. Administración utiliza pizarra. Son identidades de dominio; no equivalen por sí mismas a severidad, permiso o estado. Rosa e índigo no identifican ningún módulo.
 
 Los acentos de módulo, el estado Abierto/Cerrado y la escala de antigüedad viven como variables en `:root` de `frontend/src/styles.css` (`--module-*`, `--state-*`, `--age-*`); los componentes las referencian en vez de repetir hexadecimales.
 

@@ -16,6 +16,7 @@ export const moduleIdentity: Omit<ModuleDefinition, 'number'>[] = [
   { path: '/customers', title: 'Clientes', group: 'Operación', theme: 'blue', badge: 'CATÁLOGO' },
   { path: '/circuits', title: 'Circuitos', group: 'Operación', theme: 'blue', badge: 'RED Y ENLACES' },
   { path: '/distribution-devices', title: 'Equipos de distribución', group: 'Operación', theme: 'purple', badge: 'RED Y DISTRIBUCIÓN' },
+  { path: '/installation-orders', title: 'Órdenes de instalación', group: 'Operación', theme: 'emerald', badge: 'SOLICITUDES' },
   { path: '/reports', title: 'Reportería de tickets', group: 'Análisis', theme: 'blue', badge: 'REPORTES' },
   { path: '/catalogs', title: 'Catálogos', group: 'Administración', theme: 'slate', badge: 'SISTEMA' },
   { path: '/settings', title: 'Configuración', group: 'Administración', theme: 'slate', badge: 'SISTEMA' },
@@ -31,6 +32,7 @@ export const moduleIdentity: Omit<ModuleDefinition, 'number'>[] = [
   { path: '/security-roles', title: 'Roles y permisos', group: 'Administración', theme: 'slate', badge: 'SEGURIDAD' },
   { path: '/security-sessions', title: 'Sesiones', group: 'Administración', theme: 'slate', badge: 'SEGURIDAD' },
   { path: '/security-audit', title: 'Auditoría de seguridad', group: 'Administración', theme: 'slate', badge: 'SEGURIDAD' },
+  { path: '/admin-requests', title: 'Solicitudes administrativas', group: 'Operación', theme: 'purple', badge: 'BITÁCORA' },
 ]
 
 export const moduleGroups = ['Operación', 'Análisis', 'Administración']
@@ -45,5 +47,6 @@ export const orderedModuleIdentity: ModuleDefinition[] = moduleGroups
   .map((item, index) => ({ ...item, number: String(index + 1).padStart(2, '0') }))
 
 export function identityFor(pathname: string): ModuleDefinition | undefined {
+  if (pathname.startsWith('/installation-requests/')) return orderedModuleIdentity.find(item => item.path === '/installation-orders')
   return orderedModuleIdentity.find(item => item.path === '/' ? pathname === '/' : pathname === item.path || pathname.startsWith(`${item.path}/`))
 }

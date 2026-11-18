@@ -94,7 +94,7 @@ route('GET', '/api/distribution-devices/{id}/circuits', 'distribution_devices.vi
 
 CATALOG_PATHS = ('sectors', 'departments', 'incident-types', 'nodes', 'responsibles', 'positions',
                  'escalation-reasons', 'service-types', 'deactivation-reasons', 'cpe-models',
-                 'internal-incident-types', 'providers', 'change-completion-types', 'change-types')
+                 'internal-incident-types', 'providers', 'change-completion-types', 'change-types', 'admin-request-types')
 for resource in CATALOG_PATHS:
     module = 'catalogs.' + resource.replace('-', '_')
     route('GET', '/api/' + resource, any_of=(module + '.view', module + '.lookup'))
@@ -104,7 +104,7 @@ for resource in CATALOG_PATHS:
     route('PATCH', '/api/' + resource + '/{id}', module + '.edit')
 
 for resource, consumer in [('ticket-number', 'tickets'), ('internal-ticket-number', 'internal_tickets'),
-                           ('activation-number', 'activations'), ('change-number', 'changes')]:
+                           ('activation-number', 'activations'), ('change-number', 'changes'), ('admin-request-number', 'admin_requests')]:
     module = 'settings.' + resource.replace('-', '_')
     route('GET', '/api/settings/' + resource, module + '.view')
     route('PATCH', '/api/settings/' + resource, module + '.edit')
@@ -189,6 +189,33 @@ for suffix in ('', '/{id}', '/{id}/preview'):
 route('POST', '/api/distribution-device-templates/preview', any_of=('catalogs.distribution_device_templates.create', 'catalogs.distribution_device_templates.edit'))
 route('POST', '/api/distribution-device-templates', 'catalogs.distribution_device_templates.create')
 route('PATCH', '/api/distribution-device-templates/{id}', 'catalogs.distribution_device_templates.edit')
+
+
+# Installation orders are independent of activation and outbound mail policies.
+for method, suffix, permission in [('GET', '', 'view'), ('POST', '', 'create'), ('GET', '/{id}', 'view'), ('PATCH', '/{id}', 'edit')]:
+    route(method, '/api/installation-orders' + suffix, 'installation_orders.' + permission)
+for method in ('POST', 'PUT', 'DELETE'):
+    route(method, '/api/installation-orders/{id}/circuit', 'installation_orders.link')
+route('POST', '/api/installation-orders/{id}/documents', any_of=('installation_orders.create', 'installation_orders.edit'))
+for suffix in ('', '/content'):
+    route('GET', '/api/installation-documents/{id}' + suffix, any_of=('installation_orders.view', 'installation_requests.review'))
+for suffix in ('', '/summary', '/{id}'):
+    route('GET', '/api/installation-requests' + suffix, 'installation_requests.review')
+for method, suffix, permission in [('POST', 'review', 'review'), ('PUT', 'draft', 'review'), ('POST', 'process', 'process'), ('POST', 'discard', 'discard')]:
+    route(method, '/api/installation-requests/{id}/' + suffix, *dict.fromkeys(('installation_requests.review', 'installation_requests.' + permission)))
+route('GET', '/api/incoming-mail/status', 'incoming_mail.manage')
+route('POST', '/api/incoming-mail/poll', 'incoming_mail.manage')
+for method in ('GET', 'PATCH'):
+    route(method, '/api/incoming-mail/filters', 'incoming_mail.manage')
+
+# Administrative requests: candidate search needs the view grant of the module it reads.
+for method, suffix, permission in [('GET', '', 'view'), ('POST', '', 'create'), ('GET', '/{id}', 'view'), ('PATCH', '/{id}', 'edit')]:
+    route(method, '/api/admin-requests' + suffix, 'admin_requests.' + permission)
+route('POST', '/api/admin-requests/{id}/status', 'admin_requests.edit')
+route('POST', '/api/admin-requests/{id}/links', 'admin_requests.link')
+route('DELETE', '/api/admin-requests/{id}/links/{link_id}', 'admin_requests.link')
+for path, module in (('tickets', 'tickets'), ('internal-tickets', 'internal_tickets'), ('changes', 'changes')):
+    route('GET', '/api/admin-requests/{id}/candidates/' + path, 'admin_requests.link', module + '.view')
 
 
 _MATCHERS = sorted(((method, path, compile_path(path)[0], rule) for (method, path), rule in RULES.items()),

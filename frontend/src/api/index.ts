@@ -138,6 +138,7 @@ export const listProviders = (signal?: AbortSignal, includeInactive = false) => 
 
 export const listChangeCompletionTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & {description: string | null; applies_efficiency: boolean}>('/api/change-completion-types', signal, {}, includeInactive)
 
+export const listAdminRequestTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & {description:string|null}>('/api/admin-request-types', signal, {}, includeInactive)
 export const listChangeTypes = (signal?: AbortSignal, includeInactive = false) => catalogList<NamedCatalog & {description:string|null}>('/api/change-types', signal, {}, includeInactive)
 
 export * from './distribution'

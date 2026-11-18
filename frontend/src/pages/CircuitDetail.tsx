@@ -1,9 +1,11 @@
+import { CircuitLocationData } from '../components/CircuitLocationData'
+import { CircuitInstallationOrder } from '../components/installation/CircuitInstallationOrder'
 import { Can, usePermissions } from '../auth/permissions'
 import { PaginationBar } from '../components/PaginationBar'
 import { CpeConfiguration } from '../components/CpeConfiguration'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { Network, Plus, Zap } from 'lucide-react'
+import { FileText, Network, Plus, Zap } from 'lucide-react'
 import { updateCircuit } from '../api'
 import { confirmDeactivation } from '../lib/catalogActions'
 import { CircuitActions } from '../components/CircuitActions'
@@ -91,40 +93,53 @@ export function CircuitDetail() {
             </div>
           ))}
         </dl>
+        <div className="mt-3.5"><CircuitLocationData site={c} showNotes={false} /></div>
       </section>
-      <section className="panel p-6 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl">
-        <div className="flex items-center gap-2 border-b border-sky-500/15 pb-3 mb-4">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
-            <Zap size={14} />
-          </span>
-          <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">Activación inicial</h2>
-        </div>
-        {!access.can('activations.view') ? (
-          <p className="text-sm text-slate-400 font-mono">Sin permiso para consultar la activación.</p>
-        ) : a ? (
-          <div className="space-y-3">
-            <div className="p-3.5 rounded-xl bg-[#070d1a] border border-slate-800">
-              <p className="font-mono font-bold text-emerald-400 text-base tracking-wide">{a.reference}</p>
-              <p className="mt-1 text-xs text-slate-300 font-mono">{formatDate(a.effective_at, ticketynTimezone)} · <span className="text-slate-400">{a.responsible.name}</span></p>
-            </div>
-            <div>
-              <Link className="button-ghost rounded-full text-sky-400 hover:text-sky-300 font-mono text-xs inline-flex items-center gap-1.5" to={`/activations/${a.id}`}>
-                Ver detalle y bitácora →
-              </Link>
-            </div>
+      <div className="grid gap-4">
+        <CircuitInstallationOrder circuitId={id} customerId={detail.customer.id} />
+        <section className="panel p-6 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl">
+          <div className="flex items-center gap-2 border-b border-sky-500/15 pb-3 mb-4">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs" aria-hidden="true">
+              <Zap size={14} />
+            </span>
+            <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">Activación inicial</h2>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-400 font-mono">Sin registrar</p>
-            <Can permission="activations.create">
-              <button type="button" className="button-primary button-primary--blue rounded-full shadow-sm" onClick={() => setModal('activations')}>
-                <Plus size={14} aria-hidden="true" />
-                Registrar activación
-              </button>
-            </Can>
+          {!access.can('activations.view') ? (
+            <p className="text-sm text-slate-400 font-mono">Sin permiso para consultar la activación.</p>
+          ) : a ? (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-[#070d1a] border border-slate-800">
+                <p className="font-mono font-bold text-emerald-400 text-base tracking-wide">{a.reference}</p>
+                <p className="mt-1 text-xs text-slate-300 font-mono">{formatDate(a.effective_at, ticketynTimezone)} · <span className="text-slate-400">{a.responsible.name}</span></p>
+              </div>
+              <div>
+                <Link className="button-ghost rounded-full text-sky-400 hover:text-sky-300 font-mono text-xs inline-flex items-center gap-1.5" to={`/activations/${a.id}`}>
+                  Ver detalle y bitácora →
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-400 font-mono">Sin registrar</p>
+              <Can permission="activations.create">
+                <button type="button" className="button-primary button-primary--blue rounded-full shadow-sm" onClick={() => setModal('activations')}>
+                  <Plus size={14} aria-hidden="true" />
+                  Registrar activación
+                </button>
+              </Can>
+            </div>
+          )}
+        </section>
+        <section aria-label="Notas adicionales" className="panel p-6 rounded-2xl bg-[#0b1426] border border-sky-500/20 shadow-xl">
+          <div className="flex items-center gap-2 border-b border-sky-500/15 pb-3 mb-4">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs" aria-hidden="true">
+              <FileText size={14} />
+            </span>
+            <h2 className="text-xs font-bold font-mono text-white uppercase tracking-wider">Notas adicionales</h2>
           </div>
-        )}
-      </section>
+          <p className="[overflow-wrap:anywhere] whitespace-pre-wrap text-sm font-medium text-white">{c.additional_notes || 'No disponible'}</p>
+        </section>
+      </div>
     </div>
     <section aria-label="Distribución actual del circuito" className="panel mb-5 rounded-2xl border border-sky-500/20 bg-[#0b1426] p-6">
       <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-white">Distribución actual</h2>

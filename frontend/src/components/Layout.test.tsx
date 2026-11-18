@@ -11,12 +11,22 @@ function setup(path = '/', permissions?: string[]) {
 }
 
 describe('Navegación Electric Blue', () => {
+  it('muestra Solicitudes administrativas solo con permiso, también para un operador', async () => {
+    setup('/', ['admin_requests.view', 'dashboard.view'])
+    await screen.findByText('API conectada')
+    expect(within(screen.getByRole('navigation')).getByRole('link', { name: /Solicitudes administrativas/ })).toHaveAttribute('href', '/admin-requests')
+  })
+  it('oculta Solicitudes administrativas sin permiso', async () => {
+    setup('/', ['dashboard.view'])
+    await screen.findByText('API conectada')
+    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: /Solicitudes administrativas/ })).not.toBeInTheDocument()
+  })
   it('numera correlativamente los módulos en su orden visual sin cambiar rutas', async () => {
     setup()
     await screen.findByText('API conectada')
     const links = within(screen.getByRole('navigation')).getAllByRole('link')
-    expect(links.map(link => link.querySelector('.nav-number')?.textContent)).toEqual(Array.from({ length: 23 }, (_, i) => String(i + 1).padStart(2, '0')))
-    expect(links.map(link => link.getAttribute('href'))).toEqual(['/my-tickets', '/', '/tickets', '/internal-tickets', '/changes', '/customers', '/circuits', '/distribution-devices', '/activations', '/capacity-changes', '/circuit-lifecycle', '/reports', '/activation-reports', '/capacity-reports', '/lifecycle-reports', '/responsibles', '/security-roles', '/security-sessions', '/catalogs', '/settings', '/mail-notifications', '/mail-templates', '/security-audit'])
+    expect(links.map(link => link.querySelector('.nav-number')?.textContent)).toEqual(Array.from({ length: 25 }, (_, i) => String(i + 1).padStart(2, '0')))
+    expect(links.map(link => link.getAttribute('href'))).toEqual(['/my-tickets', '/', '/tickets', '/internal-tickets', '/changes', '/customers', '/circuits', '/distribution-devices', '/installation-orders', '/activations', '/capacity-changes', '/circuit-lifecycle', '/admin-requests', '/reports', '/activation-reports', '/capacity-reports', '/lifecycle-reports', '/responsibles', '/security-roles', '/security-sessions', '/catalogs', '/settings', '/mail-notifications', '/mail-templates', '/security-audit'])
     expect(document.querySelector('#main-navigation')).toHaveClass('md:w-56', 'xl:w-60')
     expect(document.querySelector('.header-brand')).toContainElement(screen.getByText('Ticketyn', { exact: true }).closest('.brand-capsule') as HTMLElement)
   })

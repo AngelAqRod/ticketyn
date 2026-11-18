@@ -1,3 +1,10 @@
+import { AdminRequests } from './pages/AdminRequests'
+import { AdminRequestForm } from './pages/AdminRequestForm'
+import { AdminRequestDetail } from './pages/AdminRequestDetail'
+import { InstallationOrders } from './pages/InstallationOrders'
+import { InstallationOrderForm } from './pages/InstallationOrderForm'
+import { InstallationOrderDetail } from './pages/InstallationOrderDetail'
+import { InstallationRequestDetail } from './pages/InstallationRequestDetail'
 import { Profile } from './pages/Profile'
 import { SecurityRoles } from './pages/SecurityRoles'
 import { SecuritySessions } from './pages/SecuritySessions'
@@ -44,6 +51,15 @@ export default function App() {
     <Route path="tickets/new" element={<NewTicket />} />
     <Route path="tickets/:id" element={<TicketDetail />} />
     <Route path="tickets/:id/edit" element={<TicketDetail edit />} />
+    <Route path="admin-requests" element={<AdminRequests />} />
+    <Route path="admin-requests/new" element={<AdminRequestForm />} />
+    <Route path="admin-requests/:id" element={<AdminRequestDetail />} />
+    <Route path="admin-requests/:id/edit" element={<AdminRequestForm edit />} />
+    <Route path="installation-orders" element={<InstallationOrders />} />
+    <Route path="installation-orders/new" element={<InstallationOrderForm />} />
+    <Route path="installation-orders/:id" element={<InstallationOrderDetail />} />
+    <Route path="installation-orders/:id/edit" element={<InstallationOrderForm edit />} />
+    <Route path="installation-requests/:id" element={<InstallationRequestDetail />} />
     <Route path="customers" element={<CatalogAdmin key="customers" kind="customers" />} />
     <Route path="circuits" element={<CatalogAdmin key="circuits" kind="circuits" />} />
     <Route path="circuits/:id" element={<CircuitDetail />} />

@@ -1,7 +1,8 @@
 from typing import ClassVar, Literal
 from decimal import Decimal
 from ipaddress import ip_address
-from pydantic import Field, BaseModel, ConfigDict, IPvAnyAddress, field_validator
+from decimal import ROUND_HALF_UP
+from pydantic import Field, BaseModel, ConfigDict, IPvAnyAddress, field_validator, model_validator
 from typing import Annotated
 
 from ticketyn.schemas.common import AssignmentSummary, InputSchema, NonEmptyString, PositiveId, ResponseSchema
@@ -23,12 +24,56 @@ class CircuitAddressInput(InputSchema):
             raise ValueError('Introduce una dirección IPv4 o IPv6 válida') from None
 
 
-class CircuitCreate(CircuitAddressInput):
+Coordinate = Annotated[Decimal, Field(allow_inf_nan=False)]
+LOCATION_FIELDS = {'address', 'latitude', 'longitude', 'additional_notes'}
+
+
+def gps_error(latitude, longitude):
+    """Single rule shared by create, update (against the stored row) and the database checks."""
+    if latitude is not None and not -90 <= latitude <= 90:
+        return 'La latitud debe estar entre -90 y 90.'
+    if longitude is not None and not -180 <= longitude <= 180:
+        return 'La longitud debe estar entre -180 y 180.'
+    if (latitude is None) != (longitude is None):
+        return 'El Punto GPS debe incluir latitud y longitud.'
+
+
+class CircuitSiteInput(CircuitAddressInput):
+    """Optional site data. Null clears a field; omitting it leaves the stored value untouched."""
+    address: Annotated[str, Field(max_length=500)] | None = None
+    latitude: Coordinate | None = None
+    longitude: Coordinate | None = None
+    additional_notes: Annotated[str, Field(max_length=5000)] | None = None
+
+    @field_validator('address', 'additional_notes')
+    @classmethod
+    def trim_text(cls, value):
+        return value.strip() if value is not None else None
+
+    @field_validator('latitude', 'longitude')
+    @classmethod
+    def six_decimals(cls, value):
+        # Google Maps copies seven or more decimals; 1e-6 degrees is about 0.1 m.
+        return value.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP) if value is not None else None
+
+    pair_required: ClassVar[bool] = False  # create always checks the pair; update checks it against the stored row in the API
+
+    @model_validator(mode='after')
+    def valid_gps(self):
+        both_sent = {'latitude', 'longitude'} <= self.model_fields_set
+        error = gps_error(self.latitude, self.longitude)
+        if error and ('entre' in error or self.pair_required or both_sent):
+            raise ValueError(error)
+        return self
+
+
+class CircuitCreate(CircuitSiteInput):
+    pair_required: ClassVar[bool] = True
     distribution_device_id: PositiveId | None = None
     distribution_port_id: PositiveId | None = None
     cpe_model_id: PositiveId | None = None
     sector_id: PositiveId
-    nullable_fields: ClassVar[set[str]] = {"cpe_management_ip", "initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id", "distribution_device_id", "distribution_port_id"}
+    nullable_fields: ClassVar[set[str]] = {"cpe_management_ip", "initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id", "distribution_device_id", "distribution_port_id", *LOCATION_FIELDS}
     initial_capacity: Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=6, allow_inf_nan=False)] | None = None
     initial_capacity_unit: Literal['Mbps', 'Gbps'] | None = None
     service_type_id: PositiveId | None = None
@@ -39,12 +84,12 @@ class CircuitCreate(CircuitAddressInput):
     active: bool = True
 
 
-class CircuitUpdate(CircuitAddressInput):
+class CircuitUpdate(CircuitSiteInput):
     distribution_device_id: PositiveId | None = None
     distribution_port_id: PositiveId | None = None
     cpe_model_id: PositiveId | None = None
     sector_id: PositiveId | None = None
-    nullable_fields: ClassVar[set[str]] = {"cpe_management_ip", "initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id", "distribution_device_id", "distribution_port_id"}
+    nullable_fields: ClassVar[set[str]] = {"cpe_management_ip", "initial_capacity", "initial_capacity_unit", "service_type_id", "cpe_model_id", "distribution_device_id", "distribution_port_id", *LOCATION_FIELDS}
     initial_capacity: Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=6, allow_inf_nan=False)] | None = None
     initial_capacity_unit: Literal['Mbps', 'Gbps'] | None = None
     service_type_id: PositiveId | None = None
@@ -56,6 +101,10 @@ class CircuitUpdate(CircuitAddressInput):
 
 
 class CircuitResponse(ResponseSchema):
+    address: str | None
+    latitude: Decimal | None
+    longitude: Decimal | None
+    additional_notes: str | None
     cpe_management_ip: IPvAnyAddress | None
     distribution_device_id: int | None
     distribution_port_id: int | None

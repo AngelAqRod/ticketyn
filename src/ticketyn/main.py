@@ -13,6 +13,10 @@ from ticketyn.api.reports import router as reports_router
 from ticketyn.api.health import router as health_router
 from ticketyn.api.customers import router as customers_router
 from ticketyn.api.circuits import router as circuits_router
+from ticketyn.api.installation_documents import router as installation_documents_router
+from ticketyn.api.installation_orders import router as installation_orders_router
+from ticketyn.api.installation_requests import router as installation_requests_router
+from ticketyn.api.incoming_mail import router as incoming_mail_router
 from ticketyn.api.sectors import router as sectors_router
 from ticketyn.api.departments import router as departments_router
 from ticketyn.api.incident_types import router as incident_types_router
@@ -115,6 +119,12 @@ def create_app(*, start_notifications=True, notification_engine=None, security_s
     app.include_router(positions_router)
     app.include_router(customers_router)
     app.include_router(circuits_router)
+    from ticketyn.api.admin_requests import router as admin_requests_router
+    app.include_router(admin_requests_router)
+    app.include_router(installation_orders_router)
+    app.include_router(installation_requests_router)
+    app.include_router(installation_documents_router)
+    app.include_router(incoming_mail_router)
     from ticketyn.api.distribution import router as distribution_router
     app.include_router(distribution_router)
     app.include_router(sectors_router)

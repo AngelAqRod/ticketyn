@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '../test/render'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '../test/render'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { CatalogAdmin } from './CatalogAdmin'
@@ -28,7 +28,7 @@ afterAll(() => {
     else Reflect.deleteProperty(HTMLDialogElement.prototype, key)
   }
 })
-function mockApi(item: Circuit = circuit) {
+function mockApi(item: Circuit = circuit, orders: unknown[] = []) {
   const devices = [{ ...device, ...item.distribution_device }, { ...device, id: 11, name: 'SW B' }], ports = [{ ...port, ...item.distribution_port }]
   const mock = vi.fn((path: string, init?: RequestInit): Promise<Response> => {
     const url = new URL(path, 'http://localhost'), data = init?.body ? JSON.parse(String(init.body)) : {}
@@ -41,6 +41,7 @@ function mockApi(item: Circuit = circuit) {
     }
     if (url.pathname === '/api/distribution-devices') return Promise.resolve(jsonResponse(devices.filter(row => row.node_id === Number(url.searchParams.get('node_id')) && (row.active || url.searchParams.get('include_inactive') === 'true'))))
     if (url.pathname === '/api/distribution-ports') return Promise.resolve(jsonResponse(ports.filter(row => row.distribution_device_id === Number(url.searchParams.get('distribution_device_id')) && (row.active || url.searchParams.get('include_inactive') === 'true'))))
+    if (url.pathname === '/api/installation-orders') return Promise.resolve(new Response(JSON.stringify(orders), { headers: { 'X-Total-Count': String(orders.length) } }))
     if (url.pathname.endsWith('/operational-detail')) return Promise.resolve(jsonResponse({ circuit: item, customer, current_capacity: null, current_capacity_unit: null, initial_activation: null }))
     if (url.pathname === '/api/circuits') return Promise.resolve(jsonResponse([item]))
     if (url.pathname === '/api/customers') return Promise.resolve(jsonResponse([customer]))
@@ -131,6 +132,76 @@ describe('contratos de circuito y distribución', () => {
     expect(parent.getByLabelText(/^Descripción/)).toHaveValue('Escrito antes de abrir modales'); expect(writes(mock)).toHaveLength(2)
     await save(); await waitFor(() => expect(created).toHaveBeenCalledOnce())
     expect(JSON.parse(String(writes(mock).at(-1)![1]?.body))).toMatchObject({ customer_id: 1, circuit_code: 'RAPIDO', description: 'Escrito antes de abrir modales', distribution_device_id: 12, distribution_port_id: 22 })
+  })
+})
+
+describe('Orden de instalación en el detalle del circuito', () => {
+  function show(orders: unknown[], permissions: string[]) {
+    mockApi(circuit, orders)
+    render(<PermissionProvider permissions={permissions}><MemoryRouter initialEntries={['/circuits/1']}><Routes><Route path="/circuits/:id" element={<CircuitDetail />} /><Route path="/installation-orders/:id" element={<p>Detalle de la orden</p>} /></Routes></MemoryRouter></PermissionProvider>)
+  }
+  const column = (box: HTMLElement) => [...box.parentElement!.children]
+  it('va en la columna derecha, justo encima de Activación inicial y antes de Notas adicionales, con ícono y enlace', async () => {
+    show([{ id: 5, reference: 'OI-000005' }], ['circuits.view', 'installation_orders.view'])
+    const box = await screen.findByRole('region', { name: 'Orden de instalación' })
+    const activation = screen.getByRole('heading', { name: 'Activación inicial' }).closest('section')!, notes = screen.getByRole('region', { name: 'Notas adicionales' }), general = screen.getByRole('heading', { name: 'Información general' }).closest('section')!
+    expect(column(box)).toEqual([box, activation, notes]); expect(general.contains(box)).toBe(false)
+    expect(within(box).getByRole('heading', { name: 'Orden de instalación' })).toBeVisible(); expect(box.querySelector('svg.lucide-clipboard-check')).toBeInTheDocument()
+    expect(box).toHaveClass('p-4')  // compact, not the previous p-6 full-width box
+    expect(box.closest('.mb-5')?.nextElementSibling).not.toBe(box)  // no longer a full-width box below the grid
+  })
+  it('el número de orden navega al detalle de la orden', async () => {
+    show([{ id: 5, reference: 'OI-000005' }], ['circuits.view', 'installation_orders.view'])
+    const link = await screen.findByRole('link', { name: 'OI-000005' })
+    expect(link).toHaveAttribute('href', '/installation-orders/5')
+    fireEvent.click(link); expect(await screen.findByText('Detalle de la orden')).toBeVisible()
+  })
+  it('sin orden asociada mantiene el mensaje y ofrece crearla solo con permiso', async () => {
+    show([], ['circuits.view', 'installation_orders.view', 'installation_orders.create'])
+    const box = await screen.findByRole('region', { name: 'Orden de instalación' })
+    expect(await within(box).findByText('Sin orden de instalación asociada.')).toBeVisible()
+    expect(within(box).getByRole('link', { name: 'Crear orden normal' })).toHaveAttribute('href', '/installation-orders/new?customer_id=1&circuit_id=1')
+    cleanup(); show([], ['circuits.view', 'installation_orders.view'])
+    await screen.findByText('Sin orden de instalación asociada.'); expect(screen.queryByRole('link', { name: 'Crear orden normal' })).not.toBeInTheDocument()
+  })
+  it('sin permiso para consultar órdenes no muestra el cuadro', async () => {
+    show([{ id: 5, reference: 'OI-000005' }], ['circuits.view'])
+    await screen.findByRole('region', { name: 'Notas adicionales' })
+    expect(screen.queryByRole('region', { name: 'Orden de instalación' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Punto GPS en el detalle del circuito', () => {
+  function show(item: Circuit) {
+    mockApi(item)
+    render(<PermissionProvider permissions={['circuits.view']}><MemoryRouter initialEntries={['/circuits/1']}><Routes><Route path="/circuits/:id" element={<CircuitDetail />} /></Routes></MemoryRouter></PermissionProvider>)
+  }
+  it('muestra las coordenadas guardadas y «Ver en Google Maps» con la URL correcta', async () => {
+    show({ ...circuit, address: 'Zona 1', latitude: '14.634915', longitude: '-90.506882', additional_notes: 'Acceso por el portón' })
+    const link = await screen.findByRole('link', { name: 'Ver en Google Maps' })
+    expect(link).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=14.634915%2C-90.506882'); expect(link).toHaveAttribute('target', '_blank'); expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.getByText('14.634915, -90.506882')).toBeVisible(); expect(screen.getByText('Acceso por el portón')).toBeVisible()
+  })
+  it('muestra Notas adicionales en un cuadro propio bajo «Activación inicial» y no en «Información general»', async () => {
+    show({ ...circuit, additional_notes: 'Línea 1\nLínea 2' })
+    const notes = await screen.findByRole('region', { name: 'Notas adicionales' })
+    const general = screen.getByRole('heading', { name: 'Información general' }).closest('section')!, activation = screen.getByRole('heading', { name: 'Activación inicial' }).closest('section')!
+    expect(within(notes).getByRole('heading', { name: 'Notas adicionales' })).toBeVisible()
+    expect(within(notes).getByText(/Línea 1/)).toHaveClass('whitespace-pre-wrap'); expect(within(notes).getByText(/Línea 1/).textContent).toBe('Línea 1\nLínea 2')
+    expect(within(general).queryByText('Notas adicionales')).not.toBeInTheDocument(); expect(general.contains(notes)).toBe(false)
+    expect(activation.parentElement).toBe(notes.parentElement); expect(activation.nextElementSibling).toBe(notes)  // same column, right below
+  })
+  it('sin notas muestra «No disponible» en su cuadro y conserva Dirección y Punto GPS en Información general', async () => {
+    show({ ...circuit, additional_notes: null, address: 'Zona 1' })
+    const notes = await screen.findByRole('region', { name: 'Notas adicionales' })
+    expect(within(notes).getByText('No disponible')).toBeVisible()
+    const general = screen.getByRole('heading', { name: 'Información general' }).closest('section')!
+    expect(within(general).getByText('Dirección')).toBeVisible(); expect(within(general).getByText('Zona 1')).toBeVisible(); expect(within(general).getByText('Punto GPS')).toBeVisible()
+  })
+  it.each([[{ latitude: null, longitude: null }], [{ latitude: '14.5', longitude: null }], [{}]])('sin Punto GPS completo no muestra la acción (%j)', async coordinates => {
+    show({ ...circuit, ...coordinates })
+    await screen.findByRole('region', { name: 'Distribución actual del circuito' })
+    expect(screen.queryByRole('link', { name: 'Ver en Google Maps' })).not.toBeInTheDocument()
   })
 })
 

@@ -20,12 +20,20 @@ export function Can({ permission, anyOf, children, fallback = null }: { permissi
   return (permission ? access.can(permission) : anyOf ? access.any(...anyOf) : false) ? children : fallback
 }
 
-const catalogs = ['sectors', 'departments', 'incident_types', 'nodes', 'positions', 'escalation_reasons', 'service_types', 'deactivation_reasons', 'cpe_models', 'internal_incident_types', 'providers', 'change_completion_types', 'change_types', 'port_nomenclatures', 'distribution_device_templates']
+const catalogs = ['sectors', 'departments', 'incident_types', 'nodes', 'positions', 'escalation_reasons', 'service_types', 'deactivation_reasons', 'cpe_models', 'internal_incident_types', 'providers', 'change_completion_types', 'change_types', 'port_nomenclatures', 'distribution_device_templates', 'admin_request_types']
 export function catalogModule(kind: string) { return ['customers', 'circuits'].includes(kind) ? kind : 'catalogs.' + kind.replaceAll('-', '_') }
 export function routeAllowed(path: string, access: Access): boolean {
   if (path === '/profile' || path === '/login') return true
   if (path === '/' || path === '/dashboard') return access.can('dashboard.view')
   const root = path.split('/')[1]
+  if (root === 'installation-requests') return access.can('installation_requests.review')
+  if (root === 'installation-orders') {
+    if (path.endsWith('/new')) return access.can('installation_orders.create')
+    if (path.endsWith('/edit')) return access.can('installation_orders.edit')
+    if (path === '/installation-orders') return access.any('installation_orders.view', 'installation_requests.review')
+    return access.can('installation_orders.view')
+  }
+  if (root === 'admin-requests') return access.can(path.endsWith('/new') ? 'admin_requests.create' : path.endsWith('/edit') ? 'admin_requests.edit' : 'admin_requests.view')
   const modules: Record<string, string> = { tickets: 'tickets', 'internal-tickets': 'internal_tickets', changes: 'changes', customers: 'customers', circuits: 'circuits', activations: 'activations', 'capacity-changes': 'capacity_changes', 'circuit-lifecycle': 'lifecycle' }
   if (root in modules) {
     const module = modules[root]
@@ -38,7 +46,7 @@ export function routeAllowed(path: string, access: Access): boolean {
   if (root === 'security-sessions') return access.can('sessions.manage')
   if (root === 'security-audit') return access.can('audit.view')
   if (root === 'catalogs') return access.any(...catalogs.map(key => `catalogs.${key}.view`))
-  if (root === 'settings') return access.any(...['ticket_number', 'internal_ticket_number', 'activation_number', 'change_number'].map(key => `settings.${key}.view`))
+  if (root === 'settings') return access.any('incoming_mail.manage', ...['ticket_number', 'internal_ticket_number', 'activation_number', 'change_number', 'admin_request_number'].map(key => `settings.${key}.view`))
   if (root === 'mail-notifications') return access.any('mail.transport.view', 'mail.oauth.view', 'mail.events.view', 'mail.processor.view')
   if (root === 'mail-templates') return access.can('mail.templates.view')
   if (root === 'reports') return access.any(...['tickets', 'internal_tickets', 'changes'].flatMap(key => [`reports.${key}.view`, `reports.${key}.export`]))
@@ -48,7 +56,7 @@ export function routeAllowed(path: string, access: Access): boolean {
   if (root === 'distribution-devices') return access.any('distribution_devices.view', 'distribution_devices.lookup')
   return false
 }
-export const MODULE_PATHS = ['/my-tickets', '/', '/tickets', '/internal-tickets', '/changes', '/customers', '/circuits', '/activations', '/capacity-changes', '/circuit-lifecycle', '/reports', '/activation-reports', '/capacity-reports', '/lifecycle-reports', '/catalogs', '/settings', '/mail-notifications', '/mail-templates', '/responsibles', '/security-roles', '/security-sessions', '/security-audit']
+export const MODULE_PATHS = ['/my-tickets', '/', '/tickets', '/internal-tickets', '/changes', '/customers', '/installation-orders', '/admin-requests', '/circuits', '/activations', '/capacity-changes', '/circuit-lifecycle', '/reports', '/activation-reports', '/capacity-reports', '/lifecycle-reports', '/catalogs', '/settings', '/mail-notifications', '/mail-templates', '/responsibles', '/security-roles', '/security-sessions', '/security-audit']
 export function firstAllowed(access: Access, preferredHome?: string | null) {
   if (preferredHome === 'MY_TICKETS' && routeAllowed('/my-tickets', access)) return '/my-tickets'
   if (preferredHome === 'DASHBOARD' && routeAllowed('/', access)) return '/'

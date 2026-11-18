@@ -55,8 +55,8 @@ export function FilterPanelGroup({ title, children }: { title: string; children:
 }
 
 /** Segmentado de un solo valor (p. ej. Estado) con el color del módulo; el valor activo se anuncia con aria-pressed. */
-export function FilterSegment({ label, options, value, onChange }: { label: string; options: readonly (readonly [string, string])[]; value: string; onChange: (value: string) => void }) {
-  return <div className="segmented-control segmented-control--soft filter-bar-segment" role="group" aria-label={label}>
+export function FilterSegment({ label, options, value, onChange, theme }: { label: string; options: readonly (readonly [string, string])[]; value: string; onChange: (value: string) => void; theme?: FilterBarTheme }) {
+  return <div className={`segmented-control segmented-control--soft filter-bar-segment${theme ? ` segmented-control--${theme}` : ''}`} role="group" aria-label={label}>
     {options.map(([option, text]) => <button key={text} type="button" className="segment-button" aria-pressed={value === option} onClick={() => onChange(option)}>{text}</button>)}
   </div>
 }

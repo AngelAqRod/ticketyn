@@ -62,6 +62,26 @@
 ## Mantenimiento
 Este documento debe actualizarse ante cualquier cambio en el modelo `Circuit`, variaciones en la ventana temporal de sincronización de sectores o ampliación de capacidades en la gestión de equipamiento CPE.
 
+## Ubicación y notas del circuito
+
+Cuatro columnas opcionales en `circuits` (migración `0046_circuit_location`, todas NULL,
+sin valores ficticios para circuitos históricos): `address`, `latitude`, `longitude`
+(`NUMERIC(9,6)`) y `additional_notes`.
+
+- **Punto GPS** es un solo campo visual («14.634915, -90.506882», pegable desde Google
+  Maps, con espacios tolerados) que `frontend/src/lib/gps.ts` separa en dos columnas.
+  Las coordenadas son un par: el check `ck_circuits_gps_pair` exige ambas o ninguna, y
+  `ck_circuits_latitude_range` / `ck_circuits_longitude_range` fijan -90…90 y -180…180.
+  La API redondea a seis decimales y valida con la misma regla (`gps_error` en
+  `schemas/circuit.py`); en `PATCH` el par se juzga contra la fila guardada.
+- `null` limpia un campo; omitirlo lo conserva. Los textos vacíos se rechazan (el
+  formulario envía `null`).
+- Una sola pieza compartida: `CircuitLocationFields` (formularios) y
+  `CircuitLocationData` (lectura), usada por Catálogos/edición, creación rápida de
+  Tickets y de Órdenes de instalación, y el detalle del circuito. Enlace simple a
+  Google Maps; sin mapas ni APIs externas.
+- Las órdenes normales exponen `circuit_location` leído del circuito; no se copia.
+
 ## Distribución — v0.8.0, bloques 1, 2 y 3
 
 - Jerarquía actual opcional: Nodo → equipo → puerto → circuitos. Un circuito puede

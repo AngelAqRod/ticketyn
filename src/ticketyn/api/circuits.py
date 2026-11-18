@@ -9,7 +9,7 @@ from ticketyn.api.crud import DBSession, delete_unreferenced, get_or_404, list_i
 from ticketyn.models import Circuit, Customer, Ticket, ServiceType, CpeModel
 from ticketyn.api.fms_data import validate_active, validate_initial_capacity
 from ticketyn.models.fms import Activation, CapacityChange, CircuitLifecycleOperation
-from ticketyn.schemas.circuit import CircuitCreate, CircuitResponse, CircuitUpdate, CpeConfigurationInput, CpeConfigurationResponse
+from ticketyn.schemas.circuit import gps_error, CircuitCreate, CircuitResponse, CircuitUpdate, CpeConfigurationInput, CpeConfigurationResponse
 
 from ticketyn.api.circuit_sector import locked_circuit, validate_sector, validate_node
 from ticketyn.api.circuit_ticket_nodes import synchronize_recent_ticket_nodes
@@ -22,21 +22,8 @@ router = APIRouter(prefix="/api/circuits", tags=["circuits"])
 @router.post("", response_model=CircuitResponse, status_code=201)
 def create_circuit(payload: CircuitCreate, session: DBSession, request: Request):
     with distribution_write(session):
-        from ticketyn.security.mutations import contextual_creation
-        contextual_creation(request.state.principal, 'circuits', payload.model_dump())
-        validate_sector(session, payload.sector_id)
-        validate_initial_capacity(payload.model_dump())
-        get_or_404(session, Customer, payload.customer_id)
-        validate_node(session, payload.node_id)
-        if payload.service_type_id is not None:
-            validate_active(session, ServiceType, payload.service_type_id)
-        if payload.cpe_model_id is not None:
-            validate_active(session, CpeModel, payload.cpe_model_id)
-        validate_circuit_distribution(session, payload.model_dump())
-        item = Circuit(**payload.model_dump())
-        session.add(item); session.flush(); session.refresh(item)
-        if item.distribution_device_id is not None:
-            record(session, request.state.principal.id, item, 'ASSIGN')
+        from ticketyn.api.circuit_creation import build_circuit
+        item = build_circuit(session, payload, request.state.principal)
         result = CircuitResponse.model_validate(item)
     return result
 
@@ -79,6 +66,9 @@ def patch_circuit(id: Annotated[int, Path(gt=0)], payload: CircuitUpdate, sessio
             raise HTTPException(422, 'Selecciona un Sector para el circuito antes de guardar.')
         sector_changed = sector_id != item.sector_id
         new_sector = validate_sector(session, sector_id) if sector_changed else None
+        gps_problem = gps_error(values.get('latitude', item.latitude), values.get('longitude', item.longitude))
+        if gps_problem:
+            raise HTTPException(422, gps_problem)
         validate_initial_capacity({'initial_capacity': values.get('initial_capacity', item.initial_capacity), 'initial_capacity_unit': values.get('initial_capacity_unit', item.initial_capacity_unit)})
         if "customer_id" in values:
             get_or_404(session, Customer, values["customer_id"])

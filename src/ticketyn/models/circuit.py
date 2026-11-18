@@ -16,6 +16,11 @@ if TYPE_CHECKING:
 class Circuit(CommonFields, Base):
     __tablename__ = "circuits"
 
+    # Optional site information; coordinates are always a pair (see gps_pair).
+    address: Mapped[str | None] = mapped_column(Text)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    additional_notes: Mapped[str | None] = mapped_column(Text)
     cpe_model_id: Mapped[int | None] = mapped_column(ForeignKey('cpe_models.id'), index=True)
     cpe_model: Mapped['CpeModel | None'] = relationship(lazy='joined')
     cpe_management_ip: Mapped[str | None] = mapped_column(INET)
@@ -24,6 +29,9 @@ class Circuit(CommonFields, Base):
     __table_args__ = (
         CheckConstraint("masklen(cpe_management_ip) = CASE family(cpe_management_ip) WHEN 4 THEN 32 ELSE 128 END", name="cpe_management_ip_host"),
         CheckConstraint("(initial_capacity IS NULL AND initial_capacity_unit IS NULL) OR (initial_capacity IS NOT NULL AND initial_capacity > 0 AND initial_capacity <> 'NaN'::numeric AND initial_capacity_unit IS NOT NULL AND initial_capacity_unit IN ('Mbps','Gbps'))", name='initial_capacity_valid'),
+        CheckConstraint('(latitude IS NULL) = (longitude IS NULL)', name='gps_pair'),
+        CheckConstraint('latitude BETWEEN -90 AND 90', name='latitude_range'),
+        CheckConstraint('longitude BETWEEN -180 AND 180', name='longitude_range'),
         CheckConstraint('distribution_device_id IS NULL OR node_id IS NOT NULL', name='distribution_node_required'),
         CheckConstraint('distribution_port_id IS NULL OR distribution_device_id IS NOT NULL', name='distribution_device_required'),
         ForeignKeyConstraint(['distribution_device_id', 'node_id'], ['distribution_devices.id', 'distribution_devices.node_id'], name='fk_circuits_distribution_device_node', ondelete='RESTRICT', onupdate='RESTRICT'),

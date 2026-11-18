@@ -1,5 +1,10 @@
 # Instalación y administración
 
+Para las órdenes de instalación, el directorio privado persistente y el receptor
+IMAP opcional, consultar [Operación de órdenes de instalación](installation-orders.md).
+Los respaldos de ese módulo deben incluir PostgreSQL y sus originales en una
+misma ventana sin escrituras; el backup general de base de datos no basta.
+
 El aprovisionamiento y recuperación independientes de claves se describen en
 [Gestión de secretos](secrets-v0.6.0.md). El backup general no contiene esas claves.
 
@@ -30,7 +35,7 @@ Ticketyn v0.7.0 incorpora inicio de sesión y autorización granular en el backe
 con denegación por defecto. Los Responsables son los usuarios: el acceso se
 habilita sobre su identidad existente, sin crear un catálogo paralelo de personas.
 Restringe además el acceso mediante red controlada, VPN, firewall o proxy; la
-autenticación no sustituye esos controles. El instalador configura HTTP, no HTTPS:
+autenticación no sustituye esos controles. El instalador configura HTTP, no HTTPS (para habilitarlo, ver «Habilitar HTTPS»):
 configura TLS y la protección del entorno antes de exponer el servicio.
 Ocultar Swagger no protege los endpoints.
 
@@ -357,3 +362,70 @@ verificaciones. Conserva su recibo y utiliza después el flujo administrado.
 - [Módulos](modules.md): reglas y exportaciones disponibles.
 - [Actualización v0.3.0](upgrading-v0.3.0.md): referencia específica histórica,
   no procedimiento general para cualquier versión.
+
+
+## Habilitar HTTPS
+
+`deploy/enable_https.py` habilita HTTPS sin modificar el instalador, el updater ni el sitio
+administrado de Nginx. Ejecutar en el servidor, como root:
+
+```bash
+sudo /opt/ticketyn/current/deploy/enable-https.sh          # interactivo
+sudo .../enable-https.sh --domain ticketyn.empresa.com --cert fullchain.pem --key privkey.pem --yes
+sudo .../enable-https.sh --domain ticketyn.local --self-signed --yes
+sudo .../enable-https.sh --domain ticketyn.empresa.com --certbot-lineage /etc/letsencrypt/live/ticketyn.empresa.com --yes   # Let's Encrypt + renovación
+sudo .../enable-https.sh --check      # estado y vencimiento, sin cambios
+sudo .../enable-https.sh --disable    # vuelve a solo HTTP
+```
+
+- Escribe únicamente `/etc/nginx/conf.d/ticketyn-https.conf` y copia el certificado y la llave a
+  `/etc/ticketyn/tls` (modo 600). La llave no debe tener contraseña; Nginx no puede pedirla.
+- Todo HTTP externo (puerto 80) responde `301` a `https://<dominio>`. Un servidor en
+  `127.0.0.1:80` sigue sirviendo la aplicación, porque el health check del updater usa ese camino.
+- Activa HSTS (`--hsts-seconds`, 86400 por defecto; `0` lo desactiva). Súbelo solo cuando el
+  certificado esté estable.
+- Valida con `nginx -t`, recarga y prueba `/health` por HTTPS y por loopback; si algo falla restaura
+  el archivo anterior.
+- Uvicorn sigue en `127.0.0.1:8000` por HTTP: el tramo Nginx → backend es local y no cambia.
+- Tras habilitarlo, actualizar la `redirect_uri` de OAuth del correo a `https://` (en Ticketyn y en
+  el registro de la aplicación del proveedor).
+- Limitación: el bloque copia las rutas de `deploy/nginx/ticketyn.conf`; si una release cambia esa
+  plantilla, volver a ejecutar el script.
+- Reejecutar el script es la forma de **cambiar de certificado** (por ejemplo de autofirmado a
+  Let's Encrypt): reemplaza la copia en `/etc/ticketyn/tls` y el archivo de Nginx. Antes de tocar
+  nada comprueba que el certificado no esté vencido y que la llave corresponda; si `nginx -t`, la
+  recarga o `/health` fallan, restaura la configuración **y** los certificados anteriores. Los
+  archivos TLS se crean siempre con modo 600 en un directorio 700; no quedan copias temporales de la llave.
+
+### Let's Encrypt (Certbot) y renovación automática
+
+Certbot renueva en `/etc/letsencrypt/live/<nombre>/`, pero Nginx usa la copia de
+`/etc/ticketyn/tls`. Para que la renovación llegue a Ticketyn, el script instala un *deploy hook*:
+
+```bash
+# 1. Obtener el certificado con Certbot (a cargo del administrador; Certbot instalado y puerto 80 alcanzable).
+# 2. Habilitar HTTPS apuntando al directorio del certificado:
+sudo /opt/ticketyn/current/deploy/enable-https.sh --domain ticketyn.empresa.com \
+  --certbot-lineage /etc/letsencrypt/live/ticketyn.empresa.com --yes
+```
+
+Resultado:
+
+- Instala `/etc/letsencrypt/renewal-hooks/deploy/ticketyn-https.sh` (modo 755). Certbot lo ejecuta
+  tras cada renovación exitosa con `RENEWED_LINEAGE`; el hook **solo actúa si coincide con ese
+  directorio** (otros certificados del servidor no lo disparan) y vuelve a ejecutar el script con
+  `--domain`, `--cert`, `--key`, el mismo `--hsts-seconds` y `--yes`. Eso actualiza la copia, valida
+  con `nginx -t`, recarga Nginx y prueba `/health`.
+- Si la renovación llega mala (llave que no corresponde, `nginx -t` falla), el script restaura los
+  archivos anteriores y sale con error; Certbot registra el fallo del hook.
+- `--disable`, o habilitar otro certificado (`--self-signed` o `--cert`), **retiran el hook**; de
+  lo contrario la siguiente renovación reactivaría HTTPS o pisaría la elección. Solo se retira un
+  hook con la marca de Ticketyn; uno escrito por el administrador no se toca.
+- `--check` informa si el hook está instalado y cuándo vence el certificado.
+
+Requisitos del administrador: Certbot instalado (debe existir `/etc/letsencrypt/renewal-hooks/deploy/`),
+el temporizador de renovación de Certbot activo (`systemctl list-timers | grep certbot`), y la
+ruta `/opt/ticketyn/current/deploy/enable_https.py` vigente (el hook usa `current`, no un directorio
+de release). Para probar el hook sin esperar una renovación:
+`sudo RENEWED_LINEAGE=/etc/letsencrypt/live/<nombre> /etc/letsencrypt/renewal-hooks/deploy/ticketyn-https.sh`.
+- Firewall, límite de peticiones y demás hardening quedan fuera del script.

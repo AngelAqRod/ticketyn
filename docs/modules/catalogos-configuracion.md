@@ -39,6 +39,7 @@
   - Motivos de Baja: `src/ticketyn/models/fms.py`
   - Tipos de Cambio y Tipos de Finalización: `src/ticketyn/models/change.py`
   - Configuraciones de numeración: `ticket_number_config.py`, `internal_ticket.py`, `fms.py` y `change.py`
+- **Navegación:** Catálogos y Configuración comparten `SideNavLayout`: navegación lateral agrupada (arriba en pantallas angostas) y una sola sección visible a la vez. Configuración incluye «Filtros de recepción» (`incoming_mail.manage`, `GET/PATCH /api/incoming-mail/filters`).
 - **Componentes frontend:** Vistas en `frontend/src/pages/` (`Catalogs.tsx`, `Settings.tsx`), componentes en `frontend/src/components/` (`CatalogAdmin.tsx`, `QuickCatalogCreate.tsx`).
 - **Dependencias:** Requerido transversalmente por todos los módulos operativos de la plataforma.
 - **Referencias:** Consultar `docs/SYSTEM_MAP.md` para la lista completa de archivos.

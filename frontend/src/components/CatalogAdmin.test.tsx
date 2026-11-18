@@ -11,13 +11,13 @@ import type { CatalogKind } from '../types/catalog'
 const created_at = '2026-01-01T12:00:00Z'
 const customer = { id: 1, customer_code: 'CUS-A', name: 'Empresa Alfa', active: true, created_at }
 const inactiveCustomer = { id: 2, customer_code: 'CUS-B', name: 'Empresa Beta', active: false, created_at }
-const circuit = { node_id: 1, node: { id: 1, name: 'Nodo actual', active: true }, sector_id: 1, sector: { id: 1, name: 'Sector actual', active: true }, id: 1, customer_id: 2, circuit_code: 'LINK-A', description: 'Internet principal', active: true, created_at }
+const circuit = { address: 'Zona 1', latitude: '14.634915', longitude: '-90.506882', additional_notes: 'Nota previa', node_id: 1, node: { id: 1, name: 'Nodo actual', active: true }, sector_id: 1, sector: { id: 1, name: 'Sector actual', active: true }, id: 1, customer_id: 2, circuit_code: 'LINK-A', description: 'Internet principal', active: true, created_at }
 const named = { id: 1, name: 'Nombre inicial', active: true, created_at }
 type Row = typeof customer | typeof circuit | typeof named
 interface Options { empty?: boolean; fail?: boolean; write?: (path: string, options: RequestInit) => Promise<Response> }
 function mockApi(options: Options = {}) {
   const rows: Record<CatalogKind, Row[]> = {
-    'change-types': [], 'change-completion-types': [], 'internal-incident-types': [], providers: [], 'cpe-models': [named, { ...named, id: 2, name: 'Modelo inactivo', active: false }],
+    'admin-request-types': [], 'change-types': [], 'change-completion-types': [], 'internal-incident-types': [], providers: [], 'cpe-models': [named, { ...named, id: 2, name: 'Modelo inactivo', active: false }],
     'service-types': [],
     'deactivation-reasons': [],
     positions: [{ ...named, name: 'Consultor de redes', department_id: 1, department: named } as Row, { ...named, id: 2, name: 'Otro departamento', department_id: 2, department: inactiveCustomer } as Row],
@@ -127,7 +127,7 @@ describe('administración de catálogos', () => {
     await screen.findByText('Registro creado correctamente.')
     const created = writes(mock)[0]
     expect(created[0]).toBe(`/api/${resource}`)
-    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 1, active: true, node_id: 1 } : { name: 'Nuevo registro', active: true }
+    const expected = resource === 'customers' ? { customer_code: 'MANUAL-NEW', name: 'Nuevo registro', active: true } : resource === 'circuits' ? { circuit_code: 'MANUAL-NEW', description: 'Nuevo registro', customer_id: 1, active: true, node_id: 1, address: null, latitude: null, longitude: null, additional_notes: null } : { name: 'Nuevo registro', active: true }
     expect(JSON.parse(String(created[1]?.body))).toEqual(resource === 'responsibles' ? { ...expected, department_id: null, position_id: null, operational_selectable: true } : resource === 'circuits' ? { ...expected, sector_id: 1, cpe_management_ip: null, cpe_model_id: null, initial_capacity: null, initial_capacity_unit: null, service_type_id: null } : expected)
     fireEvent.click(screen.getByRole('button', { name: `Editar ${identifier}` }))
     expect(field(resource === 'circuits' ? 'Descripción' : 'Nombre')).toHaveValue(resource === 'customers' ? customer.name : resource === 'circuits' ? circuit.description : named.name)
@@ -544,5 +544,32 @@ describe('barra de filtros de clientes y circuitos', () => {
     expect(within(region).getAllByRole('button', { name: /^Limpiar/ })).toHaveLength(1)
     fireEvent.click(within(region).getByRole('button', { name: 'Limpiar todo' }))
     expect(screen.getByLabelText(/^Buscar/)).toHaveValue('')
+  })
+})
+
+describe('información de ubicación del circuito', () => {
+  async function edit() { const mock = mockApi(); open('/circuits'); await screen.findByRole('table'); fireEvent.click(screen.getByRole('button', { name: 'Editar LINK-A' })); return mock }
+  it('reconstruye el Punto GPS guardado y conserva los datos al guardar otros cambios', async () => {
+    const mock = await edit()
+    expect(screen.getByLabelText(/^Dirección/)).toHaveValue('Zona 1'); expect(screen.getByLabelText(/^Punto GPS/)).toHaveValue('14.634915, -90.506882'); expect(screen.getByLabelText(/^Notas adicionales/)).toHaveValue('Nota previa')
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' })); await screen.findByText('Cambios guardados correctamente.')
+    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toMatchObject({ address: 'Zona 1', latitude: '14.634915', longitude: '-90.506882', additional_notes: 'Nota previa' })
+  })
+  it('edita cada campo, separa latitud y longitud y acepta espacios alrededor', async () => {
+    const mock = await edit()
+    fireEvent.change(screen.getByLabelText(/^Dirección/), { target: { value: '  Zona 10  ' } }); fireEvent.change(screen.getByLabelText(/^Punto GPS/), { target: { value: '  15.25, -91.75 ' } }); fireEvent.change(screen.getByLabelText(/^Notas adicionales/), { target: { value: 'Línea 1\nLínea 2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' })); await screen.findByText('Cambios guardados correctamente.')
+    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toMatchObject({ address: 'Zona 10', latitude: '15.25', longitude: '-91.75', additional_notes: 'Línea 1\nLínea 2' })
+  })
+  it('permite borrar el Punto GPS y los textos enviando null', async () => {
+    const mock = await edit()
+    for (const label of [/^Dirección/, /^Punto GPS/, /^Notas adicionales/]) fireEvent.change(screen.getByLabelText(label), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' })); await screen.findByText('Cambios guardados correctamente.')
+    expect(JSON.parse(String(writes(mock)[0][1]?.body))).toMatchObject({ address: null, latitude: null, longitude: null, additional_notes: null })
+  })
+  it.each([['14.634915', 'latitud y longitud'], ['abc', 'Formato de Punto GPS no válido'], ['91, 0', 'latitud debe estar entre'], ['0, 181', 'longitud debe estar entre']])('rechaza «%s» sin enviar la solicitud', async (value, message) => {
+    const mock = await edit()
+    fireEvent.change(screen.getByLabelText(/^Punto GPS/), { target: { value } }); fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(message); expect(writes(mock)).toHaveLength(0)
   })
 })

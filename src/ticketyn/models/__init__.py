@@ -41,3 +41,7 @@ from ticketyn.models.security import SecurityRole, SecurityPermission, SecurityR
 from ticketyn.models.distribution import PortNomenclature
 
 from .distribution import DistributionDeviceTemplate, DistributionDeviceTemplateGroup
+
+from ticketyn.models.installation_orders import InstallationOrder, InstallationRequest, InstallationRequestDraft, InstallationDocument, InstallationEvent
+
+from ticketyn.models.admin_request import AdminRequestType, AdminRequestNumberConfig, AdminRequest, AdminRequestLink, AdminRequestEvent

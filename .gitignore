@@ -69,3 +69,8 @@ keys.json
 /.codex/
 /.impeccable/
 /frontend/.impeccable/
+
+# Archivos locales de herramientas de desarrollo
+.atl/
+.engram/
+odd/

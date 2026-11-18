@@ -11,6 +11,7 @@ Permite ubicar rápidamente archivos, dependencias y reglas críticas por domini
 - **Frontend:** SPA React 18 + TypeScript + Vite en `frontend/src/`. Enrutador en `frontend/src/App.tsx`, vistas en `frontend/src/pages/`, componentes en `frontend/src/components/` y sistema visual Electric Blue 2.0 (`DESIGN.md`).
 - **Persistencia y Migraciones:** PostgreSQL obligatorio (`DATABASE_URL`). Evolución de esquema gestionada exclusivamente con Alembic en `alembic/versions/`.
 - **Seguridad y Sesiones:** Tokens opacos en memoria RAM (`src/ticketyn/security/memory.py`). Servidor monoproceso (`--workers 1`). Control de acceso por ruta (`SafeAuthRoute` en `src/ticketyn/security/routes.py`) y permisos en `src/ticketyn/security/permissions.py`. Denegación predeterminada (403). Identidad única en tabla `responsibles`.
+- **HTTPS opcional:** `deploy/enable-https.sh` (wrapper de `deploy/enable_https.py`) escribe solo `/etc/nginx/conf.d/ticketyn-https.conf`; no modifica instalador, updater ni sitio administrado. Reejecutarlo cambia de certificado con rollback de conf y certificados; `--certbot-lineage` instala el deploy hook `/etc/letsencrypt/renewal-hooks/deploy/ticketyn-https.sh` (se retira con `--disable` o al cambiar de certificado). Pruebas en `tests/test_enable_https.py`; uso en `docs/deployment.md` («Habilitar HTTPS»).
 - **Notificaciones y Cola:** Subsistema en `src/ticketyn/notifications/` con soporte SMTP y OAuth2 (Google / Microsoft 365). Cola persistente asíncrona en `mail_jobs`.
 - **Documentación y Reportes:** Generación de PDF (ReportLab en `src/ticketyn/api/documents.py`) y Excel (openpyxl en `src/ticketyn/api/*exports.py`).
 
@@ -93,7 +94,7 @@ Permite ubicar rápidamente archivos, dependencias y reglas críticas por domini
 |---|---|
 | **Dominio** | Mantenimiento de tablas maestras y configuración de numeración secuencial |
 | **Backend** | `src/ticketyn/api/crud.py`, `src/ticketyn/api/positions.py`, `src/ticketyn/api/settings.py`, `src/ticketyn/api/ticket_numbers.py`, `src/ticketyn/models/` (sector, node, department, position, etc.), `src/ticketyn/schemas/position.py`, `src/ticketyn/schemas/` |
-| **Frontend** | `frontend/src/pages/Catalogs.tsx`, `frontend/src/pages/Settings.tsx`, `frontend/src/components/PortNomenclatureAdmin.tsx`, `frontend/src/components/CatalogAdmin.tsx`, `frontend/src/components/QuickCatalogCreate.tsx` |
+| **Frontend** | `frontend/src/pages/Catalogs.tsx`, `frontend/src/pages/Settings.tsx`, `frontend/src/components/SideNavLayout.tsx`, `frontend/src/components/ReceptionFiltersSettings.tsx`, `frontend/src/components/PortNomenclatureAdmin.tsx`, `frontend/src/components/CatalogAdmin.tsx`, `frontend/src/components/QuickCatalogCreate.tsx` |
 | **Dependencias** | Entidades operativas de todos los dominios |
 | **Reglas críticas** | Desactivación lógica preserva integridad histórica. Puestos con configuración opcional «Escala a» (modalidades General vs Individual con umbrales en minutos), validación de ciclos (BFS) y auto-escalamiento prohibido. Nomenclaturas de puertos globales con prefijos únicos y formatos múltiples; Admin administra, Auditor consulta y Operador usa lookup. Numeraciones con bloqueo de fila `FOR UPDATE`; la vista previa no consume secuencia. |
 | **Pruebas** | `tests/test_catalog_api.py`, `tests/test_catalog_deletion.py`, `tests/test_escalation_recommendations.py`, `frontend/src/pages/Catalogs.test.tsx`, `frontend/src/components/CatalogAdmin.test.tsx`, `frontend/src/pages/Settings.test.tsx` |
@@ -109,6 +110,26 @@ Permite ubicar rápidamente archivos, dependencias y reglas críticas por domini
 | **Pruebas** | `tests/test_reports.py`, `tests/test_ticket_exports.py`, `tests/test_internal_ticket_exports.py`, `tests/test_report_pdf_composition.py`, `tests/test_modular_pdf.py`, `tests/test_activation_reports.py`, `tests/test_activation_distribution.py`, `tests/test_fms_exports.py`, `tests/test_fms_report_exports.py`, `frontend/src/pages/Reports.test.tsx`, `frontend/src/pages/FmsReports.test.tsx` |
 
 ---
+
+### 10. Órdenes de instalación
+| Campo | Información |
+|---|---|
+| **Dominio** | Antecedente documental de circuitos; registro manual y solicitudes de correo validadas por una persona |
+| **Backend** | `src/ticketyn/models/installation_orders.py`, `src/ticketyn/schemas/installation_orders.py`, `src/ticketyn/api/installation_orders.py`, `src/ticketyn/api/installation_requests.py`, `src/ticketyn/api/installation_documents.py`, `src/ticketyn/api/incoming_mail.py`, `src/ticketyn/incoming/` |
+| **Frontend** | `frontend/src/pages/InstallationOrders.tsx`, `InstallationOrderForm.tsx`, `InstallationOrderDetail.tsx`, `InstallationRequestDetail.tsx`, `frontend/src/api/installationOrders.ts`, `frontend/src/components/installation/`, `frontend/src/styles/installationOrders.css` |
+| **Dependencias** | Clientes y Responsables existentes, Circuitos, almacenamiento privado persistente, IMAP opcional; sin dependencia de la cola saliente FMS |
+| **Reglas críticas** | Relación orden–circuito 1:1 opcional. Recepción no crea orden. Procesamiento y creación/vinculación transaccionales; borradores versionados, originales preservados, permisos en backend. Sin automatizar activaciones. Ver `docs/modules/ordenes-instalacion.md` y `docs/installation-orders.md`. |
+| **Pruebas** | `tests/test_installation_orders.py`, `tests/test_installation_requests.py`, `tests/test_installation_documents.py`, `tests/test_installation_incoming.py`, `tests/test_installation_migration.py`, `tests/test_installation_concurrency.py`, `frontend/src/pages/Installation*.test.tsx` |
+
+### 11. Solicitudes administrativas
+| Campo | Información |
+|---|---|
+| **Dominio** | Bitácora de requerimientos recibidos, con solicitante, tipo configurable, estado manual (`REGISTERED`/`IN_PROGRESS`/`COMPLETED`/`CANCELLED`), período de aplicación informativo y asociación opcional a tickets, tickets internos y cambios |
+| **Backend** | `src/ticketyn/models/admin_request.py`, `src/ticketyn/schemas/admin_request.py`, `src/ticketyn/api/admin_requests.py`, `alembic/versions/0044_admin_requests.py`, `0047_admin_request_status.py` |
+| **Frontend** | `frontend/src/pages/AdminRequests.tsx`, `AdminRequestForm.tsx`, `AdminRequestDetail.tsx`, `frontend/src/components/AdminRequestFields.tsx`, `AdminRequestLinks.tsx`, `frontend/src/api/adminRequests.ts`, `frontend/src/types/adminRequests.ts` |
+| **Dependencias** | Responsables, Clientes, Circuitos, numeración configurable, tickets (`start_at`), tickets internos (`start_at`) y cambios (`proposed_start`) |
+| **Reglas críticas** | Sin estados ni aprobaciones. Búsqueda de asociaciones limitada en backend a ±15 días de la fecha de solicitud (inclusive); las asociaciones guardadas no se eliminan. Ver `docs/modules/solicitudes-administrativas.md`. |
+| **Pruebas** | `tests/test_admin_requests.py`, `frontend/src/pages/AdminRequests.test.tsx` |
 
 ## C. Guía de Navegación para Agentes
 

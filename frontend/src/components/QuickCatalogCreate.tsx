@@ -1,3 +1,5 @@
+import { CircuitLocationFields, blankLocation, locationPayload } from './CircuitLocationFields'
+import type { LocationDraft } from './CircuitLocationFields'
 import { CircuitDistributionFields } from './CircuitDistributionFields'
 import { Can } from '../auth/permissions'
 import { capacityInMicroMbps } from '../lib/capacity'
@@ -31,6 +33,7 @@ export function QuickCatalogCreate(props: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const codeInput = useRef<HTMLInputElement>(null)
   const controller = useRef<AbortController | null>(null)
+  const [location, setLocation] = useState<LocationDraft>(blankLocation)
   const customerMode = props.kind === 'customer'
   const nodeMode = props.kind === 'node'
   const [cpeModels, setCpeModels] = useState<ServiceType[]>([]), [cpeModelId, setCpeModelId] = useState(''), [cpeError, setCpeError] = useState<string | null>(null), [cpeLoading, setCpeLoading] = useState(props.kind === 'circuit'), [cpeRetry, setCpeRetry] = useState(0)
@@ -93,6 +96,7 @@ export function QuickCatalogCreate(props: Props) {
     if ((!nodeMode && !code.trim()) || !text.trim()) { setError('Completa los campos obligatorios.'); return }
     if (props.kind === 'circuit' && (!nodeId || nodeError || nodeLoading)) { setError('Selecciona un Nodo antes de guardar.'); return }
     if (props.kind === 'circuit' && (!sectorId || sectorError)) { setError('Selecciona un Sector antes de guardar.'); return }
+    if (props.kind === 'circuit') { try { locationPayload(location) } catch (failure) { setError(failure instanceof Error ? failure.message : 'Punto GPS no válido.'); return } }
     if (props.kind === 'circuit' && capacity) { try { capacityInMicroMbps(capacity, capacityUnit) } catch (failure) { setError(failure instanceof Error ? failure.message : 'Capacidad inválida.'); return } }
     sending.current = true
     setSaving(true)
@@ -106,7 +110,7 @@ export function QuickCatalogCreate(props: Props) {
         const node = await createNode({ name: text.trim(), active: true }, request.signal)
         if (!request.signal.aborted) props.onCreated(node)
       } else {
-        const circuit = await createCircuit({ cpe_management_ip: cpeManagementIp.trim() || null, ...(distributionDeviceId ? { distribution_device_id: Number(distributionDeviceId) } : {}), ...(distributionPortId ? { distribution_port_id: Number(distributionPortId) } : {}), ...(cpeModelId ? { cpe_model_id: Number(cpeModelId) } : {}), sector_id: Number(sectorId), ...(serviceTypeId ? { service_type_id: Number(serviceTypeId) } : {}), ...(capacity ? { initial_capacity: capacity, initial_capacity_unit: capacityUnit } : {}), customer_id: props.customer.id, circuit_code: code.trim(), description: text.trim(), active: true, node_id: Number(nodeId) }, request.signal)
+        const circuit = await createCircuit({ ...locationPayload(location), cpe_management_ip: cpeManagementIp.trim() || null, ...(distributionDeviceId ? { distribution_device_id: Number(distributionDeviceId) } : {}), ...(distributionPortId ? { distribution_port_id: Number(distributionPortId) } : {}), ...(cpeModelId ? { cpe_model_id: Number(cpeModelId) } : {}), sector_id: Number(sectorId), ...(serviceTypeId ? { service_type_id: Number(serviceTypeId) } : {}), ...(capacity ? { initial_capacity: capacity, initial_capacity_unit: capacityUnit } : {}), customer_id: props.customer.id, circuit_code: code.trim(), description: text.trim(), active: true, node_id: Number(nodeId) }, request.signal)
         if (!request.signal.aborted) props.onCreated(circuit)
       }
     } catch (failure) {
@@ -131,6 +135,7 @@ export function QuickCatalogCreate(props: Props) {
         {props.kind === 'circuit' && <FormField id="quick-service-type" label="Tipo de servicio" describedBy={error ? errorId : undefined} invalid={apiInvalidFields.includes('service_type_id')}><SearchableSelect id="quick-service-type" label="Tipo de servicio" value={serviceTypeId} onChange={setServiceTypeId} options={serviceTypes.map((item) => ({ value: String(item.id), label: item.name }))} disabled={serviceLoading || Boolean(serviceError)} placeholder="Sin asignar" emptyMessage="No hay tipos de servicio activos." noMatchMessage="Sin coincidencias." />{serviceError && <RequestState compact error={serviceError} errorTitle="" retryText="Reintentar tipos de servicio" onRetry={() => setServiceRetry(serviceRetry + 1)} />}</FormField>}
         {props.kind === 'circuit' && <FormField id="quick-cpe-management-ip" label="IP de gestión CPE" describedBy={error ? errorId : undefined} invalid={apiInvalidFields.includes('cpe_management_ip')}><input id="quick-cpe-management-ip" className="form-input" type="text" placeholder="192.0.2.10" value={cpeManagementIp} onChange={event => setCpeManagementIp(event.target.value)} /></FormField>}
         {props.kind === 'circuit' && <FormField id="quick-cpe-model" label="Modelo de CPE actual" describedBy={error ? errorId : undefined} invalid={apiInvalidFields.includes('cpe_model_id')}><SearchableSelect id="quick-cpe-model" label="Modelo de CPE actual" value={cpeModelId} onChange={setCpeModelId} options={cpeModels.map((item) => ({ value: String(item.id), label: item.name }))} disabled={cpeLoading || Boolean(cpeError)} placeholder="Sin asignar" emptyMessage="No hay modelos de CPE activos." noMatchMessage="Sin coincidencias." />{cpeError && <RequestState compact error={cpeError} errorTitle="" retryText="Reintentar modelos de CPE" onRetry={() => setCpeRetry(cpeRetry + 1)} />}</FormField>}
+        {props.kind === 'circuit' && <CircuitLocationFields idPrefix="quick-location" value={location} onChange={setLocation} describedBy={error ? errorId : undefined} invalidGps={Boolean(error?.includes('GPS') || error?.includes('latitud') || error?.includes('longitud')) || apiInvalidFields.includes('latitude') || apiInvalidFields.includes('longitude')} />}
         {props.kind === 'circuit' && <CapacityFields id="quick-initial-capacity" label="Capacidad inicial (opcional)" value={capacity} unit={capacityUnit} onChange={(v, u) => { setCapacity(v); setCapacityUnit(u) }} />}
         {props.kind === 'circuit' && <FormField describedBy={[nodeError ? nodeErrorId : "", error ? errorId : ""].filter(Boolean).join(" ") || undefined} invalid={Boolean(error && !nodeId) || apiInvalidFields.includes("node_id")} id="quick-node" required label="Nodo"><div className="flex gap-2"><div className="min-w-0 flex-1"><SearchableSelect id="quick-node" required label="Nodo" value={nodeId} onChange={changeNode} options={nodes.map((item) => ({ value: String(item.id), label: item.name }))} disabled={nodeLoading || Boolean(nodeError)} placeholder="Selecciona un nodo" emptyMessage="No hay nodos activos." noMatchMessage="No se encontraron nodos." /></div><Can anyOf={["catalogs.nodes.create","context.nodes.create"]}><button type="button" className="button-secondary rounded-full" aria-label="Nuevo nodo" title="Nuevo nodo" onClick={() => setQuickNode(true)}>+</button></Can></div>{nodeError && <RequestState id={nodeErrorId} compact error={nodeError} errorTitle="" retryText="Reintentar nodos" onRetry={() => setNodeRetry(nodeRetry + 1)} />}</FormField>}
         {props.kind === 'circuit' && <CircuitDistributionFields nodeId={nodeId} nodeName={nodes.find(node => String(node.id) === nodeId)?.name ?? ''} deviceId={distributionDeviceId} portId={distributionPortId} disabled={saving} invalidFields={apiInvalidFields} onModalChange={setDistributionOpen}

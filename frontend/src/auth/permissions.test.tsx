@@ -136,3 +136,14 @@ it('redirige a otro módulo si se retira el permiso del módulo actual',async()=
  expect(screen.queryByRole('heading',{name:'Tickets autorizados'})).not.toBeInTheDocument()
  expect(fetcher.mock.calls.every(([path])=>path==='/api/auth/me')).toBe(true)
 })
+
+it('installation route roots require their specific permissions without granting circuit operations',()=>{
+ const access=(permissions:string[])=>({permissions,can:(...codes:string[])=>codes.every(code=>permissions.includes(code)),any:(...codes:string[])=>codes.some(code=>permissions.includes(code))})
+ expect(routeAllowed('/installation-orders',access(['installation_requests.review']))).toBe(true)
+ expect(routeAllowed('/installation-orders/3',access(['installation_requests.review']))).toBe(false)
+ expect(routeAllowed('/installation-requests/3',access(['installation_orders.view']))).toBe(false)
+ expect(routeAllowed('/installation-orders/new',access(['installation_orders.create']))).toBe(true)
+ expect(routeAllowed('/installation-orders/3/edit',access(['installation_orders.view']))).toBe(false)
+ expect(routeAllowed('/installation-orders/3/edit',access(['installation_orders.edit']))).toBe(true)
+ expect(routeAllowed('/circuits',access(['installation_orders.link']))).toBe(false)
+})

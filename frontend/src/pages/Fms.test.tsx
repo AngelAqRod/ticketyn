@@ -139,7 +139,7 @@ describe('Gestión operativa de circuitos', () => {
   it('configura numeración independiente sin consumo por la vista previa', async () => {
     const mock = mockApi(); render(<MemoryRouter initialEntries={['/settings']}><Settings /></MemoryRouter>)
     await screen.findByRole('form', { name: 'Numeración de tickets' })
-    fireEvent.click(screen.getByRole('button', { name: 'Numeración de activaciones' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Activaciones' }))
     const form = await screen.findByRole('form', { name: 'Numeración de activaciones' })
     fireEvent.change(within(form).getByLabelText('Prefijo'), { target: { value: 'NEW' } })
     expect(writes(mock)).toHaveLength(0)

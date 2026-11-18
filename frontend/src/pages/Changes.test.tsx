@@ -494,7 +494,7 @@ describe('Control de cambios',()=>{
  })
  it('configuración reutiliza la numeración sin consumir la vista previa',async()=>{
   const {mock,click}=setup('/settings')
-  fireEvent.click(await screen.findByRole('button',{name:'Numeración de cambios'}))
+  fireEvent.click(await screen.findByRole('button',{name:'Cambios'}))
   const form=await screen.findByRole('form',{name:'Numeración de cambios'})
   await waitFor(()=>expect(within(form).getByLabelText('Prefijo')).toHaveValue('CAM'))
   expect(within(form).getByLabelText('Próximo número')).toHaveValue(1)
