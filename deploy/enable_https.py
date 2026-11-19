@@ -29,7 +29,7 @@ LOCATIONS = '''
     root /opt/ticketyn/current/frontend/dist;
     index index.html;
     server_tokens off;
-    access_log /var/log/nginx/ticketyn-access.log ticketyn_no_args;
+    access_log /var/log/nginx/ticketyn-access.log ticketyn_https_no_args;
     client_max_body_size 2m;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
@@ -100,7 +100,11 @@ def render(domain, cert, key, hsts_seconds=86400):
         raise HttpsError('Dominio inválido: usa un nombre como ticketyn.empresa.com o una dirección IPv4.')
     hsts = f'    add_header Strict-Transport-Security "max-age={hsts_seconds}" always;' if hsts_seconds else ''
     body = LOCATIONS % {'hsts': hsts, 'hsts_index': hsts.replace('    add', '        add', 1)}
+    # Own format name: conf.d loads before sites-enabled, so the site's log_format is not visible here yet.
     return f'''# Managed by deploy/enable_https.py. Remove with: python3 deploy/enable_https.py --disable
+log_format ticketyn_https_no_args '$remote_addr [$time_local] "$request_method $uri $server_protocol" '
+                                  '$status $body_bytes_sent $request_time';
+
 server {{
     listen 443 ssl;
     listen [::]:443 ssl;
@@ -242,6 +246,7 @@ def enable(domain, cert, key, hsts_seconds=86400, conf=CONF, tls_dir=TLS_DIR, ru
         reload_nginx(runner)
         probe(domain, runner)
     except (subprocess.CalledProcessError, HttpsError, OSError) as error:
+        error = (getattr(error, 'stderr', None) or '').strip() or error  # nginx explains itself on stderr
         if previous is None:
             conf.unlink(missing_ok=True)
         else:

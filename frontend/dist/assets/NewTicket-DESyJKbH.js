@@ -1,1 +1,0 @@
-import{o as e}from"./RequestState-BAq9r3S8.js";import{t}from"./TicketForm-DAwsorR3.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as NewTicket};

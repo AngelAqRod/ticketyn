@@ -10,6 +10,23 @@ spec.loader.exec_module(https)
 needs_openssl = pytest.mark.skipif(shutil.which('openssl') is None, reason='openssl no disponible')
 
 
+def test_render_defines_its_own_log_format_before_using_it():
+    text = https.render('a.b', '/c', '/k')
+    assert text.index('log_format ticketyn_https_no_args') < text.index('access_log')
+    assert 'ticketyn_no_args' not in text
+
+
+def test_nginx_error_text_reaches_the_user(tmp_path):
+    def runner(args, **kwargs):
+        if args[:2] == ['nginx', '-t']:
+            raise subprocess.CalledProcessError(1, args, stderr='[emerg] unknown directive')
+        return ''
+    cert, key = tmp_path/'c', tmp_path/'k'
+    cert.write_text('x'); key.write_text('y')
+    with pytest.raises(https.HttpsError, match='unknown directive'):
+        https.enable('a.empresa.com', cert, key, conf=tmp_path/'n.conf', tls_dir=tmp_path/'tls', runner=lambda a, **k: runner(a) if a[0] == 'nginx' else '')
+
+
 def test_render_redirects_external_http_and_keeps_loopback_for_the_updater():
     text = https.render('ticketyn.empresa.com', '/c.pem', '/k.pem')
     assert text.count('{') == text.count('}')
