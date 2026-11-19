@@ -1,0 +1,1 @@
+import{a as e}from"./RequestState-BAq9r3S8.js";var t={name:`chevron-down`,size:24,node:[[`path`,{d:`m6 9 6 6 6-6`,key:`qrunsl`}]]};t.node;var n=e(t);export{n as t};

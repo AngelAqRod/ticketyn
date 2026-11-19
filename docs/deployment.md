@@ -373,6 +373,7 @@ administrado de Nginx. Ejecutar en el servidor, como root:
 sudo /opt/ticketyn/current/deploy/enable-https.sh          # interactivo
 sudo .../enable-https.sh --domain ticketyn.empresa.com --cert fullchain.pem --key privkey.pem --yes
 sudo .../enable-https.sh --domain ticketyn.local --self-signed --yes
+sudo .../enable-https.sh --domain 10.0.0.5 --self-signed --yes   # acceso por IPv4
 sudo .../enable-https.sh --domain ticketyn.empresa.com --certbot-lineage /etc/letsencrypt/live/ticketyn.empresa.com --yes   # Let's Encrypt + renovación
 sudo .../enable-https.sh --check      # estado y vencimiento, sin cambios
 sudo .../enable-https.sh --disable    # vuelve a solo HTTP
@@ -391,6 +392,10 @@ sudo .../enable-https.sh --disable    # vuelve a solo HTTP
   el registro de la aplicación del proveedor).
 - Limitación: el bloque copia las rutas de `deploy/nginx/ticketyn.conf`; si una release cambia esa
   plantilla, volver a ejecutar el script.
+- `--domain` acepta un nombre DNS o una IPv4. Con IP, el autofirmado lleva esa IP en el certificado y
+  `http://<IP>` redirige a `https://<IP>`; el navegador seguirá avisando que el certificado no es de confianza
+  hasta que se instale en los equipos. Let's Encrypt no emite certificados para IPs, así que `--certbot-lineage`
+  requiere un nombre.
 - Reejecutar el script es la forma de **cambiar de certificado** (por ejemplo de autofirmado a
   Let's Encrypt): reemplaza la copia en `/etc/ticketyn/tls` y el archivo de Nginx. Antes de tocar
   nada comprueba que el certificado no esté vencido y que la llave corresponda; si `nginx -t`, la

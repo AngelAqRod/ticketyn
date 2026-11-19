@@ -1,0 +1,1 @@
+import{it as e,tt as t}from"./RequestState-BAq9r3S8.js";var n=e(t(),1),r=(0,n.createContext)(null),i=()=>(0,n.useContext)(r);export{i as n,r as t};

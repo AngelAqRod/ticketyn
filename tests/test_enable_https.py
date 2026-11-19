@@ -20,7 +20,7 @@ def test_render_redirects_external_http_and_keeps_loopback_for_the_updater():
     assert 'Strict-Transport-Security' not in https.render('a.b', '/c', '/k', hsts_seconds=0)
 
 
-@pytest.mark.parametrize('bad', ['', '10.0.0.5', 'a b', 'x;y', 'dominio.com{', '-a.com', 'a' * 300])
+@pytest.mark.parametrize('bad', ['', '999.1.1.1', '1234', '::1', '10.0.0', 'a b', 'x;y', 'dominio.com{', '-a.com', 'a' * 300])
 def test_invalid_domains_are_rejected(bad):
     with pytest.raises(https.HttpsError):
         https.render(bad, '/c', '/k')
@@ -196,3 +196,23 @@ def test_cli_rejects_certbot_lineage_combined_with_other_certificates(monkeypatc
     assert '--certbot-lineage no se combina' in capsys.readouterr().err
     assert https.main(['--domain', 'a.empresa.com', '--certbot-lineage', 'relativo']) == 2
     assert 'ruta absoluta' in capsys.readouterr().err
+
+
+def test_ipv4_is_accepted_and_redirects_to_that_ip():
+    text = https.render('10.0.0.5', '/c.pem', '/k.pem')
+    assert 'server_name 10.0.0.5;' in text and 'return 301 https://10.0.0.5$request_uri;' in text
+
+
+def test_probe_for_an_ip_uses_loopback_without_name_resolution(tmp_path):
+    cert, key, conf, tls = setup(tmp_path)
+    log = []
+    https.enable('10.0.0.5', cert, key, conf=conf, tls_dir=tls, runner=fake_runner(log=log))
+    curls = [a for a in log if a[0] == 'curl']
+    assert ['https://127.0.0.1/health'] == [a[-1] for a in curls][:1] and '--resolve' not in curls[0]
+
+
+@needs_openssl
+def test_self_signed_certificate_for_an_ip_carries_an_ip_san(tmp_path):
+    cert, key = https.self_signed('10.0.0.5', tmp_path/'a')
+    https.validate_cert(cert, key)
+    assert 'IP Address:10.0.0.5' in https.run(['openssl', 'x509', '-noout', '-ext', 'subjectAltName', '-in', cert])

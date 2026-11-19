@@ -1,0 +1,1 @@
+var e={NORMAL:`Normal`,EXTRAORDINARY:`Extraordinaria`},t={PENDING:`Pendiente`,REVIEWING:`En revisión`,PROCESSED:`Procesada`,DISCARDED:`Descartada`};export{e as n,t};

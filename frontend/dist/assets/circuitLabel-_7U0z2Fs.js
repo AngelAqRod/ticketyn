@@ -1,0 +1,1 @@
+function e(e){let t=e.description?.trim();return t?`${e.circuit_code} — ${t}`:e.circuit_code}export{e as t};

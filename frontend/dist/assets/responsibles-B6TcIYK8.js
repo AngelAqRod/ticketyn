@@ -1,0 +1,1 @@
+function e(e,t=[]){return e.active&&e.operational_selectable!==!1||t.some(t=>String(t)===String(e.id))}export{e as t};

@@ -1,35 +1,41 @@
-import { AdminRequests } from './pages/AdminRequests'
-import { AdminRequestForm } from './pages/AdminRequestForm'
-import { AdminRequestDetail } from './pages/AdminRequestDetail'
-import { InstallationOrders } from './pages/InstallationOrders'
-import { InstallationOrderForm } from './pages/InstallationOrderForm'
-import { InstallationOrderDetail } from './pages/InstallationOrderDetail'
-import { InstallationRequestDetail } from './pages/InstallationRequestDetail'
-import { Profile } from './pages/Profile'
-import { SecurityRoles } from './pages/SecurityRoles'
-import { SecuritySessions } from './pages/SecuritySessions'
-import { SecurityAudit } from './pages/SecurityAudit'
 import { AuthGate } from './auth/AuthGate'
-import { Changes, ChangeForm, ChangeDetail } from './pages/Changes'
-import { InternalTickets, InternalTicketDetail, InternalTicketEditor } from './pages/InternalTickets'
-import { Operations } from './pages/Operations'
-import { CircuitDetail } from './pages/CircuitDetail'
-import { DistributionDevices } from './pages/DistributionDevices'
-import { DistributionDeviceDetail } from './pages/DistributionDeviceDetail'
-import { ActivationDetail } from './pages/ActivationDetail'
 import { RequestState } from './components/RequestState'
 import { lazy, Suspense } from 'react'
 import { Link, Route, Routes } from 'react-router'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
-import { MyTickets } from './pages/MyTickets'
-import { Tickets } from './pages/Tickets'
-import { TicketDetail } from './pages/TicketDetail'
-import { NewTicket } from './pages/NewTicket'
-import { CatalogAdmin } from './components/CatalogAdmin'
-import { Catalogs } from './pages/Catalogs'
-import { Settings } from './pages/Settings'
-import { MailNotifications } from './pages/MailNotifications'
+
+const AdminRequests = lazy(() => import('./pages/AdminRequests').then((module) => ({ default: module.AdminRequests })))
+const AdminRequestForm = lazy(() => import('./pages/AdminRequestForm').then((module) => ({ default: module.AdminRequestForm })))
+const AdminRequestDetail = lazy(() => import('./pages/AdminRequestDetail').then((module) => ({ default: module.AdminRequestDetail })))
+const InstallationOrders = lazy(() => import('./pages/InstallationOrders').then((module) => ({ default: module.InstallationOrders })))
+const InstallationOrderForm = lazy(() => import('./pages/InstallationOrderForm').then((module) => ({ default: module.InstallationOrderForm })))
+const InstallationOrderDetail = lazy(() => import('./pages/InstallationOrderDetail').then((module) => ({ default: module.InstallationOrderDetail })))
+const InstallationRequestDetail = lazy(() => import('./pages/InstallationRequestDetail').then((module) => ({ default: module.InstallationRequestDetail })))
+const Profile = lazy(() => import('./pages/Profile').then((module) => ({ default: module.Profile })))
+const SecurityRoles = lazy(() => import('./pages/SecurityRoles').then((module) => ({ default: module.SecurityRoles })))
+const SecuritySessions = lazy(() => import('./pages/SecuritySessions').then((module) => ({ default: module.SecuritySessions })))
+const SecurityAudit = lazy(() => import('./pages/SecurityAudit').then((module) => ({ default: module.SecurityAudit })))
+const Changes = lazy(() => import('./pages/Changes').then((module) => ({ default: module.Changes })))
+const ChangeForm = lazy(() => import('./pages/Changes').then((module) => ({ default: module.ChangeForm })))
+const ChangeDetail = lazy(() => import('./pages/Changes').then((module) => ({ default: module.ChangeDetail })))
+const InternalTickets = lazy(() => import('./pages/InternalTickets').then((module) => ({ default: module.InternalTickets })))
+const InternalTicketDetail = lazy(() => import('./pages/InternalTickets').then((module) => ({ default: module.InternalTicketDetail })))
+const InternalTicketEditor = lazy(() => import('./pages/InternalTickets').then((module) => ({ default: module.InternalTicketEditor })))
+const Operations = lazy(() => import('./pages/Operations').then((module) => ({ default: module.Operations })))
+const CircuitDetail = lazy(() => import('./pages/CircuitDetail').then((module) => ({ default: module.CircuitDetail })))
+const DistributionDevices = lazy(() => import('./pages/DistributionDevices').then((module) => ({ default: module.DistributionDevices })))
+const DistributionDeviceDetail = lazy(() => import('./pages/DistributionDeviceDetail').then((module) => ({ default: module.DistributionDeviceDetail })))
+const ActivationDetail = lazy(() => import('./pages/ActivationDetail').then((module) => ({ default: module.ActivationDetail })))
+const MyTickets = lazy(() => import('./pages/MyTickets').then((module) => ({ default: module.MyTickets })))
+const Tickets = lazy(() => import('./pages/Tickets').then((module) => ({ default: module.Tickets })))
+const TicketDetail = lazy(() => import('./pages/TicketDetail').then((module) => ({ default: module.TicketDetail })))
+const NewTicket = lazy(() => import('./pages/NewTicket').then((module) => ({ default: module.NewTicket })))
+const CatalogAdmin = lazy(() => import('./components/CatalogAdmin').then((module) => ({ default: module.CatalogAdmin })))
+const Catalogs = lazy(() => import('./pages/Catalogs').then((module) => ({ default: module.Catalogs })))
+const Settings = lazy(() => import('./pages/Settings').then((module) => ({ default: module.Settings })))
+const MailNotifications = lazy(() => import('./pages/MailNotifications').then((module) => ({ default: module.MailNotifications })))
+
 
 const FmsReports = lazy(() => import('./pages/FmsReports').then((module) => ({ default: module.FmsReports })))
 

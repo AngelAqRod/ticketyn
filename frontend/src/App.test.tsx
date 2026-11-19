@@ -34,16 +34,16 @@ describe('aplicación', () => {
   it('navega a administración, configuración y tickets dentro del layout', async () => {
     mockApi()
     render(<MemoryRouter initialEntries={['/customers']}><App /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument()
     const nav = screen.getByRole('navigation')
     for (const title of ['Circuitos', 'Catálogos', 'Configuración']) {
       fireEvent.click(within(nav).getByRole('link', { name: title }))
-      expect(screen.getByRole('heading', { name: title === 'Catálogos' ? 'Sectores' : title, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: title === 'Catálogos' ? 'Sectores' : title, level: 1 })).toBeInTheDocument()
     }
     fireEvent.click(within(nav).getByRole('link', { name: 'Tickets' }))
     expect(await screen.findByText('TEST-003')).toBeInTheDocument()
     expect(within(nav).getByRole('link', { name: 'Tickets' })).toHaveAttribute('aria-current', 'page')
-  })
+  }, 15000) // cold-loads five lazy pages in sequence
   it('un health fallido no bloquea la aplicación ni los tickets', async () => {
     mockApi(false)
     render(<MemoryRouter initialEntries={['/tickets']}><App /></MemoryRouter>)

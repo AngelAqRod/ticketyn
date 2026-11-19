@@ -2,11 +2,12 @@ import { installationSummary } from '../api/installationOrders'
 import { sessionToken } from '../auth/session'
 import '../styles/navigation.css'
 import { UserControls } from './UserControls'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { LayoutDashboard, Ticket, Users, Network, Server, Layers3, ChartNoAxesCombined, Settings, Menu, X, Zap, Gauge, Power, Workflow, Mail, ShieldCheck, Inbox, ClipboardList } from 'lucide-react'
 import { getHealth, getSystemVersion } from '../api'
 import { usePermissions, routeAllowed } from '../auth/permissions'
+import { RequestState } from './RequestState'
 import { SevenSegmentNumber } from './SevenSegmentNumber'
 import { identityFor, moduleIdentity, moduleGroups, orderedModuleIdentity } from './moduleIdentity'
 import { describeVersion, parseVersion } from '../lib/version'
@@ -103,7 +104,7 @@ export function Layout() {
         </nav>
       </aside>
       <main id="main-content" className="workspace">
-        <div className="w-full"><Outlet /></div>
+        <div className="w-full"><Suspense fallback={<RequestState loading compact loadingText="Cargando..." />}><Outlet /></Suspense></div>
       </main>
     </div>
   </div>

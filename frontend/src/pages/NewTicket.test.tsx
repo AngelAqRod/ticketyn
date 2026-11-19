@@ -55,7 +55,7 @@ describe('creación de tickets', () => {
     vi.setSystemTime(new Date(2026, 9, 2, 16, 20, 40))
     const fetchMock = mockApi()
     renderNewTicket()
-    expect(screen.getByRole('heading', { name: 'Nuevo ticket' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nuevo ticket' })).toBeInTheDocument()
     expect(screen.getByLabelText(/^Inicio\s*\*?$/)).toHaveValue('2026-10-02T16:20')
     expect(screen.getByLabelText('Fin', { exact: true })).toHaveValue('')
     expect(screen.getByLabelText(/^Estado\s*\*?$/)).toHaveValue('OPEN')

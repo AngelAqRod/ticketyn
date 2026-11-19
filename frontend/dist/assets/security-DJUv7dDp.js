@@ -1,0 +1,1 @@
+import{u as e}from"./RequestState-BAq9r3S8.js";async function t(t,n){let r=[];for(let i=0;;i+=200){let a=await e(`${t}?limit=200&offset=${i}`,n);if(r.push(...a),a.length<200)return r}}export{t};

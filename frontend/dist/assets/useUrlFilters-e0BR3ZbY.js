@@ -1,0 +1,1 @@
+import{i as e}from"./lib--H9Lnw9o.js";function t(t){let[n,r]=e();function i(e,t=!0){r(n=>{let r=new URLSearchParams(n);for(let[t,n]of Object.entries(e))n?r.set(t,n):r.delete(t);return t&&r.delete(`offset`),r})}function a(){r(e=>{let n=new URLSearchParams(e);for(let e of[...t,`offset`])n.delete(e);return n})}return{params:n,change:i,clear:a}}export{t};

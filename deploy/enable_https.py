@@ -6,6 +6,7 @@ redirects to HTTPS, and a 127.0.0.1:80 server that still serves the app so the u
 Standard library only. Run as root: sudo python3 deploy/enable_https.py
 """
 import argparse
+import ipaddress
 import os
 import re
 import shlex
@@ -82,13 +83,21 @@ class HttpsError(Exception):
     pass
 
 
+def is_ipv4(value):
+    try:
+        return isinstance(ipaddress.ip_address(value or ''), ipaddress.IPv4Address)
+    except ValueError:
+        return False
+
+
 def valid_host(value):
-    return bool(HOST.fullmatch(value or '')) and not value.replace('.', '').isdigit()
+    """A DNS name, or an IPv4 address when staff reach the server by IP."""
+    return is_ipv4(value) or (bool(HOST.fullmatch(value or '')) and not value.replace('.', '').isdigit())
 
 
 def render(domain, cert, key, hsts_seconds=86400):
     if not valid_host(domain):
-        raise HttpsError('Dominio inválido: usa un nombre como ticketyn.empresa.com (no una IP).')
+        raise HttpsError('Dominio inválido: usa un nombre como ticketyn.empresa.com o una dirección IPv4.')
     hsts = f'    add_header Strict-Transport-Security "max-age={hsts_seconds}" always;' if hsts_seconds else ''
     body = LOCATIONS % {'hsts': hsts, 'hsts_index': hsts.replace('    add', '        add', 1)}
     return f'''# Managed by deploy/enable_https.py. Remove with: python3 deploy/enable_https.py --disable
@@ -145,7 +154,7 @@ def self_signed(domain, directory, runner=run):
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     cert, key = directory/'selfsigned.crt', directory/'selfsigned.key'
     runner(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '825', '-subj', f'/CN={domain}',
-            '-addext', f'subjectAltName=DNS:{domain}', '-keyout', key, '-out', cert])
+            '-addext', f'subjectAltName={"IP" if is_ipv4(domain) else "DNS"}:{domain}', '-keyout', key, '-out', cert])
     key.chmod(0o600)
     return cert, key
 
@@ -214,7 +223,8 @@ def reload_nginx(runner):
 
 def probe(domain, runner):
     """HTTPS must answer, and the loopback HTTP path used by the updater must keep answering."""
-    https = runner(['curl', '-ksS', '--max-time', '5', '--resolve', f'{domain}:443:127.0.0.1', f'https://{domain}/health'])
+    target = ['https://127.0.0.1/health'] if is_ipv4(domain) else ['--resolve', f'{domain}:443:127.0.0.1', f'https://{domain}/health']
+    https = runner(['curl', '-ksS', '--max-time', '5', *target])
     local = runner(['curl', '-sS', '--max-time', '5', 'http://127.0.0.1/health'])
     if '"ok"' not in https or '"ok"' not in local:
         raise HttpsError('La verificación de /health falló.')
@@ -311,9 +321,9 @@ def main(argv=None):
             raise HttpsError('Debe ejecutarse como root (sudo).')
         if options.disable:
             disable(); print('HTTPS deshabilitado. El sitio vuelve a responder solo por HTTP.'); return 0
-        domain = options.domain or ask('Dominio del sistema (ej. ticketyn.empresa.com)')
+        domain = options.domain or ask('Dominio o IPv4 del sistema (ej. ticketyn.empresa.com o 10.0.0.5)')
         if not valid_host(domain):
-            raise HttpsError('Dominio inválido: usa un nombre, no una IP.')
+            raise HttpsError('Dominio inválido: usa un nombre o una dirección IPv4.')
         selfsigned, lineage = options.self_signed, options.certbot_lineage
         if lineage and (selfsigned or options.cert or options.key):
             raise HttpsError('--certbot-lineage no se combina con --cert, --key ni --self-signed.')

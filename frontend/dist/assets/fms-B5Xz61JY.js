@@ -1,0 +1,1 @@
+var e={activations:`Activaciones`,"capacity-changes":`Cambios de capacidad`,"circuit-lifecycle":`Bajas y Reactivaciones`},t=e=>({INCREASE:`Incremento`,DECREASE:`Decremento`,DEACTIVATE:`Baja`,REACTIVATE:`Reactivación`})[e??``]??`Activación`;function n(e,t){return e.distribution_recorded?e[t]||`No asignado`:`No registrado`}export{e as n,t as r,n as t};

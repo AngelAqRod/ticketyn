@@ -263,7 +263,7 @@ it('elimina desde la ficha y vuelve al listado con confirmación de éxito', asy
 
 it.each([['Tipos de servicio', 'tipo de servicio', '/api/service-types'], ['Motivos de baja', 'motivo de baja', '/api/deactivation-reasons']])('administra %s desde Catálogos', async (title, singular, endpoint) => {
   const mock = api(), confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-  openRoute('/catalogs'); fireEvent.click(screen.getByRole('button', { name: title }))
+  openRoute('/catalogs'); fireEvent.click(await screen.findByRole('button', { name: title }))
   await screen.findByRole('table', { name: title })
   fireEvent.click(screen.getByRole('button', { name: `Nuevo ${singular}` }))
   fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: 'Registro configurable' } })
